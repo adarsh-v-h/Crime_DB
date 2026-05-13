@@ -197,16 +197,16 @@
         // ─── FALLBACK MOCK DATA ───────────────────────────────────────────────
         // Used only when the Flask backend is unreachable (offline / demo mode).
         const mockCases = [
-            { case_id: 1, case_id_display: "BLR-001", title: "Cyber Fraud — Wire Transfer Scam", crime_type: "Cyber Fraud", status: "Active", location: "Koramangala", complaint_mode: "Online", date_reported: "2026-04-12", description: "Victim received fraudulent email impersonating bank official. ₹12.5L transferred to unknown account. Digital forensics underway.", officer_ids: [1, 3] },
-            { case_id: 2, case_id_display: "BLR-002", title: "Vehicle Theft — Swift Dzire", crime_type: "Theft", status: "Solved", location: "Whitefield", complaint_mode: "Offline", date_reported: "2026-03-28", description: "Vehicle stolen from residential parking. Recovered via GPS tracking in Electronic City. Two suspects apprehended.", officer_ids: [2] },
-            { case_id: 3, case_id_display: "BLR-003", title: "Assault at Commercial Street", crime_type: "Assault", status: "Active", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-04-15", description: "Physical altercation between shop owners. Victim sustained head injuries. CCTV footage obtained. Investigation ongoing.", officer_ids: [4, 5] },
-            { case_id: 4, case_id_display: "BLR-004", title: "Real Estate Fraud — Land Document Forgery", crime_type: "Fraud", status: "Active", location: "Jayanagar", complaint_mode: "Online", date_reported: "2026-04-10", description: "Forged land sale deed used to transfer property worth ₹3.2Cr. Forensic document analysis in progress.", officer_ids: [1, 6] },
-            { case_id: 5, case_id_display: "BLR-005", title: "ATM Card Skimming Ring", crime_type: "Cyber Fraud", status: "Solved", location: "MG Road", complaint_mode: "Online", date_reported: "2026-03-05", description: "Multi-city ATM skimming operation dismantled. 47 cloned cards recovered. ₹8.7L fraud prevented.", officer_ids: [3, 7] },
-            { case_id: 6, case_id_display: "BLR-006", title: "Jewelry Heist — Commercial District", crime_type: "Theft", status: "Closed", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-02-18", description: "Armed robbery at jewelry store. ₹45L worth of gold ornaments stolen. Case closed after recovery.", officer_ids: [2, 5] },
-            { case_id: 7, case_id_display: "BLR-007", title: "Domestic Violence Report", crime_type: "Assault", status: "Active", location: "HSR Layout", complaint_mode: "Online", date_reported: "2026-04-18", description: "Multiple domestic violence complaints filed. Protection order issued. Counseling services engaged.", officer_ids: [4] },
-            { case_id: 8, case_id_display: "BLR-008", title: "Investment Ponzi Scheme", crime_type: "Fraud", status: "Active", location: "Indiranagar", complaint_mode: "Online", date_reported: "2026-04-08", description: "Fraudulent investment scheme targeting retirees. ₹1.8Cr collected from 34 victims. Financial forensics active.", officer_ids: [6, 7] },
-            { case_id: 9, case_id_display: "BLR-009", title: "Data Breach — Fintech Company", crime_type: "Cyber Fraud", status: "Active", location: "Manyata Tech Park", complaint_mode: "Online", date_reported: "2026-04-20", description: "Unauthorized database access exposing 2.3M user records. Cyber cell engaged. Server logs under analysis.", officer_ids: [1, 3, 7] },
-            { case_id: 10, case_id_display: "BLR-010", title: "Street Robbery — Mobile Snatching", crime_type: "Theft", status: "Solved", location: "Brigade Road", complaint_mode: "Offline", date_reported: "2026-03-22", description: "Motorcycle-mounted snatching. Victim resisted, sustained minor injuries. Suspects identified via CCTV.", officer_ids: [2, 5] },
+            { case_id: "BLR-001", title: "Cyber Fraud — Wire Transfer Scam", crime_type: "Cyber Fraud", status: "Active", location: "Koramangala", complaint_mode: "Online", date_reported: "2026-04-12", description: "Victim received fraudulent email impersonating bank official. ₹12.5L transferred to unknown account. Digital forensics underway.", officer_ids: [1, 3] },
+            { case_id: "BLR-002", title: "Vehicle Theft — Swift Dzire", crime_type: "Theft", status: "Solved", location: "Whitefield", complaint_mode: "Offline", date_reported: "2026-03-28", description: "Vehicle stolen from residential parking. Recovered via GPS tracking in Electronic City. Two suspects apprehended.", officer_ids: [2] },
+            { case_id: "BLR-003", title: "Assault at Commercial Street", crime_type: "Assault", status: "Active", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-04-15", description: "Physical altercation between shop owners. Victim sustained head injuries. CCTV footage obtained. Investigation ongoing.", officer_ids: [4, 5] },
+            { case_id: "BLR-004", title: "Real Estate Fraud — Land Document Forgery", crime_type: "Fraud", status: "Active", location: "Jayanagar", complaint_mode: "Online", date_reported: "2026-04-10", description: "Forged land sale deed used to transfer property worth ₹3.2Cr. Forensic document analysis in progress.", officer_ids: [1, 6] },
+            { case_id: "BLR-005", title: "ATM Card Skimming Ring", crime_type: "Cyber Fraud", status: "Solved", location: "MG Road", complaint_mode: "Online", date_reported: "2026-03-05", description: "Multi-city ATM skimming operation dismantled. 47 cloned cards recovered. ₹8.7L fraud prevented.", officer_ids: [3, 7] },
+            { case_id: "BLR-006", title: "Jewelry Heist — Commercial District", crime_type: "Theft", status: "Closed", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-02-18", description: "Armed robbery at jewelry store. ₹45L worth of gold ornaments stolen. Case closed after recovery.", officer_ids: [2, 5] },
+            { case_id: "BLR-007", title: "Domestic Violence Report", crime_type: "Assault", status: "Active", location: "HSR Layout", complaint_mode: "Online", date_reported: "2026-04-18", description: "Multiple domestic violence complaints filed. Protection order issued. Counseling services engaged.", officer_ids: [4] },
+            { case_id: "BLR-008", title: "Investment Ponzi Scheme", crime_type: "Fraud", status: "Active", location: "Indiranagar", complaint_mode: "Online", date_reported: "2026-04-08", description: "Fraudulent investment scheme targeting retirees. ₹1.8Cr collected from 34 victims. Financial forensics active.", officer_ids: [6, 7] },
+            { case_id: "BLR-009", title: "Data Breach — Fintech Company", crime_type: "Cyber Fraud", status: "Active", location: "Manyata Tech Park", complaint_mode: "Online", date_reported: "2026-04-20", description: "Unauthorized database access exposing 2.3M user records. Cyber cell engaged. Server logs under analysis.", officer_ids: [1, 3, 7] },
+            { case_id: "BLR-010", title: "Street Robbery — Mobile Snatching", crime_type: "Theft", status: "Solved", location: "Brigade Road", complaint_mode: "Offline", date_reported: "2026-03-22", description: "Motorcycle-mounted snatching. Victim resisted, sustained minor injuries. Suspects identified via CCTV.", officer_ids: [2, 5] },
         ];
 
         const mockOfficers = [
@@ -581,7 +581,7 @@
         const PublicPortal = ({ onNavigate }) => {
             const [activeTab, setActiveTab] = useState("complaint");
             const [formData, setFormData] = useState({
-                name: "", contact: "", email: "", incident_desc: "", crime_type: "", location: "", complaint_mode: "Online"
+                name: "", contact: "", email: "", incident_desc: "", crime_type: "", location: ""
             });
             const [submitted, setSubmitted] = useState(false);
             const [accessForm, setAccessForm] = useState({ case_id: "", requester_name: "", requester_email: "", reason: "" });
@@ -593,10 +593,11 @@
             const handleComplaintSubmit = async (e) => {
                 e.preventDefault();
                 setSubmitting(true);
+                const payload = { ...formData, complaint_mode: "Online" };
                 try {
                     const res = await apiFetch("/public/complaint", {
                         method: "POST",
-                        body: JSON.stringify(formData),
+                        body: JSON.stringify(payload),
                     });
                     setCaseRef(res.reference || null);
                 } catch (err) {
@@ -740,17 +741,7 @@
                                                     placeholder="Bengaluru area" />
                                             </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Complaint Mode</label>
-                                            <div className="flex gap-3">
-                                                {["Online", "Offline"].map(mode => (
-                                                    <button key={mode} type="button" onClick={() => setFormData({...formData, complaint_mode: mode})}
-                                                        className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all border ${formData.complaint_mode === mode ? "bg-cyan-glow/10 border-cyan-glow/30 text-cyan-glow" : "bg-void border-white/10 text-gray-400 hover:border-white/20"}`}>
-                                                        {mode}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        <input type="hidden" value="Online" name="complaint_mode" />
                                         <div>
                                             <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Incident Description</label>
                                             <textarea value={formData.incident_desc} onChange={e => setFormData({...formData, incident_desc: e.target.value})}
