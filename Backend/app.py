@@ -458,6 +458,22 @@ def internal_error(e):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# FRONTEND
+# ──────────────────────────────────────────────────────────────────────────────
+
+import os
+
+@app.route("/")
+def serve_frontend():
+    """Serve crms_frontend.html when visiting http://127.0.0.1:5000"""
+    frontend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crms_frontend.html")
+    if not os.path.exists(frontend_path):
+        return _err("crms_frontend.html not found next to app.py — place both files in the same folder", 404)
+    with open(frontend_path, "r", encoding="utf-8") as f:
+        return f.read(), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # STARTUP
 # ──────────────────────────────────────────────────────────────────────────────
 
