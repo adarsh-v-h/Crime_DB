@@ -34,7 +34,7 @@ def get_all_cases(status=None, crime_type=None, location=None, search=None):
         params = []
 
         if status and status != "All":
-            sql += " AND status = %s"
+            sql += " AND `status` = %s"
             params.append(status)
 
         if crime_type and crime_type != "All":
@@ -42,11 +42,11 @@ def get_all_cases(status=None, crime_type=None, location=None, search=None):
             params.append(crime_type)
 
         if location:
-            sql += " AND location LIKE %s"
+            sql += " AND `location` LIKE %s"
             params.append(f"%{location}%")
 
         if search:
-            sql += " AND (title LIKE %s OR location LIKE %s)"
+            sql += " AND (title LIKE %s OR `location` LIKE %s)"
             params.extend([f"%{search}%", f"%{search}%"])
 
         sql += " ORDER BY date_reported DESC"
@@ -106,7 +106,7 @@ def insert_case(title, description, crime_type, status, location, complaint_mode
     try:
         cur.execute(
             """INSERT INTO cases
-               (title, description, crime_type, status, location, complaint_mode, last_updated)
+               (title, description, crime_type, `status`, `location`, complaint_mode, last_updated)
                VALUES (%s, %s, %s, %s, %s, %s, NOW())""",
             (title, description, crime_type, status, location, complaint_mode)
         )
@@ -117,11 +117,15 @@ def insert_case(title, description, crime_type, status, location, complaint_mode
         conn.close()
 
 
+# Columns in `cases` that are MySQL reserved words and need backtick-quoting
+_RESERVED = {"status", "location"}
+
 def update_case(case_id, fields: dict):
     """
     Updates any subset of case fields.
     `fields` is a dict like {"status": "Solved"} or {"title": "...", "location": "..."}.
-    Always bumps last_updated.
+    Always bumps last_updated via MySQL NOW().
+    Reserved column names (status, location) are backtick-quoted automatically.
     """
     if not fields:
         return 0
@@ -131,12 +135,15 @@ def update_case(case_id, fields: dict):
     if not safe:
         return 0
 
-    safe["last_updated"] = "NOW()"  # handled specially below
-
-    # Build SET clause — last_updated uses MySQL NOW() not a param placeholder
-    set_parts  = [f"{k} = NOW()" if k == "last_updated" else f"{k} = %s" for k in safe]
+    # Build SET clause — backtick-quote reserved words, always append last_updated = NOW()
+    set_parts = []
+    params    = []
+    for k, v in safe.items():
+        col = f"`{k}`" if k in _RESERVED else k
+        set_parts.append(f"{col} = %s")
+        params.append(v)
+    set_parts.append("last_updated = NOW()")
     set_clause = ", ".join(set_parts)
-    params     = [v for k, v in safe.items() if k != "last_updated"]
     params.append(case_id)
 
     conn = get_db()
@@ -236,7 +243,7 @@ def insert_officer(name, rank):
     cur  = conn.cursor()
     try:
         cur.execute(
-            "INSERT INTO officers (name, rank) VALUES (%s, %s)",
+            "INSERT INTO officers (`name`, `rank`) VALUES (%s, %s)",
             (name, rank)
         )
         conn.commit()
@@ -298,8 +305,8 @@ def get_all_assignments():
                  c.status,
                  c.location,
                  o.officer_id,
-                 o.name        AS officer_name,
-                 o.rank        AS officer_rank
+                 o.`name`      AS officer_name,
+                 o.`rank`      AS officer_rank
                FROM case_officer co
                JOIN cases    c ON co.case_id    = c.case_id
                JOIN officers o ON co.officer_id = o.officer_id
@@ -334,7 +341,7 @@ def get_analytics():
 
         # Status distribution
         cur.execute(
-            "SELECT status, COUNT(*) AS cnt FROM cases GROUP BY status"
+            "SELECT `status`, COUNT(*) AS cnt FROM cases GROUP BY `status`"
         )
         status_dist = [{"status": r[0], "count": r[1]} for r in cur.fetchall()]
 
@@ -352,9 +359,9 @@ def get_analytics():
 
         # Location distribution (top 8)
         cur.execute(
-            """SELECT location, COUNT(*) AS cnt
+            """SELECT `location`, COUNT(*) AS cnt
                FROM cases
-               GROUP BY location
+               GROUP BY `location`
                ORDER BY cnt DESC
                LIMIT 8"""
         )
@@ -386,7 +393,7 @@ def submit_public_complaint(name, contact, email, crime_type, location, complain
     try:
         cur.execute(
             """INSERT INTO cases
-               (title, description, crime_type, status, location, complaint_mode, last_updated)
+               (title, description, crime_type, `status`, `location`, complaint_mode, last_updated)
                VALUES (%s, %s, %s, 'Active', %s, %s, NOW())""",
             (title, incident_desc or "", crime_type or "Other", location or "", complaint_mode or "Online")
         )
