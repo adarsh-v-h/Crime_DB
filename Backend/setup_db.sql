@@ -132,8 +132,8 @@ INSERT INTO case_officer VALUES (10, 2), (10, 5);
 
 -- ─── VERIFY ───────────────────────────────────────────────────────────────────
 
-SELECT 'officers'    AS tbl, COUNT(*) AS rows FROM officers
+SELECT 'officers'    AS tbl, COUNT(*) AS `rows` FROM officers
 UNION ALL
-SELECT 'cases',             COUNT(*)          FROM cases
+SELECT 'cases',             COUNT(*)                    FROM cases
 UNION ALL
-SELECT 'case_officer',      COUNT(*)          FROM case_officer;
+SELECT 'case_officer',      COUNT(*)                    FROM case_officer;

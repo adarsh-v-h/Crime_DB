@@ -3,8 +3,8 @@
 
 DB_HOST     = "localhost"
 DB_PORT     = 3306
-DB_USER     = "root"
-DB_PASSWORD = "your_password_here"   # ← change this
+DB_USER     = "adarsh"
+DB_PASSWORD = "root"   # ← change this
 DB_NAME     = "crms"
 
 # Flask server settings
