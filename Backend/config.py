@@ -1,3 +1,5 @@
+import os
+
 # ─── CRMS Backend Configuration ───────────────────────────────────────────────
 # Edit these values to match your local MySQL setup before running the server.
 
@@ -9,7 +11,7 @@ DB_NAME     = "crms"
 
 # Flask server settings
 FLASK_HOST  = "0.0.0.0"
-FLASK_PORT  = 5000
+FLASK_PORT  = int(os.environ.get("PORT", 5000))
 FLASK_DEBUG = True                   # Set False in production
 
 # CORS — the origin where your HTML file is served from.
