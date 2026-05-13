@@ -180,8 +180,9 @@
         const { motion, AnimatePresence } = window.Motion;
 
         // ─── API CONFIG ───────────────────────────────────────────────────────
-        // Change this to match where your Flask server is running.
-        const API_BASE = "http://localhost:5000";
+        // Empty string = relative URL. Works on Railway, local, and any host.
+        // The frontend is served by Flask itself so /cases hits the same server.
+        const API_BASE = "";
 
         // Generic fetch helper — returns parsed JSON or throws with a readable message.
         const apiFetch = async (path, options = {}) => {
@@ -697,13 +698,7 @@
                                             <Icon name="CheckCircle" size={28} className="text-green-tactical" />
                                         </div>
                                         <h3 className="text-xl font-semibold text-white mb-2">Complaint Submitted</h3>
-                                        {caseRef && (
-                                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-glow/10 border border-cyan-glow/20 mb-3">
-                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Case Reference</span>
-                                                <span className="font-mono text-cyan-glow font-bold">{caseRef}</span>
-                                            </div>
-                                        )}
-                                        <p className="text-gray-500 text-sm">Your case has been registered. Keep your reference number safe.</p>
+                                        <p className="text-gray-500 text-sm">Your case has been registered. Case ID will be sent to your contact.</p>
                                     </div>
                                 ) : (
                                     <form onSubmit={handleComplaintSubmit} className="space-y-5">
@@ -755,10 +750,9 @@
                                                 className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
                                                 placeholder="Describe the incident in detail..." />
                                         </div>
-                                        <button type="submit" disabled={submitting}
-                                            className={`w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 ${submitting ? "opacity-60 cursor-not-allowed" : ""}`}>
-                                            <Icon name={submitting ? "Clock" : "FilePlus"} size={16} />
-                                            {submitting ? "Submitting..." : "Submit Complaint"}
+                                        <button type="submit" className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+                                            <Icon name="FilePlus" size={16} />
+                                            Submit Complaint
                                         </button>
                                     </form>
                                 )}
@@ -815,10 +809,9 @@
                                                 className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
                                                 placeholder="Explain why you need access to this case..." />
                                         </div>
-                                        <button type="submit" disabled={submitting}
-                                            className={`w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 ${submitting ? "opacity-60 cursor-not-allowed" : ""}`}>
-                                            <Icon name={submitting ? "Clock" : "Eye"} size={16} />
-                                            {submitting ? "Submitting..." : "Submit Access Request"}
+                                        <button type="submit" className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+                                            <Icon name="Eye" size={16} />
+                                            Submit Access Request
                                         </button>
                                     </form>
                                 )}
@@ -832,8 +825,8 @@
         // ─── STAFF DASHBOARD ──────────────────────────────────────────────────
         const StaffDashboard = ({ onNavigate, userRole = "P1" }) => {
             const [activeView, setActiveView] = useState("cases");
-            const [cases, setCases] = useState(mockCases);
-            const [officers, setOfficers] = useState(mockOfficers);
+            const [cases, setCases] = useState([]);
+            const [officers, setOfficers] = useState([]);
             const [loading, setLoading] = useState(true);
             const [apiOnline, setApiOnline] = useState(false);
             const [searchQuery, setSearchQuery] = useState("");
@@ -844,6 +837,25 @@
             const [showOfficerModal, setShowOfficerModal] = useState(false);
             const [selectedOfficer, setSelectedOfficer] = useState(null);
             const [sidebarOpen, setSidebarOpen] = useState(false);
+            const [notifications, setNotifications] = useState([]);
+            const [showNotifs, setShowNotifs] = useState(false);
+            const notifRef = useRef(null);
+
+            // Close notif dropdown on outside click
+            useEffect(() => {
+                const handler = (e) => {
+                    if (notifRef.current && !notifRef.current.contains(e.target)) {
+                        setShowNotifs(false);
+                    }
+                };
+                document.addEventListener("mousedown", handler);
+                return () => document.removeEventListener("mousedown", handler);
+            }, []);
+
+            const pushNotif = (title, msg) => {
+                const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+                setNotifications(prev => [{ title, msg, time }, ...prev].slice(0, 10));
+            };
 
             // ── Load from API on mount ─────────────────────────────────────
             useEffect(() => {
@@ -857,6 +869,7 @@
                         const enriched = (casesRes.data || []).map(c => ({
                             ...c,
                             _raw_id: c.case_id,
+                            officer_ids: c.officer_ids || [],
                             case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
                         }));
                         setCases(enriched);
@@ -911,26 +924,36 @@
             const handleAddCase = async (newCase) => {
                 if (apiOnline) {
                     try {
-                        const res = await apiFetch("/cases", {
+                        await apiFetch("/cases", {
                             method: "POST",
                             body: JSON.stringify(newCase),
                         });
-                        // Reload full list to get server-assigned ID and timestamp
+                        // Reload full list to get server-assigned ID, timestamp, and officer_ids
                         const updated = await apiFetch("/cases");
                         const enriched = (updated.data || []).map(c => ({
                             ...c,
                             _raw_id: c.case_id,
+                            officer_ids: c.officer_ids || [],
                             case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
                         }));
                         setCases(enriched);
+                        pushNotif("Case Registered", newCase.title || "New case added to the system");
+                        setShowAddModal(false);
                     } catch (err) {
                         console.error("[CRMS] Failed to add case:", err.message);
+                        alert("Failed to add case: " + err.message);
+                        // Don't close modal on error so user can retry
                     }
                 } else {
-                    // Offline fallback
-                    setCases([...cases, { ...newCase, case_id: "BLR-" + String(cases.length + 1).padStart(3, "0"), date_reported: new Date().toISOString().split("T")[0] }]);
+                    // Offline fallback — still needs officer_ids field
+                    setCases([...cases, {
+                        ...newCase,
+                        officer_ids: [],
+                        case_id: "BLR-" + String(cases.length + 1).padStart(3, "0"),
+                        date_reported: new Date().toISOString().split("T")[0]
+                    }]);
+                    setShowAddModal(false);
                 }
-                setShowAddModal(false);
             };
 
             const handleStatusChange = async (caseId, newStatus) => {
@@ -939,6 +962,7 @@
                 if (selectedCase && selectedCase.case_id === caseId) {
                     setSelectedCase(prev => ({ ...prev, status: newStatus }));
                 }
+                pushNotif("Status Updated", `${caseId} marked as ${newStatus}`);
                 if (apiOnline) {
                     const target = cases.find(c => c.case_id === caseId);
                     const rawId = target ? (target._raw_id || target.case_id) : caseId;
@@ -949,6 +973,7 @@
                         });
                     } catch (err) {
                         console.error("[CRMS] Status update failed:", err.message);
+                        pushNotif("Sync Error", "Status saved locally but DB update failed");
                     }
                 }
             };
@@ -1040,10 +1065,37 @@
                                     <span className={"w-1.5 h-1.5 rounded-full pulse-dot " + (apiOnline ? "bg-green-tactical" : "bg-amber-warn")} />
                                     <span className="text-xs text-gray-400">{apiOnline ? "Live" : "Demo"}</span>
                                 </div>
-                                <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors relative">
-                                    <Icon name="Bell" size={18} />
-                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-warn" />
-                                </button>
+                                <div className="relative" ref={notifRef}>
+                                    <button
+                                        onClick={() => setShowNotifs(v => !v)}
+                                        className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors relative">
+                                        <Icon name="Bell" size={18} />
+                                        {notifications.length > 0 && (
+                                            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-warn" />
+                                        )}
+                                    </button>
+                                    {showNotifs && (
+                                        <div className="absolute right-0 top-10 w-80 glass-panel-strong rounded-xl border border-white/10 z-50 overflow-hidden">
+                                            <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                                                <span className="text-xs font-semibold text-white uppercase tracking-wider">Notifications</span>
+                                                {notifications.length > 0 && (
+                                                    <button onClick={() => setNotifications([])} className="text-[10px] text-gray-500 hover:text-cyan-glow transition-colors">Clear all</button>
+                                                )}
+                                            </div>
+                                            <div className="max-h-64 overflow-y-auto">
+                                                {notifications.length === 0 ? (
+                                                    <div className="px-4 py-8 text-center text-xs text-gray-500">No notifications</div>
+                                                ) : notifications.map((n, i) => (
+                                                    <div key={i} className="px-4 py-3 border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                        <div className="text-xs text-white font-medium mb-0.5">{n.title}</div>
+                                                        <div className="text-[10px] text-gray-500">{n.msg}</div>
+                                                        <div className="text-[10px] text-gray-600 mt-1">{n.time}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </header>
 
@@ -1102,7 +1154,7 @@
                                                 <div className="flex items-start justify-between mb-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-mono text-xs text-cyan-glow">
-                                                            {String(c.case_id).includes("-") ? String(c.case_id).split("-")[1] : String(c.case_id).padStart(3,"0")}
+                                                            {c.case_id.split("-")[1]}
                                                         </div>
                                                         <div>
                                                             <h3 className="text-sm font-semibold text-white group-hover:text-cyan-glow transition-colors">{c.title}</h3>
@@ -1125,7 +1177,7 @@
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
                                                         <Icon name="Users" size={12} className="text-gray-500" />
-                                                        <span className="text-xs text-gray-400">{(c.officer_ids || []).length} assigned</span>
+                                                        <span className="text-xs text-gray-400">{c.officer_ids.length} assigned</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1245,7 +1297,7 @@
                                         { label: "Location", value: selectedCase.location, icon: "MapPin" },
                                         { label: "Date Reported", value: selectedCase.date_reported, icon: "Calendar" },
                                         { label: "Mode", value: selectedCase.complaint_mode, icon: "Globe" },
-                                        { label: "Officers", value: `${(selectedCase.officer_ids || []).length} assigned`, icon: "Users" },
+                                        { label: "Officers", value: `${selectedCase.officer_ids.length} assigned`, icon: "Users" },
                                     ].map((item, i) => (
                                         <div key={i} className="glass-panel rounded-lg p-3">
                                             <div className="flex items-center gap-2 mb-1">
@@ -1267,7 +1319,7 @@
                                 <div>
                                     <h3 className="text-sm font-semibold text-white mb-3 font-space">Assigned Officers</h3>
                                     <div className="flex flex-wrap gap-3">
-                                        {(selectedCase.officer_ids || []).map(oid => {
+                                        {selectedCase.officer_ids.map(oid => {
                                             const officer = officers.find(o => o.officer_id === oid);
                                             return officer ? (
                                                 <div key={oid} className="glass-panel rounded-lg px-4 py-2 flex items-center gap-2">
@@ -1426,24 +1478,13 @@
             const monthlyChartRef = useRef(null);
             const locationChartRef = useRef(null);
 
-            // Keep refs to chart instances so we can destroy before re-creating
-            const crimeChartInst  = useRef(null);
-            const statusChartInst = useRef(null);
-            const monthlyChartInst= useRef(null);
-            const locationChartInst=useRef(null);
-
             useEffect(() => {
-                // Destroy existing chart instances before re-creating (prevents "canvas in use" error)
-                [crimeChartInst, statusChartInst, monthlyChartInst, locationChartInst].forEach(r => {
-                    if (r.current) { r.current.destroy(); r.current = null; }
-                });
-
                 // Crime Type Chart
                 if (crimeTypeChartRef.current) {
                     const ctx = crimeTypeChartRef.current.getContext("2d");
                     const types = {};
                     cases.forEach(c => { types[c.crime_type] = (types[c.crime_type] || 0) + 1; });
-                    crimeChartInst.current = new Chart(ctx, {
+                    new Chart(ctx, {
                         type: "doughnut",
                         data: {
                             labels: Object.keys(types),
@@ -1470,7 +1511,7 @@
                     const ctx = statusChartRef.current.getContext("2d");
                     const statuses = {};
                     cases.forEach(c => { statuses[c.status] = (statuses[c.status] || 0) + 1; });
-                    statusChartInst.current = new Chart(ctx, {
+                    new Chart(ctx, {
                         type: "bar",
                         data: {
                             labels: Object.keys(statuses),
@@ -1493,25 +1534,12 @@
                     });
                 }
 
-                // Monthly Trend Chart — computed from actual case date_reported
+                // Monthly Trend Chart
                 if (monthlyChartRef.current) {
                     const ctx = monthlyChartRef.current.getContext("2d");
-                    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-                    const monthlyCounts = {};
-                    cases.forEach(c => {
-                        if (!c.date_reported) return;
-                        const d = new Date(c.date_reported);
-                        const key = monthNames[d.getMonth()] + " " + d.getFullYear();
-                        monthlyCounts[key] = (monthlyCounts[key] || 0) + 1;
-                    });
-                    // Sort by actual date
-                    const sortedMonths = Object.keys(monthlyCounts).sort((a, b) => {
-                        const toDate = s => { const [m, y] = s.split(" "); return new Date(`${m} 1, ${y}`); };
-                        return toDate(a) - toDate(b);
-                    }).slice(-6);
-                    const months = sortedMonths.length ? sortedMonths : ["Jan","Feb","Mar","Apr","May","Jun"];
-                    const data   = sortedMonths.length ? sortedMonths.map(m => monthlyCounts[m]) : [3,5,4,7,4,6];
-                    monthlyChartInst.current = new Chart(ctx, {
+                    const months = ["Jan", "Feb", "Mar", "Apr", "May"];
+                    const data = [12, 18, 15, 22, 14];
+                    new Chart(ctx, {
                         type: "line",
                         data: {
                             labels: months,
@@ -1546,7 +1574,7 @@
                     const locs = {};
                     cases.forEach(c => { locs[c.location] = (locs[c.location] || 0) + 1; });
                     const sortedLocs = Object.entries(locs).sort((a, b) => b[1] - a[1]).slice(0, 6);
-                    locationChartInst.current = new Chart(ctx, {
+                    new Chart(ctx, {
                         type: "bar",
                         data: {
                             labels: sortedLocs.map(l => l[0]),
@@ -1569,13 +1597,13 @@
                         }
                     });
                 }
-            }, [cases, officers]);
+            }, [cases]);
 
             const officerWorkload = useMemo(() => {
                 return officers.map(o => ({
                     ...o,
                     total: o.active_cases + o.solved_cases,
-                    efficiency: (o.active_cases + o.solved_cases) > 0 ? ((o.solved_cases / (o.active_cases + o.solved_cases)) * 100).toFixed(0) : '0'
+                    efficiency: ((o.solved_cases / (o.active_cases + o.solved_cases)) * 100).toFixed(0)
                 })).sort((a, b) => b.total - a.total);
             }, [officers]);
 
