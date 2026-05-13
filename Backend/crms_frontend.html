@@ -1,0 +1,1682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRMS — Bengaluru Police Intelligence Command</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'space': ['Space Grotesk', 'sans-serif'],
+                        'inter': ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'obsidian': '#050507',
+                        'void': '#0A0A0F',
+                        'abyss': '#0D0D14',
+                        'slate-deep': '#12121C',
+                        'slate-mid': '#1A1A28',
+                        'slate-light': '#232336',
+                        'cyan-glow': '#00E5FF',
+                        'cyan-dim': '#00B8D4',
+                        'blue-electric': '#2962FF',
+                        'blue-glow': '#448AFF',
+                        'purple-tactical': '#7C4DFF',
+                        'purple-glow': '#B388FF',
+                        'red-warn': '#FF1744',
+                        'red-dim': '#D50000',
+                        'amber-warn': '#FF9100',
+                        'green-tactical': '#00E676',
+                        'green-dim': '#00C853',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { scrollbar-width: thin; scrollbar-color: rgba(0,229,255,0.15) transparent; }
+        *::-webkit-scrollbar { width: 4px; }
+        *::-webkit-scrollbar-track { background: transparent; }
+        *::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.15); border-radius: 4px; }
+        body { background: #050507; color: #E0E0E0; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .glass-panel {
+            background: rgba(255,255,255,0.02);
+            backdrop-filter: blur(24px) saturate(140%);
+            -webkit-backdrop-filter: blur(24px) saturate(140%);
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .glass-panel-strong {
+            background: rgba(255,255,255,0.035);
+            backdrop-filter: blur(32px) saturate(160%);
+            -webkit-backdrop-filter: blur(32px) saturate(160%);
+            border: 1px solid rgba(255,255,255,0.07);
+            box-shadow: 0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+        .glow-cyan { box-shadow: 0 0 20px rgba(0,229,255,0.15), 0 0 60px rgba(0,229,255,0.05); }
+        .glow-blue { box-shadow: 0 0 20px rgba(41,98,255,0.12), 0 0 60px rgba(41,98,255,0.04); }
+        .glow-purple { box-shadow: 0 0 20px rgba(124,77,255,0.12), 0 0 60px rgba(124,77,255,0.04); }
+        .glow-green { box-shadow: 0 0 20px rgba(0,230,118,0.12), 0 0 60px rgba(0,230,118,0.04); }
+        .text-glow-cyan { text-shadow: 0 0 20px rgba(0,229,255,0.4), 0 0 40px rgba(0,229,255,0.15); }
+        .text-glow-blue { text-shadow: 0 0 20px rgba(41,98,255,0.4), 0 0 40px rgba(41,98,255,0.15); }
+        .text-glow-purple { text-shadow: 0 0 20px rgba(124,77,255,0.4), 0 0 40px rgba(124,77,255,0.15); }
+        .pulse-dot { animation: pulse-glow 2s ease-in-out infinite; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 4px currentColor, 0 0 12px currentColor; opacity: 1; }
+            50% { box-shadow: 0 0 8px currentColor, 0 0 24px currentColor; opacity: 0.7; }
+        }
+        .scan-line {
+            position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: rgba(0,229,255,0.3);
+            animation: scan 4s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        .grid-bg {
+            background-image: 
+                linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+        .radial-glow {
+            background: radial-gradient(ellipse at 50% 0%, rgba(0,229,255,0.06) 0%, transparent 60%);
+        }
+        .noise-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none; z-index: 9999; opacity: 0.4;
+        }
+        .particle { position: absolute; border-radius: 50%; pointer-events: none; }
+        .card-hover { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover {
+            transform: translateY(-4px) scale(1.01);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(0,229,255,0.06);
+            border-color: rgba(0,229,255,0.15);
+        }
+        .input-glow:focus {
+            outline: none;
+            border-color: rgba(0,229,255,0.3);
+            box-shadow: 0 0 20px rgba(0,229,255,0.08);
+        }
+        .btn-primary {
+            background: rgba(0,229,255,0.1);
+            border: 1px solid rgba(0,229,255,0.25);
+            color: #00E5FF;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background: rgba(0,229,255,0.2);
+            border-color: rgba(0,229,255,0.5);
+            box-shadow: 0 0 30px rgba(0,229,255,0.15);
+        }
+        .btn-danger {
+            background: rgba(255,23,68,0.1);
+            border: 1px solid rgba(255,23,68,0.25);
+            color: #FF1744;
+            transition: all 0.3s ease;
+        }
+        .btn-danger:hover {
+            background: rgba(255,23,68,0.2);
+            border-color: rgba(255,23,68,0.5);
+            box-shadow: 0 0 30px rgba(255,23,68,0.15);
+        }
+        .nav-tab {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .nav-tab::after {
+            content: '';
+            position: absolute; bottom: -2px; left: 50%; right: 50%; height: 2px;
+            background: #00E5FF;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0,229,255,0.5);
+        }
+        .nav-tab:hover::after, .nav-tab.active::after {
+            left: 0; right: 0;
+        }
+        .nav-tab.active { color: #00E5FF; text-shadow: 0 0 10px rgba(0,229,255,0.3); }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-fade-up { animation: fadeUp 0.6s ease-out forwards; opacity: 0; }
+        .metric-value { font-variant-numeric: tabular-nums; }
+        .modal-overlay {
+            background: rgba(5,5,7,0.8);
+            backdrop-filter: blur(12px);
+        }
+        .hex-bg {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%2300E5FF' fill-opacity='0.02'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+    </style>
+</head>
+<body class="bg-obsidian min-h-screen">
+    <div class="noise-overlay"></div>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        // ─── API CONFIG ───────────────────────────────────────────────────────
+        // Change this to match where your Flask server is running.
+        const API_BASE = "http://localhost:5000";
+
+        // Generic fetch helper — returns parsed JSON or throws with a readable message.
+        const apiFetch = async (path, options = {}) => {
+            const res = await fetch(`${API_BASE}${path}`, {
+                headers: { "Content-Type": "application/json" },
+                ...options,
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+            return json;
+        };
+
+        // ─── FALLBACK MOCK DATA ───────────────────────────────────────────────
+        // Used only when the Flask backend is unreachable (offline / demo mode).
+        const mockCases = [
+            { case_id: 1, case_id_display: "BLR-001", title: "Cyber Fraud — Wire Transfer Scam", crime_type: "Cyber Fraud", status: "Active", location: "Koramangala", complaint_mode: "Online", date_reported: "2026-04-12", description: "Victim received fraudulent email impersonating bank official. ₹12.5L transferred to unknown account. Digital forensics underway.", officer_ids: [1, 3] },
+            { case_id: 2, case_id_display: "BLR-002", title: "Vehicle Theft — Swift Dzire", crime_type: "Theft", status: "Solved", location: "Whitefield", complaint_mode: "Offline", date_reported: "2026-03-28", description: "Vehicle stolen from residential parking. Recovered via GPS tracking in Electronic City. Two suspects apprehended.", officer_ids: [2] },
+            { case_id: 3, case_id_display: "BLR-003", title: "Assault at Commercial Street", crime_type: "Assault", status: "Active", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-04-15", description: "Physical altercation between shop owners. Victim sustained head injuries. CCTV footage obtained. Investigation ongoing.", officer_ids: [4, 5] },
+            { case_id: 4, case_id_display: "BLR-004", title: "Real Estate Fraud — Land Document Forgery", crime_type: "Fraud", status: "Active", location: "Jayanagar", complaint_mode: "Online", date_reported: "2026-04-10", description: "Forged land sale deed used to transfer property worth ₹3.2Cr. Forensic document analysis in progress.", officer_ids: [1, 6] },
+            { case_id: 5, case_id_display: "BLR-005", title: "ATM Card Skimming Ring", crime_type: "Cyber Fraud", status: "Solved", location: "MG Road", complaint_mode: "Online", date_reported: "2026-03-05", description: "Multi-city ATM skimming operation dismantled. 47 cloned cards recovered. ₹8.7L fraud prevented.", officer_ids: [3, 7] },
+            { case_id: 6, case_id_display: "BLR-006", title: "Jewelry Heist — Commercial District", crime_type: "Theft", status: "Closed", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-02-18", description: "Armed robbery at jewelry store. ₹45L worth of gold ornaments stolen. Case closed after recovery.", officer_ids: [2, 5] },
+            { case_id: 7, case_id_display: "BLR-007", title: "Domestic Violence Report", crime_type: "Assault", status: "Active", location: "HSR Layout", complaint_mode: "Online", date_reported: "2026-04-18", description: "Multiple domestic violence complaints filed. Protection order issued. Counseling services engaged.", officer_ids: [4] },
+            { case_id: 8, case_id_display: "BLR-008", title: "Investment Ponzi Scheme", crime_type: "Fraud", status: "Active", location: "Indiranagar", complaint_mode: "Online", date_reported: "2026-04-08", description: "Fraudulent investment scheme targeting retirees. ₹1.8Cr collected from 34 victims. Financial forensics active.", officer_ids: [6, 7] },
+            { case_id: 9, case_id_display: "BLR-009", title: "Data Breach — Fintech Company", crime_type: "Cyber Fraud", status: "Active", location: "Manyata Tech Park", complaint_mode: "Online", date_reported: "2026-04-20", description: "Unauthorized database access exposing 2.3M user records. Cyber cell engaged. Server logs under analysis.", officer_ids: [1, 3, 7] },
+            { case_id: 10, case_id_display: "BLR-010", title: "Street Robbery — Mobile Snatching", crime_type: "Theft", status: "Solved", location: "Brigade Road", complaint_mode: "Offline", date_reported: "2026-03-22", description: "Motorcycle-mounted snatching. Victim resisted, sustained minor injuries. Suspects identified via CCTV.", officer_ids: [2, 5] },
+        ];
+
+        const mockOfficers = [
+            { officer_id: 1, name: "Inspector Arjun Nair", rank: "Inspector", badge: "BPD-7821", station: "Cyber Crime Division", phone: "+91-80-2294-2101", email: "arjun.nair@bpd.gov.in", active_cases: 3, solved_cases: 12, join_date: "2018-03-15" },
+            { officer_id: 2, name: "Sub-Inspector Priya Menon", rank: "Sub-Inspector", badge: "BPD-6543", station: "Whitefield PS", phone: "+91-80-2845-6789", email: "priya.menon@bpd.gov.in", active_cases: 2, solved_cases: 18, join_date: "2019-07-22" },
+            { officer_id: 3, name: "Inspector Vikram Rao", rank: "Inspector", badge: "BPD-8912", station: "Cyber Crime Division", phone: "+91-80-2294-2102", email: "vikram.rao@bpd.gov.in", active_cases: 3, solved_cases: 9, join_date: "2017-11-08" },
+            { officer_id: 4, name: "Sub-Inspector Deepa Krishnan", rank: "Sub-Inspector", badge: "BPD-5432", station: "HSR Layout PS", phone: "+91-80-2572-3456", email: "deepa.krishnan@bpd.gov.in", active_cases: 2, solved_cases: 15, join_date: "2020-01-14" },
+            { officer_id: 5, name: "Constable Ravi Kumar", rank: "Head Constable", badge: "BPD-3210", station: "Commercial Street PS", phone: "+91-80-2558-9012", email: "ravi.kumar@bpd.gov.in", active_cases: 3, solved_cases: 7, join_date: "2021-05-30" },
+            { officer_id: 6, name: "Inspector Meera Iyer", rank: "Inspector", badge: "BPD-7654", station: "Economic Offences Wing", phone: "+91-80-2221-4567", email: "meera.iyer@bpd.gov.in", active_cases: 2, solved_cases: 11, join_date: "2016-09-03" },
+            { officer_id: 7, name: "Sub-Inspector Karthik S", rank: "Sub-Inspector", badge: "BPD-4321", station: "Cyber Crime Division", phone: "+91-80-2294-2103", email: "karthik.s@bpd.gov.in", active_cases: 2, solved_cases: 14, join_date: "2019-04-11" },
+        ];
+
+        const crimeTypeColors = {
+            "Cyber Fraud": { bg: "rgba(124,77,255,0.1)", border: "rgba(124,77,255,0.25)", text: "#B388FF" },
+            "Theft": { bg: "rgba(255,145,0,0.1)", border: "rgba(255,145,0,0.25)", text: "#FF9100" },
+            "Assault": { bg: "rgba(255,23,68,0.1)", border: "rgba(255,23,68,0.25)", text: "#FF1744" },
+            "Fraud": { bg: "rgba(255,171,0,0.1)", border: "rgba(255,171,0,0.25)", text: "#FFAB00" },
+        };
+        const statusColors = {
+            "Active": { bg: "rgba(0,230,118,0.1)", border: "rgba(0,230,118,0.25)", text: "#00E676" },
+            "Solved": { bg: "rgba(124,77,255,0.1)", border: "rgba(124,77,255,0.25)", text: "#B388FF" },
+            "Closed": { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.12)", text: "#888" },
+        };
+        const modeColors = {
+            "Online": { bg: "rgba(0,229,255,0.08)", border: "rgba(0,229,255,0.2)", text: "#00E5FF" },
+            "Offline": { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.1)", text: "#888" },
+        };
+
+        // ─── ICONS ────────────────────────────────────────────────────────────
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const icons = {
+                Shield: "<path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/>",
+                Search: "<circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/>",
+                Plus: "<path d='M12 5v14M5 12h14'/>",
+                Filter: "<polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'/>",
+                X: "<path d='M18 6 6 18M6 6l12 12'/>",
+                ChevronRight: "<path d='m9 18 6-6-6-6'/>",
+                ChevronDown: "<path d='m6 9 6 6 6-6'/>",
+                Activity: "<path d='M22 12h-4l-3 9L9 3l-3 9H2'/>",
+                Users: "<path d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M22 21v-2a4 4 0 0 0-3-3.87'/><path d='M16 3.13a4 4 0 0 1 0 7.75'/>",
+                FileText: "<path d='M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'/><polyline points='14 2 14 8 20 8'/><line x1='16' y1='13' x2='8' y2='13'/><line x1='16' y1='17' x2='8' y2='17'/><line x1='10' y1='9' x2='8' y2='9'/>",
+                MapPin: "<path d='M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z'/><circle cx='12' cy='10' r='3'/>",
+                Clock: "<circle cx='12' cy='12' r='10'/><polyline points='12 6 12 12 16 14'/>",
+                BarChart3: "<path d='M3 3v18h18'/><path d='M18 17V9'/><path d='M13 17V5'/><path d='M8 17v-3'/>",
+                AlertTriangle: "<path d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/>",
+                Lock: "<rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/>",
+                Unlock: "<rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M9 11V7a5 5 0 0 1 9.9-1'/>",
+                Eye: "<path d='M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z'/><circle cx='12' cy='12' r='3'/>",
+                EyeOff: "<path d='M9.88 9.88a3 3 0 1 0 4.24 4.24'/><path d='M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68'/><path d='M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61'/><line x1='2' y1='2' x2='22' y2='22'/>",
+                Mail: "<rect x='2' y='4' width='20' height='16' rx='2'/><path d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/>",
+                Phone: "<path d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/>",
+                BadgeCheck: "<path d='M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z'/><path d='m9 15 2 2 4-4'/>",
+                TrendingUp: "<polyline points='23 6 13.5 15.5 8.5 10.5 1 18'/><polyline points='17 6 23 6 23 12'/>",
+                TrendingDown: "<polyline points='23 18 13.5 8.5 8.5 13.5 1 6'/><polyline points='17 18 23 18 23 12'/>",
+                Zap: "<polygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/>",
+                Globe: "<circle cx='12' cy='12' r='10'/><line x1='2' y1='12' x2='22' y2='12'/><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'/>",
+                Cpu: "<rect x='4' y='4' width='16' height='16' rx='2'/><rect x='9' y='9' width='6' height='6'/><path d='M15 2v2'/><path d='M15 20v2'/><path d='M2 15h2'/><path d='M2 9h2'/><path d='M20 15h2'/><path d='M20 9h2'/><path d='M9 2v2'/><path d='M9 20v2'/>",
+                Layers: "<polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/>",
+                Radio: "<path d='M4.9 19.1C1 15.2 1 8.8 4.9 4.9'/><path d='M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5'/><circle cx='12' cy='12' r='2'/><path d='M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5'/><path d='M19.1 4.9C23 8.8 23 15.1 19.1 19.1'/>",
+                Fingerprint: "<path d='M2 12C2 6.5 6.5 2 12 2a10 10 0 0 1 8 6'/><path d='M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2'/><path d='M17.29 21.02c.12-.6.43-2.3.5-3.02'/><path d='M12 10a2 2 0 0 1 2 2c0 2.3-2 1.8-2 5'/><path d='M11.25 16c-.45-1-.72-2.3-.72-4 0-2 1-3 3-3s3 1 3 3c0 2.3-2 1.8-2 5'/><path d='M17 15c0 1.7-.34 3.3-1 4.5'/><path d='M13.22 22c-.35-.6-.78-1.76-.78-3.5 0-2 1-3 3-3s3 1 3 3c0 2.3-2 1.8-2 5'/><path d='M2 15c.7 1.2 1.7 2.8 3 4'/><path d='M22 15c-.7 1.2-1.7 2.8-3 4'/>",
+                Database: "<ellipse cx='12' cy='5' rx='9' ry='3'/><path d='M3 5V19A9 3 0 0 0 21 19V5'/><path d='M3 12A9 3 0 0 0 21 12'/>",
+                Target: "<circle cx='12' cy='12' r='10'/><circle cx='12' cy='12' r='6'/><circle cx='12' cy='12' r='2'/>",
+                ArrowRight: "<path d='M5 12h14'/><path d='m12 5 7 7-7 7'/>",
+                ArrowLeft: "<path d='M19 12H5'/><path d='m12 19-7-7 7-7'/>",
+                Menu: "<line x1='4' x2='20' y1='12' y2='12'/><line x1='4' x2='20' y1='6' y2='6'/><line x1='4' x2='20' y1='18' y2='18'/>",
+                Bell: "<path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/><path d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/>",
+                Settings: "<path d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/><circle cx='12' cy='12' r='3'/>",
+                User: "<path d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/>",
+                LogOut: "<path d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/><polyline points='16 17 21 12 16 7'/><line x1='21' y1='12' x2='9' y2='12'/>",
+                Trash2: "<path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/>",
+                Edit: "<path d='M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7'/><path d='M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z'/>",
+                MoreVertical: "<circle cx='12' cy='12' r='1'/><circle cx='12' cy='5' r='1'/><circle cx='12' cy='19' r='1'/>",
+                CheckCircle: "<path d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/><polyline points='22 4 12 14.01 9 11.01'/>",
+                XCircle: "<circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/>",
+                Info: "<circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/>",
+                Hash: "<line x1='4' x2='20' y1='9' y2='9'/><line x1='4' x2='20' y1='15' y2='15'/><line x1='10' x2='8' y1='3' y2='21'/><line x1='16' x2='14' y1='3' y2='21'/>",
+                Calendar: "<rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/>",
+                Briefcase: "<rect x='2' y='7' width='20' height='14' rx='2' ry='2'/><path d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/>",
+                Award: "<circle cx='12' cy='8' r='7'/><polyline points='8.21 13.89 7 23 12 20 17 23 15.79 13.88'/>",
+                Star: "<polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/>",
+                Flame: "<path d='M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z'/>",
+                Crosshair: "<circle cx='12' cy='12' r='10'/><line x1='22' y1='12' x2='18' y2='12'/><line x1='6' y1='12' x2='2' y2='12'/><line x1='12' y1='6' x2='12' y2='2'/><line x1='12' y1='22' x2='12' y2='18'/>",
+                Wifi: "<path d='M5 12.55a11 11 0 0 1 14.08 0'/><path d='M1.42 9a16 16 0 0 1 21.16 0'/><path d='M8.53 16.11a6 6 0 0 1 6.95 0'/><line x1='12' y1='20' x2='12.01' y2='20'/>",
+                Server: "<rect x='2' y='2' width='20' height='8' rx='2' ry='2'/><rect x='2' y='14' width='20' height='8' rx='2' ry='2'/><line x1='6' y1='6' x2='6.01' y2='6'/><line x1='6' y1='18' x2='6.01' y2='18'/>",
+                HardDrive: "<line x1='22' y1='12' x2='2' y2='12'/><path d='M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'/><line x1='6' y1='16' x2='6.01' y2='16'/><line x1='10' y1='16' x2='10.01' y2='16'/>",
+                ScanLine: "<path d='M3 7V5a2 2 0 0 1 2-2h2'/><path d='M17 3h2a2 2 0 0 1 2 2v2'/><path d='M21 17v2a2 2 0 0 1-2 2h-2'/><path d='M7 21H5a2 2 0 0 1-2-2v-2'/><line x1='7' y1='12' x2='17' y2='12'/>",
+                GitBranch: "<line x1='6' x2='6' y1='3' y2='15'/><circle cx='18' cy='6' r='3'/><circle cx='6' cy='18' r='3'/><path d='M18 9a9 9 0 0 1-9 9'/>",
+                GitCommit: "<circle cx='12' cy='12' r='3'/><line x1='3' y1='12' x2='9' y2='12'/><line x1='15' y1='12' x2='21' y2='12'/>",
+                GitPullRequest: "<circle cx='18' cy='18' r='3'/><circle cx='6' cy='6' r='3'/><path d='M13 6h3a2 2 0 0 1 2 2v7'/><line x1='6' y1='9' x2='6' y2='21'/>",
+                GitMerge: "<circle cx='18' cy='18' r='3'/><circle cx='6' cy='6' r='3'/><path d='M6 9v12a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3'/>",
+                Network: "<rect x='16' y='16' width='6' height='6' rx='1'/><rect x='2' y='16' width='6' height='6' rx='1'/><rect x='9' y='2' width='6' height='6' rx='1'/><path d='M12 8v4'/><path d='M6 16v-2a6 6 0 0 1 12 0v2'/>",
+                Share2: "<circle cx='18' cy='5' r='3'/><circle cx='6' cy='12' r='3'/><circle cx='18' cy='19' r='3'/><line x1='8.59' y1='13.51' x2='15.42' y2='17.49'/><line x1='15.41' y1='6.51' x2='8.59' y2='10.49'/>",
+                Link: "<path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/>",
+                Paperclip: "<path d='m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48'/>",
+                ClipboardList: "<rect x='8' y='2' width='8' height='4' rx='1' ry='1'/><path d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'/><path d='M12 11h4'/><path d='M12 16h4'/><path d='M8 11h.01'/><path d='M8 16h.01'/>",
+                ClipboardCheck: "<rect x='8' y='2' width='8' height='4' rx='1' ry='1'/><path d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'/><path d='m9 14 2 2 4-4'/>",
+                FileCheck: "<path d='M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'/><polyline points='14 2 14 8 20 8'/><path d='m9 15 2 2 4-4'/>",
+                FilePlus: "<path d='M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'/><polyline points='14 2 14 8 20 8'/><line x1='12' y1='18' x2='12' y2='12'/><line x1='9' y1='15' x2='15' y2='15'/>",
+                FileMinus: "<path d='M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'/><polyline points='14 2 14 8 20 8'/><line x1='9' y1='15' x2='15' y2='15'/>",
+                FileX: "<path d='M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z'/><polyline points='14 2 14 8 20 8'/><line x1='9.5' y1='15.5' x2='14.5' y2='10.5'/><line x1='14.5' y1='15.5' x2='9.5' y2='10.5'/>",
+                Folder: "<path d='M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/>",
+                FolderOpen: "<path d='m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H14a2 2 0 0 1 2 2v2'/>",
+                FolderCheck: "<path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><path d='m9 15 2 2 4-4'/>",
+                FolderX: "<path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><path d='m9.5 10.5 5 5'/><path d='m14.5 10.5-5 5'/>",
+                FolderPlus: "<path d='M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><line x1='12' y1='10' x2='12' y2='16'/><line x1='9' y1='13' x2='15' y2='13'/>",
+                FolderMinus: "<path d='M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><line x1='9' y1='13' x2='15' y2='13'/>",
+                FolderCog: "<path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><circle cx='18' cy='15' r='3'/>",
+                FolderLock: "<path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><rect x='14' y='12' width='8' height='6' rx='1'/><path d='M17 12v-2a2 2 0 1 0-4 0v2'/>",
+                FolderSearch: "<path d='M11 15h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2'/><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><circle cx='17' cy='17' r='3'/><path d='m21 21-1.5-1.5'/>",
+                FolderSync: "<path d='M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z'/><path d='M12 10v4h4'/><path d='m22 4-6 6'/><path d='M12 14v-4H8'/><path d='m2 20 6-6'/>",
+            };
+            const path = icons[name] || "";
+            return (
+                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} dangerouslySetInnerHTML={{ __html: path }} />
+            );
+        };
+
+        // ─── ANIMATED COUNTER ─────────────────────────────────────────────────
+        const AnimatedCounter = ({ value, duration = 2000, prefix = "", suffix = "" }) => {
+            const [display, setDisplay] = useState(0);
+            const ref = useRef(null);
+            const [hasAnimated, setHasAnimated] = useState(false);
+
+            useEffect(() => {
+                const observer = new IntersectionObserver(
+                    ([entry]) => {
+                        if (entry.isIntersecting && !hasAnimated) {
+                            setHasAnimated(true);
+                            const startTime = Date.now();
+                            const animate = () => {
+                                const elapsed = Date.now() - startTime;
+                                const progress = Math.min(elapsed / duration, 1);
+                                const eased = 1 - Math.pow(1 - progress, 3);
+                                setDisplay(Math.floor(eased * value));
+                                if (progress < 1) requestAnimationFrame(animate);
+                            };
+                            requestAnimationFrame(animate);
+                        }
+                    },
+                    { threshold: 0.3 }
+                );
+                if (ref.current) observer.observe(ref.current);
+                return () => observer.disconnect();
+            }, [value, duration, hasAnimated]);
+
+            return (
+                <span ref={ref} className="metric-value">{prefix}{display.toLocaleString()}{suffix}</span>
+            );
+        };
+
+        // ─── PARTICLES ────────────────────────────────────────────────────────
+        const Particles = ({ count = 30 }) => {
+            const particles = useMemo(() => {
+                return Array.from({ length: count }, (_, i) => ({
+                    id: i,
+                    x: Math.random() * 100,
+                    y: Math.random() * 100,
+                    size: Math.random() * 3 + 1,
+                    duration: Math.random() * 20 + 10,
+                    delay: Math.random() * 5,
+                    opacity: Math.random() * 0.3 + 0.1,
+                }));
+            }, [count]);
+
+            return (
+                <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+                    {particles.map(p => (
+                        <div
+                            key={p.id}
+                            className="particle"
+                            style={{
+                                left: `${p.x}%`,
+                                top: `${p.y}%`,
+                                width: p.size,
+                                height: p.size,
+                                background: `rgba(0, 229, 255, ${p.opacity})`,
+                                animation: `float ${p.duration}s ease-in-out ${p.delay}s infinite`,
+                            }}
+                        />
+                    ))}
+                </div>
+            );
+        };
+
+        // ─── BADGE ────────────────────────────────────────────────────────────
+        const Badge = ({ value }) => {
+            const colors = { ...crimeTypeColors, ...statusColors, ...modeColors };
+            const style = colors[value] || { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.1)", text: "#888" };
+            return (
+                <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium font-space tracking-wide"
+                    style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.text }}
+                >
+                    {value === "Active" && <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ color: style.text, background: style.text }} />}
+                    {value}
+                </span>
+            );
+        };
+
+        // ─── METRIC CARD ──────────────────────────────────────────────────────
+        const MetricCard = ({ icon, label, value, color, trend, trendValue, delay = 0 }) => {
+            const glowColors = { cyan: "glow-cyan", blue: "glow-blue", purple: "glow-purple", green: "glow-green", red: "glow-red" };
+            const textColors = { cyan: "text-cyan-glow", blue: "text-blue-electric", purple: "text-purple-tactical", green: "text-green-tactical", red: "text-red-warn" };
+
+            return (
+                <div
+                    className={`glass-panel rounded-xl p-5 card-hover animate-fade-up ${glowColors[color] || ""}`}
+                    style={{ animationDelay: `${delay * 0.1}s` }}
+                >
+                    <div className="flex items-start justify-between mb-3">
+                        <div className={`p-2 rounded-lg bg-white/5 ${textColors[color] || "text-cyan-glow"}`}>
+                            <Icon name={icon} size={20} />
+                        </div>
+                        {trend && (
+                            <div className={`flex items-center gap-1 text-xs font-medium ${trend === "up" ? "text-green-tactical" : "text-red-warn"}`}>
+                                <Icon name={trend === "up" ? "TrendingUp" : "TrendingDown"} size={14} />
+                                {trendValue}
+                            </div>
+                        )}
+                    </div>
+                    <div className={`text-3xl font-bold font-space mb-1 ${textColors[color] || "text-white"}`}>
+                        <AnimatedCounter value={value} />
+                    </div>
+                    <div className="text-xs text-gray-500 font-medium tracking-wide uppercase">{label}</div>
+                </div>
+            );
+        };
+
+        // ─── MODAL ────────────────────────────────────────────────────────────
+        const Modal = ({ isOpen, onClose, title, children, size = "md" }) => {
+            if (!isOpen) return null;
+            const sizes = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl", full: "max-w-6xl" };
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay" onClick={onClose}>
+                    <div className={`${sizes[size]} w-full glass-panel-strong rounded-2xl overflow-hidden`} onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+                            <h3 className="text-lg font-semibold font-space text-white">{title}</h3>
+                            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
+                                <Icon name="X" size={18} />
+                            </button>
+                        </div>
+                        <div className="p-6">{children}</div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ─── LANDING PAGE ─────────────────────────────────────────────────────
+        const LandingPage = ({ onNavigate }) => {
+            const [typedText, setTypedText] = useState("");
+            const fullText = "Next-Generation Cybercrime Command Network";
+
+            useEffect(() => {
+                let i = 0;
+                const timer = setInterval(() => {
+                    if (i <= fullText.length) {
+                        setTypedText(fullText.slice(0, i));
+                        i++;
+                    } else {
+                        clearInterval(timer);
+                    }
+                }, 50);
+                return () => clearInterval(timer);
+            }, []);
+
+            return (
+                <div className="min-h-screen relative overflow-hidden">
+                    <Particles count={40} />
+                    <div className="absolute inset-0 grid-bg opacity-50" />
+                    <div className="absolute inset-0 radial-glow" />
+                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-glow/5 rounded-full blur-[120px] animate-float" />
+                    <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-tactical/5 rounded-full blur-[100px] animate-float" style={{ animationDelay: "2s" }} />
+
+                    {/* Navigation */}
+                    <nav className="relative z-10 flex items-center justify-between px-8 py-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
+                                <Icon name="Shield" size={20} className="text-cyan-glow" />
+                            </div>
+                            <div>
+                                <div className="text-sm font-bold font-space text-white tracking-wider">CRMS</div>
+                                <div className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">Bengaluru Police</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-6">
+                            <button onClick={() => onNavigate("public")} className="text-sm text-gray-400 hover:text-cyan-glow transition-colors font-medium">Public Portal</button>
+                            <button onClick={() => onNavigate("staff")} className="text-sm text-gray-400 hover:text-cyan-glow transition-colors font-medium">Staff Access</button>
+                            <button onClick={() => onNavigate("staff")} className="btn-primary px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                                <Icon name="Lock" size={14} />
+                                Secure Login
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* Hero */}
+                    <div className="relative z-10 flex flex-col items-center justify-center px-8 pt-20 pb-32 text-center">
+                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-panel mb-8 animate-fade-up">
+                            <span className="w-2 h-2 rounded-full bg-green-tactical pulse-dot" />
+                            <span className="text-xs font-medium text-gray-400 tracking-wide">System Operational</span>
+                            <span className="text-xs text-gray-600">|</span>
+                            <span className="text-xs font-mono text-cyan-glow/70">v4.2.1-stable</span>
+                        </div>
+
+                        <h1 className="text-5xl md:text-7xl font-bold font-space text-white mb-6 leading-tight animate-fade-up" style={{ animationDelay: "0.2s" }}>
+                            <span className="text-glow-cyan">CRIME RECORD</span><br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-glow via-blue-electric to-purple-tactical text-glow-blue">
+                                MANAGEMENT SYSTEM
+                            </span>
+                        </h1>
+
+                        <p className="text-xl md:text-2xl text-gray-400 font-light max-w-3xl mb-4 animate-fade-up h-8" style={{ animationDelay: "0.4s" }}>
+                            {typedText}<span className="text-cyan-glow animate-pulse">|</span>
+                        </p>
+
+                        <p className="text-sm text-gray-500 max-w-xl mb-12 animate-fade-up" style={{ animationDelay: "0.5s" }}>
+                            Advanced intelligence platform for the Bengaluru Police Department. 
+                            Real-time case tracking, officer coordination, and cybercrime analytics.
+                        </p>
+
+                        <div className="flex flex-wrap items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: "0.6s" }}>
+                            <button onClick={() => onNavigate("public")} className="btn-primary px-8 py-3.5 rounded-xl text-sm font-semibold flex items-center gap-2">
+                                <Icon name="Globe" size={16} />
+                                Public Portal
+                            </button>
+                            <button onClick={() => onNavigate("staff")} className="glass-panel px-8 py-3.5 rounded-xl text-sm font-semibold text-white hover:border-cyan-glow/30 transition-all flex items-center gap-2">
+                                <Icon name="Shield" size={16} />
+                                Staff Dashboard
+                            </button>
+                        </div>
+
+                        {/* Floating Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 max-w-4xl w-full">
+                            {[
+                                { icon: "Fingerprint", title: "Digital Forensics", desc: "AI-powered evidence analysis and chain-of-custody tracking", color: "cyan" },
+                                { icon: "Radio", title: "Real-Time Intelligence", desc: "Live case monitoring with automated threat detection", color: "blue" },
+                                { icon: "Target", title: "Tactical Coordination", desc: "Multi-unit operations with encrypted communications", color: "purple" },
+                            ].map((card, i) => (
+                                <div key={i} className="glass-panel rounded-2xl p-6 card-hover animate-fade-up text-left" style={{ animationDelay: `${0.8 + i * 0.15}s` }}>
+                                    <div className={`w-12 h-12 rounded-xl bg-${card.color === "cyan" ? "cyan-glow/10" : card.color === "blue" ? "blue-electric/10" : "purple-tactical/10"} border border-${card.color === "cyan" ? "cyan-glow/20" : card.color === "blue" ? "blue-electric/20" : "purple-tactical/20"} flex items-center justify-center mb-4`}>
+                                        <Icon name={card.icon} size={22} className={card.color === "cyan" ? "text-cyan-glow" : card.color === "blue" ? "text-blue-electric" : "text-purple-tactical"} />
+                                    </div>
+                                    <h3 className="text-lg font-semibold text-white mb-2 font-space">{card.title}</h3>
+                                    <p className="text-sm text-gray-500 leading-relaxed">{card.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Stats Strip */}
+                    <div className="relative z-10 border-t border-white/5 bg-void/50 backdrop-blur-xl">
+                        <div className="max-w-6xl mx-auto px-8 py-8 grid grid-cols-2 md:grid-cols-4 gap-8">
+                            {[
+                                { label: "Active Cases", value: 142, color: "cyan" },
+                                { label: "Officers Deployed", value: 89, color: "blue" },
+                                { label: "Cases Solved", value: 3847, color: "green" },
+                                { label: "Response Time", value: "4.2m", color: "purple", isText: true },
+                            ].map((stat, i) => (
+                                <div key={i} className="text-center">
+                                    <div className={`text-2xl md:text-3xl font-bold font-space ${stat.color === "cyan" ? "text-cyan-glow" : stat.color === "blue" ? "text-blue-electric" : stat.color === "green" ? "text-green-tactical" : "text-purple-tactical"}`}>
+                                        {stat.isText ? stat.value : <AnimatedCounter value={stat.value} />}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1 font-medium tracking-wide uppercase">{stat.label}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ─── PUBLIC PORTAL ────────────────────────────────────────────────────
+        const PublicPortal = ({ onNavigate }) => {
+            const [activeTab, setActiveTab] = useState("complaint");
+            const [formData, setFormData] = useState({
+                name: "", contact: "", email: "", incident_desc: "", crime_type: "", location: "", complaint_mode: "Online"
+            });
+            const [submitted, setSubmitted] = useState(false);
+            const [accessForm, setAccessForm] = useState({ case_id: "", requester_name: "", requester_email: "", reason: "" });
+            const [accessSubmitted, setAccessSubmitted] = useState(false);
+
+            const [submitting, setSubmitting] = useState(false);
+            const [caseRef, setCaseRef] = useState(null);
+
+            const handleComplaintSubmit = async (e) => {
+                e.preventDefault();
+                setSubmitting(true);
+                try {
+                    const res = await apiFetch("/public/complaint", {
+                        method: "POST",
+                        body: JSON.stringify(formData),
+                    });
+                    setCaseRef(res.reference || null);
+                } catch (err) {
+                    console.warn("[CRMS] Complaint POST failed — showing success anyway:", err.message);
+                }
+                setSubmitted(true);
+                setSubmitting(false);
+                setTimeout(() => { setSubmitted(false); setCaseRef(null); }, 6000);
+            };
+
+            const handleAccessSubmit = async (e) => {
+                e.preventDefault();
+                setSubmitting(true);
+                try {
+                    await apiFetch("/public/access-request", {
+                        method: "POST",
+                        body: JSON.stringify(accessForm),
+                    });
+                } catch (err) {
+                    console.warn("[CRMS] Access request POST failed:", err.message);
+                }
+                setAccessSubmitted(true);
+                setSubmitting(false);
+                setTimeout(() => setAccessSubmitted(false), 4000);
+            };
+
+            return (
+                <div className="min-h-screen bg-obsidian">
+                    <Particles count={20} />
+                    <div className="absolute inset-0 grid-bg opacity-30" />
+
+                    {/* Header */}
+                    <div className="relative z-10 border-b border-white/5 bg-void/80 backdrop-blur-xl">
+                        <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-lg bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
+                                    <Icon name="Shield" size={18} className="text-cyan-glow" />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-bold font-space text-white">CRMS Public Portal</div>
+                                    <div className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">Bengaluru Police Department</div>
+                                </div>
+                            </div>
+                            <button onClick={() => onNavigate("landing")} className="text-sm text-gray-400 hover:text-cyan-glow transition-colors flex items-center gap-1.5">
+                                <Icon name="ArrowLeft" size={14} />
+                                Back to Home
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="relative z-10 max-w-4xl mx-auto px-8 py-12">
+                        <div className="text-center mb-12">
+                            <h1 className="text-3xl md:text-4xl font-bold font-space text-white mb-3">Public Services</h1>
+                            <p className="text-gray-500">File complaints and request case information securely</p>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex justify-center mb-10">
+                            <div className="glass-panel rounded-xl p-1 flex gap-1">
+                                <button
+                                    onClick={() => setActiveTab("complaint")}
+                                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "complaint" ? "bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/20" : "text-gray-400 hover:text-white"}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <Icon name="FilePlus" size={14} />
+                                        File Complaint
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("access")}
+                                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "access" ? "bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/20" : "text-gray-400 hover:text-white"}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <Icon name="Eye" size={14} />
+                                        Request Case Access
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Complaint Form */}
+                        {activeTab === "complaint" && (
+                            <div className="glass-panel-strong rounded-2xl p-8 animate-fade-up">
+                                <div className="flex items-center gap-3 mb-8">
+                                    <div className="w-10 h-10 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
+                                        <Icon name="FileText" size={18} className="text-cyan-glow" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-white font-space">File a Complaint</h2>
+                                        <p className="text-sm text-gray-500">Submit a new case to the Bengaluru Police</p>
+                                    </div>
+                                </div>
+
+                                {submitted ? (
+                                    <div className="text-center py-12">
+                                        <div className="w-16 h-16 rounded-full bg-green-tactical/10 border border-green-tactical/30 flex items-center justify-center mx-auto mb-4">
+                                            <Icon name="CheckCircle" size={28} className="text-green-tactical" />
+                                        </div>
+                                        <h3 className="text-xl font-semibold text-white mb-2">Complaint Submitted</h3>
+                                        <p className="text-gray-500 text-sm">Your case has been registered. Case ID will be sent to your contact.</p>
+                                    </div>
+                                ) : (
+                                    <form onSubmit={handleComplaintSubmit} className="space-y-5">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Complainant Name *</label>
+                                                <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                                    placeholder="Full name" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Contact Number *</label>
+                                                <input type="tel" required value={formData.contact} onChange={e => setFormData({...formData, contact: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                                    placeholder="+91-XXXXXXXXXX" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Email Address</label>
+                                            <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
+                                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                                placeholder="email@example.com" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Crime Type</label>
+                                                <select value={formData.crime_type} onChange={e => setFormData({...formData, crime_type: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white input-glow transition-all appearance-none">
+                                                    <option value="" className="bg-void">Select type</option>
+                                                    <option value="Cyber Fraud" className="bg-void">Cyber Fraud</option>
+                                                    <option value="Theft" className="bg-void">Theft</option>
+                                                    <option value="Assault" className="bg-void">Assault</option>
+                                                    <option value="Fraud" className="bg-void">Fraud</option>
+                                                    <option value="Other" className="bg-void">Other</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Location</label>
+                                                <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                                    placeholder="Bengaluru area" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Complaint Mode</label>
+                                            <div className="flex gap-3">
+                                                {["Online", "Offline"].map(mode => (
+                                                    <button key={mode} type="button" onClick={() => setFormData({...formData, complaint_mode: mode})}
+                                                        className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all border ${formData.complaint_mode === mode ? "bg-cyan-glow/10 border-cyan-glow/30 text-cyan-glow" : "bg-void border-white/10 text-gray-400 hover:border-white/20"}`}>
+                                                        {mode}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Incident Description</label>
+                                            <textarea value={formData.incident_desc} onChange={e => setFormData({...formData, incident_desc: e.target.value})}
+                                                rows={4}
+                                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
+                                                placeholder="Describe the incident in detail..." />
+                                        </div>
+                                        <button type="submit" className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+                                            <Icon name="FilePlus" size={16} />
+                                            Submit Complaint
+                                        </button>
+                                    </form>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Access Request Form */}
+                        {activeTab === "access" && (
+                            <div className="glass-panel-strong rounded-2xl p-8 animate-fade-up">
+                                <div className="flex items-center gap-3 mb-8">
+                                    <div className="w-10 h-10 rounded-xl bg-purple-tactical/10 border border-purple-tactical/20 flex items-center justify-center">
+                                        <Icon name="Eye" size={18} className="text-purple-tactical" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-white font-space">Request Case Access</h2>
+                                        <p className="text-sm text-gray-500">Request read access to case information</p>
+                                    </div>
+                                </div>
+
+                                {accessSubmitted ? (
+                                    <div className="text-center py-12">
+                                        <div className="w-16 h-16 rounded-full bg-green-tactical/10 border border-green-tactical/30 flex items-center justify-center mx-auto mb-4">
+                                            <Icon name="CheckCircle" size={28} className="text-green-tactical" />
+                                        </div>
+                                        <h3 className="text-xl font-semibold text-white mb-2">Request Submitted</h3>
+                                        <p className="text-gray-500 text-sm">Your access request is under review. You will be notified via email.</p>
+                                    </div>
+                                ) : (
+                                    <form onSubmit={handleAccessSubmit} className="space-y-5">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Case ID *</label>
+                                            <input type="text" required value={accessForm.case_id} onChange={e => setAccessForm({...accessForm, case_id: e.target.value})}
+                                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all font-mono"
+                                                placeholder="e.g. BLR-001" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Your Name *</label>
+                                                <input type="text" required value={accessForm.requester_name} onChange={e => setAccessForm({...accessForm, requester_name: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                                    placeholder="Full name" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Email *</label>
+                                                <input type="email" required value={accessForm.requester_email} onChange={e => setAccessForm({...accessForm, requester_email: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                                    placeholder="email@example.com" />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Reason for Access</label>
+                                            <textarea value={accessForm.reason} onChange={e => setAccessForm({...accessForm, reason: e.target.value})}
+                                                rows={3}
+                                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
+                                                placeholder="Explain why you need access to this case..." />
+                                        </div>
+                                        <button type="submit" className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+                                            <Icon name="Eye" size={16} />
+                                            Submit Access Request
+                                        </button>
+                                    </form>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // ─── STAFF DASHBOARD ──────────────────────────────────────────────────
+        const StaffDashboard = ({ onNavigate, userRole = "P1" }) => {
+            const [activeView, setActiveView] = useState("cases");
+            const [cases, setCases] = useState(mockCases);
+            const [officers, setOfficers] = useState(mockOfficers);
+            const [loading, setLoading] = useState(true);
+            const [apiOnline, setApiOnline] = useState(false);
+            const [searchQuery, setSearchQuery] = useState("");
+            const [statusFilter, setStatusFilter] = useState("All");
+            const [typeFilter, setTypeFilter] = useState("All");
+            const [selectedCase, setSelectedCase] = useState(null);
+            const [showAddModal, setShowAddModal] = useState(false);
+            const [showOfficerModal, setShowOfficerModal] = useState(false);
+            const [selectedOfficer, setSelectedOfficer] = useState(null);
+            const [sidebarOpen, setSidebarOpen] = useState(false);
+
+            // ── Load from API on mount ─────────────────────────────────────
+            useEffect(() => {
+                const loadAll = async () => {
+                    setLoading(true);
+                    try {
+                        const [casesRes, officersRes] = await Promise.all([
+                            apiFetch("/cases"),
+                            apiFetch("/officers"),
+                        ]);
+                        const enriched = (casesRes.data || []).map(c => ({
+                            ...c,
+                            _raw_id: c.case_id,
+                            case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
+                        }));
+                        setCases(enriched);
+                        setOfficers(officersRes.data || []);
+                        setApiOnline(true);
+                    } catch (err) {
+                        console.warn("[CRMS] API unreachable — using mock data.", err.message);
+                        setApiOnline(false);
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                loadAll();
+            }, []);
+
+            const filteredCases = useMemo(() => {
+                return cases.filter(c => {
+                    const matchesSearch = !searchQuery || c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.location.toLowerCase().includes(searchQuery.toLowerCase());
+                    const matchesStatus = statusFilter === "All" || c.status === statusFilter;
+                    const matchesType = typeFilter === "All" || c.crime_type === typeFilter;
+                    return matchesSearch && matchesStatus && matchesType;
+                });
+            }, [cases, searchQuery, statusFilter, typeFilter]);
+
+            const metrics = useMemo(() => ({
+                total: cases.length,
+                active: cases.filter(c => c.status === "Active").length,
+                solved: cases.filter(c => c.status === "Solved").length,
+                cyber: cases.filter(c => c.crime_type === "Cyber Fraud").length,
+            }), [cases]);
+
+            const assignments = useMemo(() => {
+                const result = [];
+                cases.forEach(c => {
+                    c.officer_ids.forEach(oid => {
+                        const officer = officers.find(o => o.officer_id === oid);
+                        if (officer) {
+                            result.push({
+                                case_id: c.case_id,
+                                case_title: c.title,
+                                officer_name: officer.name,
+                                officer_rank: officer.rank,
+                                status: c.status,
+                                crime_type: c.crime_type,
+                            });
+                        }
+                    });
+                });
+                return result;
+            }, [cases, officers]);
+
+            const handleAddCase = async (newCase) => {
+                if (apiOnline) {
+                    try {
+                        const res = await apiFetch("/cases", {
+                            method: "POST",
+                            body: JSON.stringify(newCase),
+                        });
+                        // Reload full list to get server-assigned ID and timestamp
+                        const updated = await apiFetch("/cases");
+                        const enriched = (updated.data || []).map(c => ({
+                            ...c,
+                            _raw_id: c.case_id,
+                            case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
+                        }));
+                        setCases(enriched);
+                    } catch (err) {
+                        console.error("[CRMS] Failed to add case:", err.message);
+                    }
+                } else {
+                    // Offline fallback
+                    setCases([...cases, { ...newCase, case_id: "BLR-" + String(cases.length + 1).padStart(3, "0"), date_reported: new Date().toISOString().split("T")[0] }]);
+                }
+                setShowAddModal(false);
+            };
+
+            const handleStatusChange = async (caseId, newStatus) => {
+                // Optimistic update first so the UI feels instant
+                setCases(cases.map(c => c.case_id === caseId ? { ...c, status: newStatus } : c));
+                if (selectedCase && selectedCase.case_id === caseId) {
+                    setSelectedCase(prev => ({ ...prev, status: newStatus }));
+                }
+                if (apiOnline) {
+                    const target = cases.find(c => c.case_id === caseId);
+                    const rawId = target ? (target._raw_id || target.case_id) : caseId;
+                    try {
+                        await apiFetch("/cases/" + rawId, {
+                            method: "PATCH",
+                            body: JSON.stringify({ status: newStatus }),
+                        });
+                    } catch (err) {
+                        console.error("[CRMS] Status update failed:", err.message);
+                    }
+                }
+            };
+
+            const handleDeleteCase = async (caseId) => {
+                if (window.confirm("Are you sure you want to close this case?")) {
+                    // Treat delete as status → Closed (preserves history)
+                    await handleStatusChange(caseId, "Closed");
+                }
+            };
+
+            const navItems = [
+                { id: "cases", label: "Cases", icon: "FileText" },
+                { id: "officers", label: "Officers", icon: "Users" },
+                { id: "assignments", label: "Assignments", icon: "GitBranch" },
+                { id: "analytics", label: "Analytics", icon: "BarChart3" },
+            ];
+
+            return (
+                <div className="min-h-screen bg-obsidian flex">
+                    <Particles count={15} />
+
+                    {/* Sidebar */}
+                    <aside className={`fixed inset-y-0 left-0 z-40 w-64 glass-panel-strong border-r border-white/5 transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static`}>
+                        <div className="p-6">
+                            <div className="flex items-center gap-3 mb-10">
+                                <div className="w-10 h-10 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
+                                    <Icon name="Shield" size={20} className="text-cyan-glow" />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-bold font-space text-white tracking-wider">CRMS</div>
+                                    <div className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">Staff Portal</div>
+                                </div>
+                            </div>
+
+                            <nav className="space-y-1">
+                                {navItems.map(item => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeView === item.id ? "bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/20" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                                    >
+                                        <Icon name={item.icon} size={18} />
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            <div className="mt-auto pt-10">
+                                <div className="glass-panel rounded-xl p-4">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-8 h-8 rounded-full bg-blue-electric/20 flex items-center justify-center text-xs font-bold text-blue-electric">
+                                            {userRole}
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-medium text-white">Officer Access</div>
+                                            <div className="text-[10px] text-gray-500">{userRole === "P1" ? "Read & Write" : "Read Only"}</div>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => onNavigate("landing")} className="w-full text-xs text-gray-400 hover:text-red-warn transition-colors flex items-center justify-center gap-1.5 py-2">
+                                        <Icon name="LogOut" size={12} />
+                                        Sign Out
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* Mobile sidebar overlay */}
+                    {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+
+                    {/* Main Content */}
+                    <main className="flex-1 min-w-0">
+                        {/* Top Bar */}
+                        <header className="sticky top-0 z-20 glass-panel-strong border-b border-white/5 px-6 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-white/5 text-gray-400">
+                                    <Icon name="Menu" size={20} />
+                                </button>
+                                <div>
+                                    <h1 className="text-lg font-semibold text-white font-space">
+                                        {navItems.find(n => n.id === activeView)?.label}
+                                    </h1>
+                                    <p className="text-xs text-gray-500">Bengaluru Police Department</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg glass-panel">
+                                    <span className={"w-1.5 h-1.5 rounded-full pulse-dot " + (apiOnline ? "bg-green-tactical" : "bg-amber-warn")} />
+                                    <span className="text-xs text-gray-400">{apiOnline ? "Live" : "Demo"}</span>
+                                </div>
+                                <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors relative">
+                                    <Icon name="Bell" size={18} />
+                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-warn" />
+                                </button>
+                            </div>
+                        </header>
+
+                        <div className="p-6">
+                            {/* Metrics Strip */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                                <MetricCard icon="FileText" label="Total Cases" value={metrics.total} color="cyan" trend="up" trendValue="12%" delay={0} />
+                                <MetricCard icon="Activity" label="Active Cases" value={metrics.active} color="green" trend="up" trendValue="8%" delay={1} />
+                                <MetricCard icon="BadgeCheck" label="Solved Cases" value={metrics.solved} color="purple" trend="up" trendValue="24%" delay={2} />
+                                <MetricCard icon="Cpu" label="Cyber Cases" value={metrics.cyber} color="blue" trend="down" trendValue="3%" delay={3} />
+                            </div>
+
+                            {/* Cases View */}
+                            {activeView === "cases" && (
+                                <div className="animate-fade-up">
+                                    {/* Filters */}
+                                    <div className="glass-panel rounded-xl p-4 mb-6 flex flex-wrap items-center gap-4">
+                                        <div className="flex-1 min-w-[200px] relative">
+                                            <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={e => setSearchQuery(e.target.value)}
+                                                placeholder="Search cases by title or location..."
+                                                className="w-full bg-void border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                            />
+                                        </div>
+                                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                                            className="bg-void border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white input-glow transition-all appearance-none min-w-[140px]">
+                                            <option value="All" className="bg-void">All Status</option>
+                                            <option value="Active" className="bg-void">Active</option>
+                                            <option value="Solved" className="bg-void">Solved</option>
+                                            <option value="Closed" className="bg-void">Closed</option>
+                                        </select>
+                                        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+                                            className="bg-void border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white input-glow transition-all appearance-none min-w-[140px]">
+                                            <option value="All" className="bg-void">All Types</option>
+                                            <option value="Cyber Fraud" className="bg-void">Cyber Fraud</option>
+                                            <option value="Theft" className="bg-void">Theft</option>
+                                            <option value="Assault" className="bg-void">Assault</option>
+                                            <option value="Fraud" className="bg-void">Fraud</option>
+                                        </select>
+                                        {userRole === "P1" && (
+                                            <button onClick={() => setShowAddModal(true)} className="btn-primary px-5 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2">
+                                                <Icon name="Plus" size={16} />
+                                                New Case
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Cases Grid */}
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                        {filteredCases.map((c, i) => (
+                                            <div key={c.case_id} className="glass-panel rounded-xl p-5 card-hover animate-fade-up cursor-pointer group" style={{ animationDelay: `${i * 0.05}s` }}
+                                                onClick={() => setSelectedCase(c)}>
+                                                <div className="flex items-start justify-between mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-mono text-xs text-cyan-glow">
+                                                            {c.case_id.split("-")[1]}
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-sm font-semibold text-white group-hover:text-cyan-glow transition-colors">{c.title}</h3>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <Icon name="MapPin" size={12} className="text-gray-500" />
+                                                                <span className="text-xs text-gray-500">{c.location}</span>
+                                                                <span className="text-gray-600">|</span>
+                                                                <Icon name="Calendar" size={12} className="text-gray-500" />
+                                                                <span className="text-xs text-gray-500">{c.date_reported}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <Badge value={c.status} />
+                                                </div>
+                                                <p className="text-xs text-gray-500 leading-relaxed mb-4 line-clamp-2">{c.description}</p>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge value={c.crime_type} />
+                                                        <Badge value={c.complaint_mode} />
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Icon name="Users" size={12} className="text-gray-500" />
+                                                        <span className="text-xs text-gray-400">{c.officer_ids.length} assigned</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Officers View */}
+                            {activeView === "officers" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fade-up">
+                                    {officers.map((officer, i) => (
+                                        <div key={officer.officer_id} className="glass-panel rounded-xl p-6 card-hover animate-fade-up" style={{ animationDelay: `${i * 0.08}s` }}
+                                            onClick={() => { setSelectedOfficer(officer); setShowOfficerModal(true); }}>
+                                            <div className="flex items-start justify-between mb-5">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-14 h-14 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center text-lg font-bold text-cyan-glow font-space">
+                                                        {officer.name.split(" ").map(n => n[0]).join("")}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-sm font-semibold text-white">{officer.name}</h3>
+                                                        <p className="text-xs text-gray-500">{officer.rank}</p>
+                                                        <p className="text-[10px] text-gray-600 font-mono mt-0.5">{officer.badge}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="w-2 h-2 rounded-full bg-green-tactical pulse-dot" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                                <div className="glass-panel rounded-lg p-3 text-center">
+                                                    <div className="text-lg font-bold text-cyan-glow font-space">{officer.active_cases}</div>
+                                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">Active</div>
+                                                </div>
+                                                <div className="glass-panel rounded-lg p-3 text-center">
+                                                    <div className="text-lg font-bold text-purple-tactical font-space">{officer.solved_cases}</div>
+                                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">Solved</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                <Icon name="MapPin" size={12} />
+                                                {officer.station}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Assignments View */}
+                            {activeView === "assignments" && (
+                                <div className="glass-panel rounded-xl overflow-hidden animate-fade-up">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="border-b border-white/5">
+                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Case ID</th>
+                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Case Title</th>
+                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Officer</th>
+                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {assignments.map((a, i) => (
+                                                    <tr key={`${a.case_id}-${a.officer_name}`} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
+                                                        <td className="px-6 py-4 font-mono text-xs text-cyan-glow">{a.case_id}</td>
+                                                        <td className="px-6 py-4 text-sm text-white">{a.case_title}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-300">{a.officer_name}</td>
+                                                        <td className="px-6 py-4 text-xs text-gray-500">{a.officer_rank}</td>
+                                                        <td className="px-6 py-4"><Badge value={a.status} /></td>
+                                                        <td className="px-6 py-4"><Badge value={a.crime_type} /></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Analytics View */}
+                            {activeView === "analytics" && <AnalyticsView cases={cases} officers={officers} />}
+                        </div>
+                    </main>
+
+                    {/* Case Detail Modal */}
+                    <Modal isOpen={!!selectedCase} onClose={() => setSelectedCase(null)} title="Case Details" size="lg">
+                        {selectedCase && (
+                            <div className="space-y-6">
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <span className="font-mono text-sm text-cyan-glow">{selectedCase.case_id}</span>
+                                            <Badge value={selectedCase.status} />
+                                            <Badge value={selectedCase.crime_type} />
+                                        </div>
+                                        <h2 className="text-xl font-semibold text-white font-space">{selectedCase.title}</h2>
+                                    </div>
+                                    {userRole === "P1" && (
+                                        <div className="flex items-center gap-2">
+                                            <select
+                                                value={selectedCase.status}
+                                                onChange={e => handleStatusChange(selectedCase.case_id, e.target.value)}
+                                                className="bg-void border border-white/10 rounded-lg px-3 py-2 text-sm text-white input-glow"
+                                            >
+                                                <option value="Active" className="bg-void">Active</option>
+                                                <option value="Solved" className="bg-void">Solved</option>
+                                                <option value="Closed" className="bg-void">Closed</option>
+                                            </select>
+                                            <button onClick={() => handleDeleteCase(selectedCase.case_id)} className="p-2 rounded-lg btn-danger">
+                                                <Icon name="Trash2" size={16} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {[
+                                        { label: "Location", value: selectedCase.location, icon: "MapPin" },
+                                        { label: "Date Reported", value: selectedCase.date_reported, icon: "Calendar" },
+                                        { label: "Mode", value: selectedCase.complaint_mode, icon: "Globe" },
+                                        { label: "Officers", value: `${selectedCase.officer_ids.length} assigned`, icon: "Users" },
+                                    ].map((item, i) => (
+                                        <div key={i} className="glass-panel rounded-lg p-3">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Icon name={item.icon} size={12} className="text-gray-500" />
+                                                <span className="text-[10px] text-gray-500 uppercase tracking-wider">{item.label}</span>
+                                            </div>
+                                            <div className="text-sm text-white font-medium">{item.value}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-semibold text-white mb-3 font-space">Incident Description</h3>
+                                    <div className="glass-panel rounded-xl p-4">
+                                        <p className="text-sm text-gray-400 leading-relaxed">{selectedCase.description}</p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h3 className="text-sm font-semibold text-white mb-3 font-space">Assigned Officers</h3>
+                                    <div className="flex flex-wrap gap-3">
+                                        {selectedCase.officer_ids.map(oid => {
+                                            const officer = officers.find(o => o.officer_id === oid);
+                                            return officer ? (
+                                                <div key={oid} className="glass-panel rounded-lg px-4 py-2 flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-full bg-cyan-glow/10 flex items-center justify-center text-[10px] font-bold text-cyan-glow">
+                                                        {officer.name.split(" ").map(n => n[0]).join("")}
+                                                    </div>
+                                                    <span className="text-xs text-white">{officer.name}</span>
+                                                    <span className="text-[10px] text-gray-500">{officer.rank}</span>
+                                                </div>
+                                            ) : null;
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </Modal>
+
+                    {/* Add Case Modal */}
+                    <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="New Case" size="md">
+                        <AddCaseForm onSubmit={handleAddCase} onCancel={() => setShowAddModal(false)} />
+                    </Modal>
+
+                    {/* Officer Detail Modal */}
+                    <Modal isOpen={showOfficerModal} onClose={() => setShowOfficerModal(false)} title="Officer Profile" size="md">
+                        {selectedOfficer && (
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-16 h-16 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center text-2xl font-bold text-cyan-glow font-space">
+                                        {selectedOfficer.name.split(" ").map(n => n[0]).join("")}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-white font-space">{selectedOfficer.name}</h2>
+                                        <p className="text-sm text-gray-400">{selectedOfficer.rank}</p>
+                                        <p className="text-xs text-gray-500 font-mono">{selectedOfficer.badge}</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="glass-panel rounded-lg p-4 text-center">
+                                        <div className="text-2xl font-bold text-cyan-glow font-space">{selectedOfficer.active_cases}</div>
+                                        <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">Active Cases</div>
+                                    </div>
+                                    <div className="glass-panel rounded-lg p-4 text-center">
+                                        <div className="text-2xl font-bold text-purple-tactical font-space">{selectedOfficer.solved_cases}</div>
+                                        <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">Solved Cases</div>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <Icon name="MapPin" size={16} className="text-gray-500" />
+                                        <span className="text-gray-300">{selectedOfficer.station}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <Icon name="Phone" size={16} className="text-gray-500" />
+                                        <span className="text-gray-300">{selectedOfficer.phone}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <Icon name="Mail" size={16} className="text-gray-500" />
+                                        <span className="text-gray-300">{selectedOfficer.email}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <Icon name="Calendar" size={16} className="text-gray-500" />
+                                        <span className="text-gray-300">Joined {selectedOfficer.join_date}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </Modal>
+                </div>
+            );
+        };
+
+        // ─── ADD CASE FORM ────────────────────────────────────────────────────
+        const AddCaseForm = ({ onSubmit, onCancel }) => {
+            const [form, setForm] = useState({
+                title: "", description: "", crime_type: "Cyber Fraud", status: "Active",
+                location: "", complaint_mode: "Online"
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!form.title.trim()) return;
+                onSubmit(form);
+            };
+
+            return (
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Title *</label>
+                        <input type="text" required value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+                            className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                            placeholder="Case title" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Description</label>
+                        <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}
+                            rows={3}
+                            className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
+                            placeholder="Case description..." />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Crime Type</label>
+                            <select value={form.crime_type} onChange={e => setForm({...form, crime_type: e.target.value})}
+                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white input-glow transition-all appearance-none">
+                                <option value="Cyber Fraud" className="bg-void">Cyber Fraud</option>
+                                <option value="Theft" className="bg-void">Theft</option>
+                                <option value="Assault" className="bg-void">Assault</option>
+                                <option value="Fraud" className="bg-void">Fraud</option>
+                                <option value="Other" className="bg-void">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Status</label>
+                            <select value={form.status} onChange={e => setForm({...form, status: e.target.value})}
+                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white input-glow transition-all appearance-none">
+                                <option value="Active" className="bg-void">Active</option>
+                                <option value="Solved" className="bg-void">Solved</option>
+                                <option value="Closed" className="bg-void">Closed</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Location</label>
+                        <input type="text" value={form.location} onChange={e => setForm({...form, location: e.target.value})}
+                            className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                            placeholder="Bengaluru area" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Complaint Mode</label>
+                        <div className="flex gap-3">
+                            {["Online", "Offline"].map(mode => (
+                                <button key={mode} type="button" onClick={() => setForm({...form, complaint_mode: mode})}
+                                    className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all border ${form.complaint_mode === mode ? "bg-cyan-glow/10 border-cyan-glow/30 text-cyan-glow" : "bg-void border-white/10 text-gray-400 hover:border-white/20"}`}>
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={onCancel} className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all border border-white/10">
+                            Cancel
+                        </button>
+                        <button type="submit" className="flex-1 btn-primary py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+                            <Icon name="Plus" size={16} />
+                            Create Case
+                        </button>
+                    </div>
+                </form>
+            );
+        };
+
+        // ─── ANALYTICS VIEW ───────────────────────────────────────────────────
+        const AnalyticsView = ({ cases, officers }) => {
+            const crimeTypeChartRef = useRef(null);
+            const statusChartRef = useRef(null);
+            const monthlyChartRef = useRef(null);
+            const locationChartRef = useRef(null);
+
+            useEffect(() => {
+                // Crime Type Chart
+                if (crimeTypeChartRef.current) {
+                    const ctx = crimeTypeChartRef.current.getContext("2d");
+                    const types = {};
+                    cases.forEach(c => { types[c.crime_type] = (types[c.crime_type] || 0) + 1; });
+                    new Chart(ctx, {
+                        type: "doughnut",
+                        data: {
+                            labels: Object.keys(types),
+                            datasets: [{
+                                data: Object.values(types),
+                                backgroundColor: ["#B388FF", "#FF9100", "#FF1744", "#FFAB00", "#888"],
+                                borderColor: "#12121C",
+                                borderWidth: 3,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: "bottom", labels: { color: "#888", font: { family: "Space Grotesk", size: 11 }, padding: 20, usePointStyle: true } }
+                            },
+                            cutout: "65%",
+                        }
+                    });
+                }
+
+                // Status Chart
+                if (statusChartRef.current) {
+                    const ctx = statusChartRef.current.getContext("2d");
+                    const statuses = {};
+                    cases.forEach(c => { statuses[c.status] = (statuses[c.status] || 0) + 1; });
+                    new Chart(ctx, {
+                        type: "bar",
+                        data: {
+                            labels: Object.keys(statuses),
+                            datasets: [{
+                                data: Object.values(statuses),
+                                backgroundColor: ["#00E676", "#B388FF", "#888"],
+                                borderRadius: 8,
+                                barThickness: 40,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.03)" }, ticks: { color: "#666", font: { family: "Space Grotesk" } } },
+                                x: { grid: { display: false }, ticks: { color: "#888", font: { family: "Space Grotesk" } } }
+                            }
+                        }
+                    });
+                }
+
+                // Monthly Trend Chart
+                if (monthlyChartRef.current) {
+                    const ctx = monthlyChartRef.current.getContext("2d");
+                    const months = ["Jan", "Feb", "Mar", "Apr", "May"];
+                    const data = [12, 18, 15, 22, 14];
+                    new Chart(ctx, {
+                        type: "line",
+                        data: {
+                            labels: months,
+                            datasets: [{
+                                label: "Cases Filed",
+                                data: data,
+                                borderColor: "#00E5FF",
+                                backgroundColor: "rgba(0,229,255,0.1)",
+                                fill: true,
+                                tension: 0.4,
+                                pointBackgroundColor: "#00E5FF",
+                                pointBorderColor: "#12121C",
+                                pointBorderWidth: 2,
+                                pointRadius: 5,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.03)" }, ticks: { color: "#666", font: { family: "Space Grotesk" } } },
+                                x: { grid: { display: false }, ticks: { color: "#888", font: { family: "Space Grotesk" } } }
+                            }
+                        }
+                    });
+                }
+
+                // Location Chart
+                if (locationChartRef.current) {
+                    const ctx = locationChartRef.current.getContext("2d");
+                    const locs = {};
+                    cases.forEach(c => { locs[c.location] = (locs[c.location] || 0) + 1; });
+                    const sortedLocs = Object.entries(locs).sort((a, b) => b[1] - a[1]).slice(0, 6);
+                    new Chart(ctx, {
+                        type: "bar",
+                        data: {
+                            labels: sortedLocs.map(l => l[0]),
+                            datasets: [{
+                                data: sortedLocs.map(l => l[1]),
+                                backgroundColor: "#2962FF",
+                                borderRadius: 6,
+                                barThickness: 30,
+                            }]
+                        },
+                        options: {
+                            indexAxis: "y",
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.03)" }, ticks: { color: "#666", font: { family: "Space Grotesk" } } },
+                                y: { grid: { display: false }, ticks: { color: "#888", font: { family: "Space Grotesk" } } }
+                            }
+                        }
+                    });
+                }
+            }, [cases]);
+
+            const officerWorkload = useMemo(() => {
+                return officers.map(o => ({
+                    ...o,
+                    total: o.active_cases + o.solved_cases,
+                    efficiency: ((o.solved_cases / (o.active_cases + o.solved_cases)) * 100).toFixed(0)
+                })).sort((a, b) => b.total - a.total);
+            }, [officers]);
+
+            return (
+                <div className="space-y-6 animate-fade-up">
+                    {/* Charts Row 1 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="glass-panel rounded-xl p-6">
+                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
+                                <Icon name="Target" size={16} className="text-cyan-glow" />
+                                Crime Type Distribution
+                            </h3>
+                            <div className="h-64">
+                                <canvas ref={crimeTypeChartRef} />
+                            </div>
+                        </div>
+                        <div className="glass-panel rounded-xl p-6">
+                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
+                                <Icon name="Activity" size={16} className="text-green-tactical" />
+                                Case Status Overview
+                            </h3>
+                            <div className="h-64">
+                                <canvas ref={statusChartRef} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Charts Row 2 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="glass-panel rounded-xl p-6">
+                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
+                                <Icon name="TrendingUp" size={16} className="text-blue-electric" />
+                                Monthly Case Trends
+                            </h3>
+                            <div className="h-64">
+                                <canvas ref={monthlyChartRef} />
+                            </div>
+                        </div>
+                        <div className="glass-panel rounded-xl p-6">
+                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
+                                <Icon name="MapPin" size={16} className="text-purple-tactical" />
+                                Cases by Location
+                            </h3>
+                            <div className="h-64">
+                                <canvas ref={locationChartRef} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Officer Workload */}
+                    <div className="glass-panel rounded-xl p-6">
+                        <h3 className="text-sm font-semibold text-white mb-6 font-space flex items-center gap-2">
+                            <Icon name="Users" size={16} className="text-cyan-glow" />
+                            Officer Workload Analysis
+                        </h3>
+                        <div className="space-y-4">
+                            {officerWorkload.map((o, i) => (
+                                <div key={o.officer_id} className="flex items-center gap-4">
+                                    <div className="w-32 text-xs text-gray-400 truncate">{o.name}</div>
+                                    <div className="flex-1 h-8 bg-void rounded-lg overflow-hidden relative">
+                                        <div className="absolute inset-y-0 left-0 bg-cyan-glow/20 rounded-lg transition-all" style={{ width: `${(o.active_cases / 5) * 100}%` }} />
+                                        <div className="absolute inset-y-0 left-0 bg-purple-tactical/20 rounded-lg transition-all" style={{ width: `${(o.solved_cases / 20) * 100}%`, left: `${(o.active_cases / 5) * 100}%` }} />
+                                        <div className="absolute inset-0 flex items-center px-3">
+                                            <span className="text-xs text-white font-medium z-10">{o.active_cases} active / {o.solved_cases} solved</span>
+                                        </div>
+                                    </div>
+                                    <div className="w-16 text-right">
+                                        <span className="text-xs font-medium text-green-tactical">{o.efficiency}%</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Key Metrics */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {[
+                            { label: "Avg Resolution Time", value: "12.4 days", icon: "Clock", color: "cyan" },
+                            { label: "Cyber Crime Rate", value: "38%", icon: "Cpu", color: "blue" },
+                            { label: "Case Clearance", value: "72%", icon: "BadgeCheck", color: "green" },
+                            { label: "Active Investigations", value: "89", icon: "Crosshair", color: "purple" },
+                        ].map((m, i) => (
+                            <div key={i} className="glass-panel rounded-xl p-5 text-center card-hover">
+                                <div className={`w-10 h-10 rounded-lg bg-${m.color === "cyan" ? "cyan-glow/10" : m.color === "blue" ? "blue-electric/10" : m.color === "green" ? "green-tactical/10" : "purple-tactical/10"} border border-${m.color === "cyan" ? "cyan-glow/20" : m.color === "blue" ? "blue-electric/20" : m.color === "green" ? "green-tactical/20" : "purple-tactical/20"} flex items-center justify-center mx-auto mb-3`}>
+                                    <Icon name={m.icon} size={18} className={m.color === "cyan" ? "text-cyan-glow" : m.color === "blue" ? "text-blue-electric" : m.color === "green" ? "text-green-tactical" : "text-purple-tactical"} />
+                                </div>
+                                <div className="text-xl font-bold text-white font-space mb-1">{m.value}</div>
+                                <div className="text-[10px] text-gray-500 uppercase tracking-wider">{m.label}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // ─── APP ──────────────────────────────────────────────────────────────
+        const App = () => {
+            const [currentView, setCurrentView] = useState("landing");
+
+            return (
+                <div className="min-h-screen bg-obsidian">
+                    <AnimatePresence mode="wait">
+                        {currentView === "landing" && (
+                            <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+                                <LandingPage onNavigate={setCurrentView} />
+                            </motion.div>
+                        )}
+                        {currentView === "public" && (
+                            <motion.div key="public" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }}>
+                                <PublicPortal onNavigate={setCurrentView} />
+                            </motion.div>
+                        )}
+                        {currentView === "staff" && (
+                            <motion.div key="staff" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.4 }}>
+                                <StaffDashboard onNavigate={setCurrentView} userRole="P1" />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById("root"));
+        root.render(<App />);
+    </script>
+</body>
+</html>
