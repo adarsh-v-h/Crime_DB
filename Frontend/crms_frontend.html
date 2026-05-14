@@ -181,7 +181,7 @@
 
         // ─── API CONFIG ───────────────────────────────────────────────────────
         // Change this to match where your Flask server is running.
-        const API_BASE = "http://localhost:5000";
+        const API_BASE = "";  // relative — works on Railway, local, any host
 
         // Generic fetch helper — returns parsed JSON or throws with a readable message.
         const apiFetch = async (path, options = {}) => {
@@ -697,7 +697,13 @@
                                             <Icon name="CheckCircle" size={28} className="text-green-tactical" />
                                         </div>
                                         <h3 className="text-xl font-semibold text-white mb-2">Complaint Submitted</h3>
-                                        <p className="text-gray-500 text-sm">Your case has been registered. Case ID will be sent to your contact.</p>
+                                        {caseRef && (
+                                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-glow/10 border border-cyan-glow/20 mb-3 mx-auto">
+                                                <span className="text-xs text-gray-400">Reference:</span>
+                                                <span className="font-mono font-bold text-cyan-glow">{caseRef}</span>
+                                            </div>
+                                        )}
+                                        <p className="text-gray-500 text-sm">Your case has been registered. Save your reference number.</p>
                                     </div>
                                 ) : (
                                     <form onSubmit={handleComplaintSubmit} className="space-y-5">
@@ -824,8 +830,8 @@
         // ─── STAFF DASHBOARD ──────────────────────────────────────────────────
         const StaffDashboard = ({ onNavigate, userRole = "P1" }) => {
             const [activeView, setActiveView] = useState("cases");
-            const [cases, setCases] = useState(mockCases);
-            const [officers, setOfficers] = useState(mockOfficers);
+            const [cases, setCases] = useState([]);
+            const [officers, setOfficers] = useState([]);
             const [loading, setLoading] = useState(true);
             const [apiOnline, setApiOnline] = useState(false);
             const [searchQuery, setSearchQuery] = useState("");
@@ -836,6 +842,21 @@
             const [showOfficerModal, setShowOfficerModal] = useState(false);
             const [selectedOfficer, setSelectedOfficer] = useState(null);
             const [sidebarOpen, setSidebarOpen] = useState(false);
+            const [notifications, setNotifications] = useState([]);
+            const [showNotifs, setShowNotifs] = useState(false);
+            const notifRef = useRef(null);
+
+            const pushNotif = (title, msg) => {
+                const time = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+                setNotifications(prev => [{ title, msg, time }, ...prev].slice(0, 15));
+            };
+
+            // Close notif panel on outside click
+            useEffect(() => {
+                const handler = e => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifs(false); };
+                document.addEventListener("mousedown", handler);
+                return () => document.removeEventListener("mousedown", handler);
+            }, []);
 
             // ── Load from API on mount ─────────────────────────────────────
             useEffect(() => {
@@ -849,6 +870,7 @@
                         const enriched = (casesRes.data || []).map(c => ({
                             ...c,
                             _raw_id: c.case_id,
+                            officer_ids: Array.isArray(c.officer_ids) ? c.officer_ids : [],
                             case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
                         }));
                         setCases(enriched);
@@ -883,7 +905,7 @@
             const assignments = useMemo(() => {
                 const result = [];
                 cases.forEach(c => {
-                    c.officer_ids.forEach(oid => {
+                    (c.officer_ids || []).forEach(oid => {
                         const officer = officers.find(o => o.officer_id === oid);
                         if (officer) {
                             result.push({
@@ -903,34 +925,46 @@
             const handleAddCase = async (newCase) => {
                 if (apiOnline) {
                     try {
-                        const res = await apiFetch("/cases", {
+                        await apiFetch("/cases", {
                             method: "POST",
                             body: JSON.stringify(newCase),
                         });
-                        // Reload full list to get server-assigned ID and timestamp
+                        // Reload full list — gets server-assigned ID, timestamp, officer_ids
                         const updated = await apiFetch("/cases");
                         const enriched = (updated.data || []).map(c => ({
                             ...c,
                             _raw_id: c.case_id,
+                            officer_ids: Array.isArray(c.officer_ids) ? c.officer_ids : [],
                             case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
                         }));
                         setCases(enriched);
+                        pushNotif("Case Registered", newCase.title || "New case added");
+                        setShowAddModal(false);  // only close on success
                     } catch (err) {
                         console.error("[CRMS] Failed to add case:", err.message);
+                        alert("Could not register case: " + err.message);
+                        // Modal stays open so user can retry
                     }
                 } else {
-                    // Offline fallback
-                    setCases([...cases, { ...newCase, case_id: "BLR-" + String(cases.length + 1).padStart(3, "0"), date_reported: new Date().toISOString().split("T")[0] }]);
+                    setCases(prev => [...prev, {
+                        ...newCase,
+                        officer_ids: [],
+                        _raw_id: null,
+                        case_id: "BLR-" + String(cases.length + 1).padStart(3, "0"),
+                        date_reported: new Date().toISOString().split("T")[0],
+                    }]);
+                    pushNotif("Case Added (Demo)", newCase.title || "New case added locally");
+                    setShowAddModal(false);
                 }
-                setShowAddModal(false);
             };
 
             const handleStatusChange = async (caseId, newStatus) => {
-                // Optimistic update first so the UI feels instant
-                setCases(cases.map(c => c.case_id === caseId ? { ...c, status: newStatus } : c));
+                // Optimistic update — UI feels instant
+                setCases(prev => prev.map(c => c.case_id === caseId ? { ...c, status: newStatus } : c));
                 if (selectedCase && selectedCase.case_id === caseId) {
                     setSelectedCase(prev => ({ ...prev, status: newStatus }));
                 }
+                pushNotif("Status Updated", `${caseId} → ${newStatus}`);
                 if (apiOnline) {
                     const target = cases.find(c => c.case_id === caseId);
                     const rawId = target ? (target._raw_id || target.case_id) : caseId;
@@ -941,6 +975,7 @@
                         });
                     } catch (err) {
                         console.error("[CRMS] Status update failed:", err.message);
+                        pushNotif("Sync Error", "Status saved locally — DB update failed");
                     }
                 }
             };
@@ -1032,10 +1067,35 @@
                                     <span className={"w-1.5 h-1.5 rounded-full pulse-dot " + (apiOnline ? "bg-green-tactical" : "bg-amber-warn")} />
                                     <span className="text-xs text-gray-400">{apiOnline ? "Live" : "Demo"}</span>
                                 </div>
-                                <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors relative">
-                                    <Icon name="Bell" size={18} />
-                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-warn" />
-                                </button>
+                                <div className="relative" ref={notifRef}>
+                                    <button onClick={() => setShowNotifs(v => !v)}
+                                        className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors relative">
+                                        <Icon name="Bell" size={18} />
+                                        {notifications.length > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-warn" />}
+                                    </button>
+                                    {showNotifs && (
+                                        <div className="absolute right-0 top-11 w-80 glass-panel-strong rounded-xl border border-white/10 z-50 overflow-hidden shadow-2xl">
+                                            <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
+                                                <span className="text-xs font-bold text-white uppercase tracking-wider">Activity</span>
+                                                {notifications.length > 0 && <button onClick={() => setNotifications([])} className="text-[10px] text-gray-500 hover:text-cyan-glow transition-colors">Clear all</button>}
+                                            </div>
+                                            <div className="max-h-72 overflow-y-auto">
+                                                {notifications.length === 0
+                                                    ? <div className="px-4 py-8 text-center text-xs text-gray-500">No activity yet</div>
+                                                    : notifications.map((n, i) => (
+                                                        <div key={i} className="px-4 py-3 border-b border-white/[0.04] hover:bg-white/5 transition-colors">
+                                                            <div className="flex items-center justify-between mb-0.5">
+                                                                <span className="text-xs font-semibold text-white">{n.title}</span>
+                                                                <span className="text-[10px] text-gray-600">{n.time}</span>
+                                                            </div>
+                                                            <div className="text-[11px] text-gray-400">{n.msg}</div>
+                                                        </div>
+                                                    ))
+                                                }
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </header>
 
@@ -1048,8 +1108,16 @@
                                 <MetricCard icon="Cpu" label="Cyber Cases" value={metrics.cyber} color="blue" trend="down" trendValue="3%" delay={3} />
                             </div>
 
+                            {/* Loading state */}
+                            {loading && (
+                                <div className="flex flex-col items-center justify-center py-32 gap-4">
+                                    <div className="w-10 h-10 border-2 border-cyan-glow/20 border-t-cyan-glow rounded-full animate-spin" />
+                                    <span className="text-xs text-gray-500 tracking-widest uppercase">Connecting to database...</span>
+                                </div>
+                            )}
+
                             {/* Cases View */}
-                            {activeView === "cases" && (
+                            {!loading && activeView === "cases" && (
                                 <div className="animate-fade-up">
                                     {/* Filters */}
                                     <div className="glass-panel rounded-xl p-4 mb-6 flex flex-wrap items-center gap-4">
@@ -1087,6 +1155,12 @@
                                     </div>
 
                                     {/* Cases Grid */}
+                                    {filteredCases.length === 0 && !loading && (
+                                        <div className="text-center py-20 glass-panel rounded-xl">
+                                            <Icon name="FileText" size={36} className="text-gray-600 mx-auto mb-4" />
+                                            <p className="text-gray-500 text-sm">{searchQuery || statusFilter !== "All" || typeFilter !== "All" ? "No cases match your filters." : "No cases in the database yet."}</p>
+                                        </div>
+                                    )}
                                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                                         {filteredCases.map((c, i) => (
                                             <div key={c.case_id} className="glass-panel rounded-xl p-5 card-hover animate-fade-up cursor-pointer group" style={{ animationDelay: `${i * 0.05}s` }}
@@ -1094,7 +1168,7 @@
                                                 <div className="flex items-start justify-between mb-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-mono text-xs text-cyan-glow">
-                                                            {c.case_id.split("-")[1]}
+                                                            {String(c.case_id).split("-")[1] || String(c.case_id)}
                                                         </div>
                                                         <div>
                                                             <h3 className="text-sm font-semibold text-white group-hover:text-cyan-glow transition-colors">{c.title}</h3>
@@ -1117,7 +1191,7 @@
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
                                                         <Icon name="Users" size={12} className="text-gray-500" />
-                                                        <span className="text-xs text-gray-400">{c.officer_ids.length} assigned</span>
+                                                        <span className="text-xs text-gray-400">{(c.officer_ids||[]).length} assigned</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1127,7 +1201,7 @@
                             )}
 
                             {/* Officers View */}
-                            {activeView === "officers" && (
+                            {!loading && activeView === "officers" && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fade-up">
                                     {officers.map((officer, i) => (
                                         <div key={officer.officer_id} className="glass-panel rounded-xl p-6 card-hover animate-fade-up" style={{ animationDelay: `${i * 0.08}s` }}
@@ -1165,7 +1239,7 @@
                             )}
 
                             {/* Assignments View */}
-                            {activeView === "assignments" && (
+                            {!loading && activeView === "assignments" && (
                                 <div className="glass-panel rounded-xl overflow-hidden animate-fade-up">
                                     <div className="overflow-x-auto">
                                         <table className="w-full">
@@ -1197,7 +1271,7 @@
                             )}
 
                             {/* Analytics View */}
-                            {activeView === "analytics" && <AnalyticsView cases={cases} officers={officers} />}
+                            {!loading && activeView === "analytics" && <AnalyticsView cases={cases} officers={officers} />}
                         </div>
                     </main>
 
@@ -1237,7 +1311,7 @@
                                         { label: "Location", value: selectedCase.location, icon: "MapPin" },
                                         { label: "Date Reported", value: selectedCase.date_reported, icon: "Calendar" },
                                         { label: "Mode", value: selectedCase.complaint_mode, icon: "Globe" },
-                                        { label: "Officers", value: `${selectedCase.officer_ids.length} assigned`, icon: "Users" },
+                                        { label: "Officers", value: `${(selectedCase.officer_ids||[]).length} assigned`, icon: "Users" },
                                     ].map((item, i) => (
                                         <div key={i} className="glass-panel rounded-lg p-3">
                                             <div className="flex items-center gap-2 mb-1">
@@ -1259,7 +1333,7 @@
                                 <div>
                                     <h3 className="text-sm font-semibold text-white mb-3 font-space">Assigned Officers</h3>
                                     <div className="flex flex-wrap gap-3">
-                                        {selectedCase.officer_ids.map(oid => {
+                                        {(selectedCase.officer_ids||[]).map(oid => {
                                             const officer = officers.find(o => o.officer_id === oid);
                                             return officer ? (
                                                 <div key={oid} className="glass-panel rounded-lg px-4 py-2 flex items-center gap-2">
@@ -1417,14 +1491,19 @@
             const statusChartRef = useRef(null);
             const monthlyChartRef = useRef(null);
             const locationChartRef = useRef(null);
+            const chartInstances = useRef({});
 
             useEffect(() => {
+                // Destroy existing instances before recreating (prevents "canvas already in use")
+                Object.values(chartInstances.current).forEach(c => c && c.destroy());
+                chartInstances.current = {};
+
                 // Crime Type Chart
                 if (crimeTypeChartRef.current) {
                     const ctx = crimeTypeChartRef.current.getContext("2d");
                     const types = {};
                     cases.forEach(c => { types[c.crime_type] = (types[c.crime_type] || 0) + 1; });
-                    new Chart(ctx, {
+                    chartInstances.current.crime = new Chart(ctx, {
                         type: "doughnut",
                         data: {
                             labels: Object.keys(types),
@@ -1451,7 +1530,7 @@
                     const ctx = statusChartRef.current.getContext("2d");
                     const statuses = {};
                     cases.forEach(c => { statuses[c.status] = (statuses[c.status] || 0) + 1; });
-                    new Chart(ctx, {
+                    chartInstances.current.status = new Chart(ctx, {
                         type: "bar",
                         data: {
                             labels: Object.keys(statuses),
@@ -1474,12 +1553,22 @@
                     });
                 }
 
-                // Monthly Trend Chart
+                // Monthly Trend Chart — computed from real case data
                 if (monthlyChartRef.current) {
                     const ctx = monthlyChartRef.current.getContext("2d");
-                    const months = ["Jan", "Feb", "Mar", "Apr", "May"];
-                    const data = [12, 18, 15, 22, 14];
-                    new Chart(ctx, {
+                    const mNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                    const mCounts = {};
+                    cases.forEach(c => {
+                        if (!c.date_reported) return;
+                        const d = new Date(c.date_reported);
+                        if (isNaN(d)) return;
+                        const key = mNames[d.getMonth()] + " '" + String(d.getFullYear()).slice(2);
+                        mCounts[key] = (mCounts[key] || 0) + 1;
+                    });
+                    const sortedKeys = Object.keys(mCounts).sort((a,b) => new Date("1 "+a) - new Date("1 "+b)).slice(-6);
+                    const months = sortedKeys.length ? sortedKeys : mNames.slice(0,6);
+                    const data   = sortedKeys.length ? sortedKeys.map(k => mCounts[k]) : [0,0,0,0,0,0];
+                    chartInstances.current.monthly = new Chart(ctx, {
                         type: "line",
                         data: {
                             labels: months,
@@ -1514,7 +1603,7 @@
                     const locs = {};
                     cases.forEach(c => { locs[c.location] = (locs[c.location] || 0) + 1; });
                     const sortedLocs = Object.entries(locs).sort((a, b) => b[1] - a[1]).slice(0, 6);
-                    new Chart(ctx, {
+                    chartInstances.current.location = new Chart(ctx, {
                         type: "bar",
                         data: {
                             labels: sortedLocs.map(l => l[0]),
@@ -1537,13 +1626,13 @@
                         }
                     });
                 }
-            }, [cases]);
+            }, [cases, officers]);
 
             const officerWorkload = useMemo(() => {
                 return officers.map(o => ({
                     ...o,
                     total: o.active_cases + o.solved_cases,
-                    efficiency: ((o.solved_cases / (o.active_cases + o.solved_cases)) * 100).toFixed(0)
+                    efficiency: (o.active_cases + o.solved_cases) > 0 ? ((o.solved_cases / (o.active_cases + o.solved_cases)) * 100).toFixed(0) : '0'
                 })).sort((a, b) => b.total - a.total);
             }, [officers]);
 

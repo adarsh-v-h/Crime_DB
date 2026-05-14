@@ -477,11 +477,14 @@ def serve_frontend():
 # STARTUP
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Init DB pool at module level — required for gunicorn/Railway
+# (gunicorn imports the module directly; __main__ block never runs)
+print("=" * 60)
+print("  CRMS Flask API — Bengaluru Police Department")
+print("=" * 60)
+init_pool()
+
 if __name__ == "__main__":
-    print("=" * 60)
-    print("  CRMS Flask API — Bengaluru Police Department")
-    print("=" * 60)
-    init_pool()
     app.run(
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
