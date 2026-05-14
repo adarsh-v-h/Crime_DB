@@ -3,6 +3,7 @@
 # Every function opens its own connection, executes, commits if needed, and closes.
 
 from db_connection import get_db
+import bcrypt
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -99,16 +100,20 @@ def get_case_by_id(case_id):
         conn.close()
 
 
-def insert_case(title, description, crime_type, status, location, complaint_mode):
+def insert_case(title, description, crime_type, status, location, complaint_mode,
+               complainant_name=None, complainant_contact=None,
+               complainant_aadhaar=None, source="officer"):
     """Inserts a new case and returns its new case_id."""
     conn = get_db()
     cur  = conn.cursor()
     try:
         cur.execute(
             """INSERT INTO cases
-               (title, description, crime_type, `status`, `location`, complaint_mode, last_updated)
-               VALUES (%s, %s, %s, %s, %s, %s, NOW())""",
-            (title, description, crime_type, status, location, complaint_mode)
+               (title, description, crime_type, `status`, `location`, complaint_mode,
+                complainant_name, complainant_contact, complainant_aadhaar, `source`, last_updated)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())""",
+            (title, description, crime_type, status, location, complaint_mode,
+             complainant_name, complainant_contact, complainant_aadhaar, source)
         )
         conn.commit()
         return cur.lastrowid
@@ -218,6 +223,9 @@ def get_all_officers():
             officer.setdefault("email",      "")
             officer.setdefault("join_date",  "")
 
+        for o in officers:
+            o.pop("password_hash", None)   # never send hash to frontend
+
         return officers
     finally:
         cur.close()
@@ -232,7 +240,9 @@ def get_officer_by_id(officer_id):
         row = cur.fetchone()
         if not row:
             return None
-        return _row_to_dict(cur, row)
+        o = _row_to_dict(cur, row)
+        o.pop("password_hash", None)
+        return o
     finally:
         cur.close()
         conn.close()
@@ -382,24 +392,215 @@ def get_analytics():
 # PUBLIC PORTAL — complaint + access request
 # ──────────────────────────────────────────────────────────────────────────────
 
-def submit_public_complaint(name, contact, email, crime_type, location, complaint_mode, incident_desc):
+def submit_public_complaint(name, contact, email, aadhaar_last4,
+                             crime_type, location, complaint_mode, incident_desc):
     """
-    Inserts a citizen complaint directly into the cases table as a new Active case.
-    Returns the new case_id so the frontend can show a reference number.
+    Inserts a citizen complaint into the public_complaints staging table.
+    Officers then review and promote to the main cases table.
+    Returns the new complaint_id as the citizen's reference number.
+
+    aadhaar_last4: last 4 digits of Aadhaar for basic identity anchoring.
+    Never store the full Aadhaar — validate the format before calling this.
     """
-    title = f"{crime_type} — {location}" if location else f"{crime_type} complaint"
-    conn  = get_db()
-    cur   = conn.cursor()
+    conn = get_db()
+    cur  = conn.cursor()
     try:
         cur.execute(
-            """INSERT INTO cases
-               (title, description, crime_type, `status`, `location`, complaint_mode, last_updated)
-               VALUES (%s, %s, %s, 'Active', %s, %s, NOW())""",
-            (title, incident_desc or "", crime_type or "Other", location or "", complaint_mode or "Online")
+            """INSERT INTO public_complaints
+               (complainant_name, contact, email, aadhaar_last4,
+                crime_type, `location`, incident_desc, complaint_mode)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (name, contact, email or "", aadhaar_last4,
+             crime_type or "Other", location or "",
+             incident_desc or "", complaint_mode or "Online")
         )
         conn.commit()
-        new_id = cur.lastrowid
-        return new_id
+        return cur.lastrowid
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_public_complaints(status=None):
+    """Returns all public complaints (for officer review dashboard)."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        sql = "SELECT * FROM public_complaints WHERE 1=1"
+        params = []
+        if status:
+            sql += " AND `status` = %s"
+            params.append(status)
+        sql += " ORDER BY submitted_at DESC"
+        cur.execute(sql, params)
+        rows = _rows_to_list(cur, cur.fetchall())
+        for r in rows:
+            for key in ("submitted_at", "reviewed_at"):
+                if r.get(key) and hasattr(r[key], "isoformat"):
+                    r[key] = r[key].isoformat()
+        return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def promote_complaint(complaint_id, officer_id):
+    """
+    Promotes a public_complaint to a full case in the cases table.
+    Marks the complaint as Promoted and links the generated case_id back.
+    Returns the new case_id.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM public_complaints WHERE complaint_id = %s", (complaint_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        pc = _row_to_dict(cur, row)
+
+        title = f"{pc['crime_type']} - {pc['location']}"
+        cur.execute(
+            """INSERT INTO cases
+               (title, description, crime_type, `status`, `location`, complaint_mode,
+                complainant_name, complainant_contact, complainant_aadhaar, `source`, last_updated)
+               VALUES (%s, %s, %s, 'Active', %s, %s, %s, %s, %s, 'public', NOW())""",
+            (title, pc["incident_desc"], pc["crime_type"], pc["location"],
+             pc["complaint_mode"], pc["complainant_name"], pc["contact"], pc["aadhaar_last4"])
+        )
+        new_case_id = cur.lastrowid
+
+        cur.execute(
+            """UPDATE public_complaints
+               SET `status` = 'Promoted', promoted_case_id = %s,
+                   reviewed_by = %s, reviewed_at = NOW()
+               WHERE complaint_id = %s""",
+            (new_case_id, officer_id, complaint_id)
+        )
+        conn.commit()
+        return new_case_id
+    finally:
+        cur.close()
+        conn.close()
+
+
+def reject_complaint(complaint_id, officer_id):
+    """Marks a public complaint as Rejected."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """UPDATE public_complaints
+               SET `status` = 'Rejected', reviewed_by = %s, reviewed_at = NOW()
+               WHERE complaint_id = %s""",
+            (officer_id, complaint_id)
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# AUTH
+# ──────────────────────────────────────────────────────────────────────────────
+
+def verify_officer_login(badge_or_name: str, plain_password: str):
+    """
+    Verifies officer credentials. Accepts badge number or officer name.
+    Returns the officer dict (without password_hash) on success, None on failure.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        # Try badge first, then name
+        cur.execute(
+            "SELECT * FROM officers WHERE badge = %s OR `name` = %s LIMIT 1",
+            (badge_or_name, badge_or_name)
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        o = _row_to_dict(cur, row)
+
+        stored_hash = o.pop("password_hash", None)
+        if not stored_hash:
+            return None
+
+        if not bcrypt.checkpw(plain_password.encode(), stored_hash.encode()):
+            return None
+
+        # Attach computed case counts
+        oid = o["officer_id"]
+        cur.execute(
+            """SELECT COUNT(*) FROM case_officer co
+               JOIN cases c ON co.case_id = c.case_id
+               WHERE co.officer_id = %s AND c.`status` = 'Active'""",
+            (oid,)
+        )
+        o["active_cases"] = cur.fetchone()[0]
+        cur.execute(
+            """SELECT COUNT(*) FROM case_officer co
+               JOIN cases c ON co.case_id = c.case_id
+               WHERE co.officer_id = %s AND c.`status` = 'Solved'""",
+            (oid,)
+        )
+        o["solved_cases"] = cur.fetchone()[0]
+
+        return o   # role is included; frontend uses it to gate write actions
+    finally:
+        cur.close()
+        conn.close()
+
+
+def set_officer_password(officer_id: int, plain_password: str):
+    """Hashes and stores a new password for an officer."""
+    hashed = bcrypt.hashpw(plain_password.encode(), bcrypt.gensalt(rounds=12)).decode()
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "UPDATE officers SET password_hash = %s WHERE officer_id = %s",
+            (hashed, officer_id)
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STATS — landing page strip
+# ──────────────────────────────────────────────────────────────────────────────
+
+def get_public_stats():
+    """
+    Aggregates for the public landing page stats strip.
+    Returns real counts from the DB — replaces the hardcoded 142 / 89 / 3847 values.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Active'")
+        active_cases = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Solved'")
+        solved_cases = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM officers")
+        total_officers = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM cases WHERE crime_type = 'Cyber Fraud'")
+        cyber_cases = cur.fetchone()[0]
+
+        return {
+            "active_cases":   active_cases,
+            "solved_cases":   solved_cases,
+            "total_officers": total_officers,
+            "cyber_cases":    cyber_cases,
+        }
     finally:
         cur.close()
         conn.close()

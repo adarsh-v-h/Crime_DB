@@ -148,11 +148,19 @@ def add_case():
     if complaint_mode not in VALID_COMPLAINT_MODES:
         return _err(f"complaint_mode must be Online or Offline")
 
+    complainant_name    = (body.get("complainant_name")    or "").strip() or None
+    complainant_contact = (body.get("complainant_contact") or "").strip() or None
+    complainant_aadhaar = (body.get("complainant_aadhaar") or "").strip() or None
+    source              = "officer"   # officer-filed case
+
     try:
-        new_id = queries.insert_case(title, description, crime_type, status, location, complaint_mode)
+        new_id = queries.insert_case(
+            title, description, crime_type, status, location, complaint_mode,
+            complainant_name, complainant_contact, complainant_aadhaar, source
+        )
         return jsonify({
-            "success":        True,
-            "case_id":        new_id,
+            "success":         True,
+            "case_id":         new_id,
             "case_id_display": _format_case_id(new_id),
         }), 201
     except mysql.connector.Error as e:
@@ -369,28 +377,31 @@ def get_analytics():
 def public_complaint():
     """
     POST /public/complaint
-    Called from the public portal File Complaint form.
-    No authentication required.
-    Body: { name*, contact*, email, crime_type*, location*, complaint_mode, incident_desc* }
-    Returns: { success, case_id, reference }
+    Inserts into public_complaints staging table (NOT directly into cases).
+    Body: { name*, contact*, aadhaar_last4*, email, crime_type*, location*,
+            complaint_mode, incident_desc* }
+    Returns: { success, reference }   (reference = PC-XXX format)
     """
     body           = request.get_json(silent=True) or {}
-    name           = (body.get("name") or "").strip()
-    contact        = (body.get("contact") or "").strip()
-    email          = (body.get("email") or "").strip()
-    crime_type     = (body.get("crime_type") or "Other").strip()
-    location       = (body.get("location") or "").strip()
+    name           = (body.get("name")           or "").strip()
+    contact        = (body.get("contact")        or "").strip()
+    email          = (body.get("email")          or "").strip()
+    aadhaar_last4  = (body.get("aadhaar_last4")  or "").strip()
+    crime_type     = (body.get("crime_type")     or "Other").strip()
+    location       = (body.get("location")       or "").strip()
     complaint_mode = (body.get("complaint_mode") or "Online").strip()
-    incident_desc  = (body.get("incident_desc") or "").strip()
+    incident_desc  = (body.get("incident_desc")  or "").strip()
 
     if not name:
         return _err("name is required")
     if not contact:
         return _err("contact is required")
-    if not incident_desc:
-        return _err("incident_desc is required")
     if not location:
         return _err("location is required")
+    if not incident_desc:
+        return _err("incident_desc is required")
+    if not aadhaar_last4 or not aadhaar_last4.isdigit() or len(aadhaar_last4) != 4:
+        return _err("aadhaar_last4 must be exactly 4 digits")
     if crime_type not in VALID_CRIME_TYPES:
         crime_type = "Other"
     if complaint_mode not in VALID_COMPLAINT_MODES:
@@ -398,12 +409,13 @@ def public_complaint():
 
     try:
         new_id = queries.submit_public_complaint(
-            name, contact, email, crime_type, location, complaint_mode, incident_desc
+            name, contact, email, aadhaar_last4,
+            crime_type, location, complaint_mode, incident_desc
         )
         return jsonify({
             "success":   True,
-            "case_id":   new_id,
-            "reference": _format_case_id(new_id),
+            "complaint_id": new_id,
+            "reference": f"PC-{str(new_id).zfill(3)}",
         }), 201
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
@@ -436,6 +448,115 @@ def public_access_request():
     print(f"[ACCESS REQUEST] Case: {case_id} | From: {requester_name} <{requester_email}> | Reason: {reason}")
 
     return _ok(message="Access request submitted. You will be notified within 48 hours.")
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STATS  —  /stats
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/stats", methods=["GET"])
+def public_stats():
+    """
+    GET /stats
+    Returns real DB counts for the landing page stats strip.
+    No auth required — public endpoint.
+    """
+    try:
+        return _ok(queries.get_public_stats())
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# AUTH  —  /auth/login
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/auth/login", methods=["POST"])
+def officer_login():
+    """
+    POST /auth/login
+    Body: { identifier*, password* }
+    identifier = badge number (BPD-XXXX) or officer name
+
+    Returns: { success, officer: { officer_id, name, rank, role, badge, ... } }
+    The frontend uses `role` to gate write actions:
+      role = 'inspector'  → can add/edit cases (P1)
+      role = 'viewer'     → read-only (P2)
+
+    No JWT in this MVP — role is trusted from the response and checked
+    server-side on write endpoints via the X-Officer-Id header.
+    """
+    body       = request.get_json(silent=True) or {}
+    identifier = (body.get("identifier") or "").strip()
+    password   = (body.get("password")   or "").strip()
+
+    if not identifier:
+        return _err("identifier is required")
+    if not password:
+        return _err("password is required")
+
+    try:
+        officer = queries.verify_officer_login(identifier, password)
+        if not officer:
+            return _err("Invalid credentials", 401)
+        return _ok(officer=officer)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PUBLIC COMPLAINTS (officer review)  —  /public-complaints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/public-complaints", methods=["GET"])
+def list_public_complaints():
+    """
+    GET /public-complaints?status=Pending
+    Returns staging complaints for officer review dashboard.
+    """
+    status = request.args.get("status")
+    try:
+        return _ok(queries.get_public_complaints(status))
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/public-complaints/<int:complaint_id>/promote", methods=["POST"])
+def promote_complaint(complaint_id):
+    """
+    POST /public-complaints/<id>/promote
+    Promotes a staging complaint to a full case.
+    Header: X-Officer-Id required.
+    """
+    officer_id = request.headers.get("X-Officer-Id")
+    if not officer_id:
+        return _err("X-Officer-Id header required", 401)
+    try:
+        new_case_id = queries.promote_complaint(complaint_id, int(officer_id))
+        if not new_case_id:
+            return _err(f"Complaint {complaint_id} not found", 404)
+        return _ok(case_id=new_case_id, case_id_display=_format_case_id(new_case_id))
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/public-complaints/<int:complaint_id>/reject", methods=["POST"])
+def reject_complaint(complaint_id):
+    """
+    POST /public-complaints/<id>/reject
+    Header: X-Officer-Id required.
+    """
+    officer_id = request.headers.get("X-Officer-Id")
+    if not officer_id:
+        return _err("X-Officer-Id header required", 401)
+    try:
+        rows = queries.reject_complaint(complaint_id, int(officer_id))
+        if not rows:
+            return _err(f"Complaint {complaint_id} not found", 404)
+        return _ok()
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -477,14 +598,11 @@ def serve_frontend():
 # STARTUP
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Init DB pool at module level — required for gunicorn/Railway
-# (gunicorn imports the module directly; __main__ block never runs)
-print("=" * 60)
-print("  CRMS Flask API — Bengaluru Police Department")
-print("=" * 60)
-init_pool()
-
 if __name__ == "__main__":
+    print("=" * 60)
+    print("  CRMS Flask API — Bengaluru Police Department")
+    print("=" * 60)
+    init_pool()
     app.run(
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
