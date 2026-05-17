@@ -69,6 +69,7 @@ crms_backend/
 
 ```bash
 mysql -u root -p < setup_db.sql
+mysql -u root -p < migrate_v2.sql
 ```
 
 This initializes:
