@@ -10,6 +10,22 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <script>
+        (function(){
+            const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+            const devSiteKey = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"; // Google test site key (v2 Invisible)
+            const prodSiteKey = "6LfLCfIsAAAAAK4ZwH_RMmvAPAi3vtkGKPLAYkuk"; // Your site key (v2 Invisible)
+            const siteKey = isLocalhost ? devSiteKey : prodSiteKey;
+            console.log("[reCAPTCHA] Loading reCAPTCHA v2 (Invisible) with site key:", siteKey.substring(0, 10) + "...");
+            window._recaptcha_site_key = siteKey;
+            const s = document.createElement('script');
+            s.src = 'https://www.google.com/recaptcha/api.js';
+            s.async = true; s.defer = true;
+            s.onload = () => console.log("[reCAPTCHA] v2 Script loaded successfully");
+            s.onerror = () => console.error("[reCAPTCHA] Failed to load reCAPTCHA script");
+            document.head.appendChild(s);
+        })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -182,6 +198,9 @@
         // ─── API CONFIG ───────────────────────────────────────────────────────
         // Change this to match where your Flask server is running.
         const API_BASE = "http://localhost:5000";
+        
+        // reCAPTCHA v2 (Invisible) Configuration
+        const RECAPTCHA_PUBLIC_KEY = window._recaptcha_site_key || "6LfLCfIsAAAAAK4ZwH_RMmvAPAi3vtkGKPLAYkuk";
 
         // Generic fetch helper — returns parsed JSON or throws with a readable message.
         const apiFetch = async (path, options = {}) => {
@@ -192,6 +211,113 @@
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
             return json;
+        };
+        
+        // Execute reCAPTCHA v2 and return token
+        const executeRecaptcha = async (action = "submit") => {
+            const siteKey = window._recaptcha_site_key || RECAPTCHA_PUBLIC_KEY;
+            console.log("[reCAPTCHA] Executing reCAPTCHA v2 for action:", action);
+
+            // Wait for grecaptcha to load
+            const waitForGrecaptcha = () => new Promise(resolve => {
+                if (window.grecaptcha?.render) {
+                    return resolve();
+                }
+                let waited = 0;
+                const iv = setInterval(() => {
+                    if (window.grecaptcha?.render) {
+                        clearInterval(iv);
+                        resolve();
+                    } else if (waited > 10000) {
+                        console.error("[reCAPTCHA] Script failed to load");
+                        clearInterval(iv);
+                        resolve();
+                    }
+                    waited += 100;
+                }, 100);
+            });
+
+            try {
+                await waitForGrecaptcha();
+                
+                if (!window.grecaptcha?.render) {
+                    console.error("[reCAPTCHA] grecaptcha.render unavailable");
+                    return "";
+                }
+
+                return new Promise((resolve) => {
+                    // Create modal for CAPTCHA
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = `
+                        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                        background: rgba(0,0,0,0.5); z-index: 9998;
+                        display: flex; align-items: center; justify-content: center;
+                    `;
+                    
+                    const container = document.createElement('div');
+                    container.style.cssText = `
+                        background: white; padding: 30px; border-radius: 12px;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.3); text-align: center;
+                    `;
+                    
+                    const title = document.createElement('p');
+                    title.textContent = "Please verify you're human";
+                    title.style.cssText = 'margin-bottom: 15px; font-weight: bold; color: #333; font-size: 16px;';
+                    
+                    const captchaDiv = document.createElement('div');
+                    captchaDiv.id = `g-recaptcha-${Date.now()}`;
+                    
+                    container.appendChild(title);
+                    container.appendChild(captchaDiv);
+                    overlay.appendChild(container);
+                    document.body.appendChild(overlay);
+                    
+                    // Track completion
+                    let completed = false;
+                    const timeoutId = setTimeout(() => {
+                        if (!completed) {
+                            console.warn("[reCAPTCHA] Timeout (2 min)");
+                            overlay.remove();
+                            resolve("");
+                        }
+                    }, 120000);
+                    
+                    // Callback
+                    const callbackName = `onRecaptchaSuccess_${Date.now()}`;
+                    window[callbackName] = (token) => {
+                        if (completed) return;
+                        completed = true;
+                        clearTimeout(timeoutId);
+                        console.log("[reCAPTCHA] Token received");
+                        overlay.remove();
+                        resolve(token);
+                    };
+                    
+                    try {
+                        grecaptcha.render(captchaDiv.id, {
+                            sitekey: siteKey,
+                            callback: callbackName,
+                            'error-callback': () => {
+                                clearTimeout(timeoutId);
+                                console.error("[reCAPTCHA] Error");
+                                overlay.remove();
+                                resolve("");
+                            },
+                            'expired-callback': () => {
+                                console.warn("[reCAPTCHA] Expired");
+                            }
+                        });
+                    } catch (err) {
+                        clearTimeout(timeoutId);
+                        console.error("[reCAPTCHA] Render error:", err);
+                        overlay.remove();
+                        resolve("");
+                    }
+                });
+            } catch (err) {
+                console.error("[reCAPTCHA] Error:", err);
+                return "";
+            }
         };
 
         // ─── FALLBACK MOCK DATA ───────────────────────────────────────────────
@@ -611,8 +737,14 @@
                 }
                 setAadhaarError("");
                 setSubmitting(true);
-                const payload = { ...formData, aadhaar_last4: a4, complaint_mode: "Online" };
                 try {
+                    // Get CAPTCHA token
+                    const captchaToken = await executeRecaptcha("complaint");
+                    if (!captchaToken) {
+                        setError("CAPTCHA verification is required");
+                        return;
+                    }
+                    const payload = { ...formData, aadhaar_last4: a4, complaint_mode: "Online", captcha_token: captchaToken };
                     const res = await apiFetch("/public/complaint", {
                         method: "POST",
                         body: JSON.stringify(payload),
@@ -631,9 +763,16 @@
                 e.preventDefault();
                 setSubmitting(true);
                 try {
+                    // Get CAPTCHA token
+                    const captchaToken = await executeRecaptcha("access_request");
+                    if (!captchaToken) {
+                        setError("CAPTCHA verification is required for access requests");
+                        return;
+                    }
+                    const payload = { ...accessForm, captcha_token: captchaToken };
                     await apiFetch("/public/access-request", {
                         method: "POST",
-                        body: JSON.stringify(accessForm),
+                        body: JSON.stringify(payload),
                     });
                 } catch (err) {
                     console.warn("[CRMS] Access request POST failed:", err.message);
@@ -1082,10 +1221,10 @@
                         <div className="p-6">
                             {/* Metrics Strip */}
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                <MetricCard icon="FileText" label="Total Cases" value={metrics.total} color="cyan" trend="up" trendValue="12%" delay={0} />
-                                <MetricCard icon="Activity" label="Active Cases" value={metrics.active} color="green" trend="up" trendValue="8%" delay={1} />
-                                <MetricCard icon="BadgeCheck" label="Solved Cases" value={metrics.solved} color="purple" trend="up" trendValue="24%" delay={2} />
-                                <MetricCard icon="Cpu" label="Cyber Cases" value={metrics.cyber} color="blue" trend="down" trendValue="3%" delay={3} />
+                                <MetricCard icon="FileText" label="Total Cases" value={metrics.total} color="cyan" delay={0} />
+                                <MetricCard icon="Activity" label="Active Cases" value={metrics.active} color="green" delay={1} />
+                                <MetricCard icon="BadgeCheck" label="Solved Cases" value={metrics.solved} color="purple" delay={2} />
+                                <MetricCard icon="Cpu" label="Cyber Cases" value={metrics.cyber} color="blue" delay={3} />
                             </div>
 
                             {/* Cases View */}
@@ -1691,9 +1830,15 @@
                 setError("");
                 setLoading(true);
                 try {
+                    // Get CAPTCHA token
+                    const captchaToken = await executeRecaptcha("login");
+                    if (!captchaToken) {
+                        setError("CAPTCHA verification is required to log in");
+                        return;
+                    }
                     const res = await apiFetch("/auth/login", {
                         method: "POST",
-                        body: JSON.stringify({ identifier, password }),
+                        body: JSON.stringify({ identifier, password, captcha_token: captchaToken }),
                     });
                     onLogin(res.officer || res.data);
                 } catch (err) {

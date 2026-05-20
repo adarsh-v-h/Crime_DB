@@ -10,6 +10,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import mysql.connector
+import requests
 
 import config
 from db_connection import init_pool
@@ -57,6 +58,53 @@ def _enrich_cases(case_list):
     for c in case_list:
         c["case_id_display"] = _format_case_id(c["case_id"])
     return case_list
+
+
+def _verify_captcha(token):
+    """
+    Verifies reCAPTCHA v2 token with Google.
+    Returns: (is_valid, score, error_msg)
+      is_valid: True if CAPTCHA verification passed
+      score: None for v2 (v2 doesn't return a score, unlike v3)
+      error_msg: Error message if verification failed
+    """
+    if not config.RECAPTCHA_SECRET_KEY:
+        # If secret key not configured, allow the request to proceed
+        return (True, None, None)
+    
+    if not token:
+        # Token is required for v2
+        print(f"[CAPTCHA] ERROR: Empty token received")
+        return (False, None, "CAPTCHA verification failed - no token provided")
+    
+    try:
+        print(f"[CAPTCHA] Verifying v2 token with Google (secret key: {config.RECAPTCHA_SECRET_KEY[:10]}...)")
+        response = requests.post(
+            "https://www.google.com/recaptcha/api/siteverify",
+            data={
+                "secret": config.RECAPTCHA_SECRET_KEY,
+                "response": token
+            },
+            timeout=5
+        )
+        result = response.json()
+        
+        print(f"[CAPTCHA] Google v2 response: {result}")
+        
+        if not result.get("success"):
+            error_codes = result.get("error-codes", [])
+            print(f"[CAPTCHA] v2 Verification failed: {error_codes}")
+            error_msg = f"CAPTCHA verification failed"
+            if error_codes:
+                error_msg += f" ({', '.join(error_codes)})"
+            return (False, None, error_msg)
+        
+        # For v2, we just check success. No score available.
+        print(f"[CAPTCHA] v2 Verification successful")
+        return (True, None, None)
+    except Exception as e:
+        print(f"[CAPTCHA] Error during v2 verification: {str(e)}")
+        return (False, None, f"CAPTCHA verification error: {str(e)}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -379,10 +427,17 @@ def public_complaint():
     POST /public/complaint
     Inserts into public_complaints staging table (NOT directly into cases).
     Body: { name*, contact*, aadhaar_last4*, email, crime_type*, location*,
-            complaint_mode, incident_desc* }
+            complaint_mode, incident_desc*, captcha_token* }
     Returns: { success, reference }   (reference = PC-XXX format)
     """
     body           = request.get_json(silent=True) or {}
+    captcha_token  = (body.get("captcha_token") or "").strip()
+    
+    # Verify CAPTCHA first
+    is_valid, score, error_msg = _verify_captcha(captcha_token)
+    if not is_valid:
+        return _err(error_msg or "CAPTCHA verification failed", 403)
+    
     name           = (body.get("name")           or "").strip()
     contact        = (body.get("contact")        or "").strip()
     email          = (body.get("email")          or "").strip()
@@ -427,9 +482,16 @@ def public_access_request():
     POST /public/access-request
     Logs a citizen request for case access.
     In this MVP the request is just acknowledged (logged to console / future table).
-    Body: { case_id*, requester_name*, requester_email*, reason* }
+    Body: { case_id*, requester_name*, requester_email*, reason*, captcha_token* }
     """
     body            = request.get_json(silent=True) or {}
+    captcha_token   = (body.get("captcha_token") or "").strip()
+    
+    # Verify CAPTCHA first
+    is_valid, score, error_msg = _verify_captcha(captcha_token)
+    if not is_valid:
+        return _err(error_msg or "CAPTCHA verification failed", 403)
+    
     case_id         = (body.get("case_id") or "").strip()
     requester_name  = (body.get("requester_name") or "").strip()
     requester_email = (body.get("requester_email") or "").strip()
@@ -476,7 +538,7 @@ def public_stats():
 def officer_login():
     """
     POST /auth/login
-    Body: { identifier*, password* }
+    Body: { identifier*, password*, captcha_token* }
     identifier = badge number (BPD-XXXX) or officer name
 
     Returns: { success, officer: { officer_id, name, rank, role, badge, ... } }
@@ -487,7 +549,14 @@ def officer_login():
     No JWT in this MVP — role is trusted from the response and checked
     server-side on write endpoints via the X-Officer-Id header.
     """
-    body       = request.get_json(silent=True) or {}
+    body           = request.get_json(silent=True) or {}
+    captcha_token  = (body.get("captcha_token") or "").strip()
+    
+    # Verify CAPTCHA first
+    is_valid, score, error_msg = _verify_captcha(captcha_token)
+    if not is_valid:
+        return _err(error_msg or "CAPTCHA verification failed", 403)
+    
     identifier = (body.get("identifier") or "").strip()
     password   = (body.get("password")   or "").strip()
 
