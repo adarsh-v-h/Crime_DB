@@ -38,34 +38,34 @@
                         'inter': ['Inter', 'sans-serif'],
                     },
                     colors: {
-                        'obsidian': '#050507',
-                        'void': '#0A0A0F',
-                        'abyss': '#0D0D14',
-                        'slate-deep': '#12121C',
-                        'slate-mid': '#1A1A28',
-                        'slate-light': '#232336',
-                        'cyan-glow': '#00E5FF',
-                        'cyan-dim': '#00B8D4',
-                        'blue-electric': '#2962FF',
-                        'blue-glow': '#448AFF',
-                        'purple-tactical': '#7C4DFF',
-                        'purple-glow': '#B388FF',
-                        'red-warn': '#FF1744',
-                        'red-dim': '#D50000',
-                        'amber-warn': '#FF9100',
-                        'green-tactical': '#00E676',
-                        'green-dim': '#00C853',
+                        'obsidian': '#070c1e',      // Majestic deep midnight indigo
+                        'void': '#0b1129',          // Enigmatic dark navy
+                        'abyss': '#0f1737',         // Tech-noir dark navy-blue
+                        'slate-deep': '#141d45',
+                        'slate-mid': '#1b2658',
+                        'slate-light': '#243270',
+                        'cyan-glow': '#ff9933',     // Indian Saffron (energy, courage, authority)
+                        'cyan-dim': '#f97316',      // Deep warm Saffron
+                        'blue-electric': '#2563eb', // Ashoka Blue
+                        'blue-glow': '#3b82f6',     // Chakra Blue
+                        'purple-tactical': '#a855f7', 
+                        'purple-glow': '#c084fc',
+                        'red-warn': '#ef4444',
+                        'red-dim': '#b91c1c',
+                        'amber-warn': '#ff9933',
+                        'green-tactical': '#10b981', // Indian Tricolor Emerald Green (peace and growth)
+                        'green-dim': '#059669',
                     }
                 }
             }
         }
     </script>
     <style>
-        * { scrollbar-width: thin; scrollbar-color: rgba(0,229,255,0.15) transparent; }
+        * { scrollbar-width: thin; scrollbar-color: rgba(255,153,51,0.18) transparent; }
         *::-webkit-scrollbar { width: 4px; }
         *::-webkit-scrollbar-track { background: transparent; }
-        *::-webkit-scrollbar-thumb { background: rgba(0,229,255,0.15); border-radius: 4px; }
-        body { background: #050507; color: #E0E0E0; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        *::-webkit-scrollbar-thumb { background: rgba(255,153,51,0.18); border-radius: 4px; }
+        body { background: #070c1e; color: #e5e7eb; font-family: 'Inter', sans-serif; overflow-x: hidden; }
         .glass-panel {
             background: rgba(255,255,255,0.02);
             backdrop-filter: blur(24px) saturate(140%);
@@ -80,13 +80,13 @@
             border: 1px solid rgba(255,255,255,0.07);
             box-shadow: 0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
         }
-        .glow-cyan { box-shadow: 0 0 20px rgba(0,229,255,0.15), 0 0 60px rgba(0,229,255,0.05); }
-        .glow-blue { box-shadow: 0 0 20px rgba(41,98,255,0.12), 0 0 60px rgba(41,98,255,0.04); }
-        .glow-purple { box-shadow: 0 0 20px rgba(124,77,255,0.12), 0 0 60px rgba(124,77,255,0.04); }
-        .glow-green { box-shadow: 0 0 20px rgba(0,230,118,0.12), 0 0 60px rgba(0,230,118,0.04); }
-        .text-glow-cyan { text-shadow: 0 0 20px rgba(0,229,255,0.4), 0 0 40px rgba(0,229,255,0.15); }
-        .text-glow-blue { text-shadow: 0 0 20px rgba(41,98,255,0.4), 0 0 40px rgba(41,98,255,0.15); }
-        .text-glow-purple { text-shadow: 0 0 20px rgba(124,77,255,0.4), 0 0 40px rgba(124,77,255,0.15); }
+        .glow-cyan { box-shadow: 0 0 20px rgba(255,153,51,0.18), 0 0 60px rgba(255,153,51,0.06); }
+        .glow-blue { box-shadow: 0 0 20px rgba(59,130,246,0.12), 0 0 60px rgba(59,130,246,0.04); }
+        .glow-purple { box-shadow: 0 0 20px rgba(168,85,247,0.12), 0 0 60px rgba(168,85,247,0.04); }
+        .glow-green { box-shadow: 0 0 20px rgba(16,185,129,0.12), 0 0 60px rgba(16,185,129,0.04); }
+        .text-glow-cyan { text-shadow: 0 0 20px rgba(255,153,51,0.45), 0 0 40px rgba(255,153,51,0.15); }
+        .text-glow-blue { text-shadow: 0 0 20px rgba(59,130,246,0.4), 0 0 40px rgba(59,130,246,0.15); }
+        .text-glow-purple { text-shadow: 0 0 20px rgba(168,85,247,0.4), 0 0 40px rgba(168,85,247,0.15); }
         .pulse-dot { animation: pulse-glow 2s ease-in-out infinite; }
         @keyframes pulse-glow {
             0%, 100% { box-shadow: 0 0 4px currentColor, 0 0 12px currentColor; opacity: 1; }
@@ -94,7 +94,7 @@
         }
         .scan-line {
             position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: rgba(0,229,255,0.3);
+            background: rgba(255,153,51,0.3);
             animation: scan 4s linear infinite;
             pointer-events: none;
         }
@@ -106,12 +106,13 @@
         }
         .grid-bg {
             background-image: 
-                linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+                linear-gradient(rgba(255,153,51,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,153,51,0.02) 1px, transparent 1px);
             background-size: 60px 60px;
         }
         .radial-glow {
-            background: radial-gradient(ellipse at 50% 0%, rgba(0,229,255,0.06) 0%, transparent 60%);
+            background: radial-gradient(ellipse at 50% 0%, rgba(255,153,51,0.08) 0%, transparent 60%),
+                        radial-gradient(ellipse at 50% 100%, rgba(16,185,129,0.04) 0%, transparent 60%);
         }
         .noise-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -122,35 +123,35 @@
         .card-hover { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
         .card-hover:hover {
             transform: translateY(-4px) scale(1.01);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(0,229,255,0.06);
-            border-color: rgba(0,229,255,0.15);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,153,51,0.06);
+            border-color: rgba(255,153,51,0.15);
         }
         .input-glow:focus {
             outline: none;
-            border-color: rgba(0,229,255,0.3);
-            box-shadow: 0 0 20px rgba(0,229,255,0.08);
+            border-color: rgba(255,153,51,0.3);
+            box-shadow: 0 0 20px rgba(255,153,51,0.08);
         }
         .btn-primary {
-            background: rgba(0,229,255,0.1);
-            border: 1px solid rgba(0,229,255,0.25);
-            color: #00E5FF;
+            background: rgba(255,153,51,0.1);
+            border: 1px solid rgba(255,153,51,0.25);
+            color: #ff9933;
             transition: all 0.3s ease;
         }
         .btn-primary:hover {
-            background: rgba(0,229,255,0.2);
-            border-color: rgba(0,229,255,0.5);
-            box-shadow: 0 0 30px rgba(0,229,255,0.15);
+            background: rgba(255,153,51,0.2);
+            border-color: rgba(255,153,51,0.5);
+            box-shadow: 0 0 30px rgba(255,153,51,0.15);
         }
         .btn-danger {
-            background: rgba(255,23,68,0.1);
-            border: 1px solid rgba(255,23,68,0.25);
-            color: #FF1744;
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.25);
+            color: #ef4444;
             transition: all 0.3s ease;
         }
         .btn-danger:hover {
-            background: rgba(255,23,68,0.2);
-            border-color: rgba(255,23,68,0.5);
-            box-shadow: 0 0 30px rgba(255,23,68,0.15);
+            background: rgba(239,68,68,0.2);
+            border-color: rgba(239,68,68,0.5);
+            box-shadow: 0 0 30px rgba(239,68,68,0.15);
         }
         .nav-tab {
             position: relative;
@@ -159,14 +160,14 @@
         .nav-tab::after {
             content: '';
             position: absolute; bottom: -2px; left: 50%; right: 50%; height: 2px;
-            background: #00E5FF;
+            background: #ff9933;
             transition: all 0.3s ease;
-            box-shadow: 0 0 10px rgba(0,229,255,0.5);
+            box-shadow: 0 0 10px rgba(255,153,51,0.5);
         }
         .nav-tab:hover::after, .nav-tab.active::after {
             left: 0; right: 0;
         }
-        .nav-tab.active { color: #00E5FF; text-shadow: 0 0 10px rgba(0,229,255,0.3); }
+        .nav-tab.active { color: #ff9933; text-shadow: 0 0 10px rgba(255,153,51,0.3); }
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-10px); }
@@ -179,15 +180,29 @@
         .animate-fade-up { animation: fadeUp 0.6s ease-out forwards; opacity: 0; }
         .metric-value { font-variant-numeric: tabular-nums; }
         .modal-overlay {
-            background: rgba(5,5,7,0.8);
+            background: rgba(7,12,30,0.8);
             backdrop-filter: blur(12px);
         }
         .hex-bg {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%2300E5FF' fill-opacity='0.02'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23ff9933' fill-opacity='0.02'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        .ashoka-watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' width='600' height='600'%3E%3Ccircle cx='100' cy='100' r='90' fill='none' stroke='%233b82f6' stroke-width='1.2' stroke-opacity='0.015'/%3E%3Ccircle cx='100' cy='100' r='20' fill='none' stroke='%233b82f6' stroke-width='1.2' stroke-opacity='0.015'/%3E%3Cg stroke='%233b82f6' stroke-width='0.6' stroke-opacity='0.015'%3E%3Cpath d='M100 10v180M10 100h180M36.36 36.36l127.28 127.28M36.36 163.64L163.64 36.36'/%3E%3Cpath d='M100 100L82.68 15.68M100 100l17.32-84.32M100 100L15.68 82.68M100 100l84.32 17.32M100 100l82.68-17.32M100 100l-17.32 84.32M100 100l-84.32-17.32M100 100l17.32 84.32'/%3E%3Cpath d='M100 100l-45-77.94M100 100l45 77.94M100 100l-77.94 45M100 100l77.94-45M100 100l-45 77.94M100 100l45-77.94M100 100l-77.94-45M100 100l77.94 45'/%3E%3C/g%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: center;
+            pointer-events: none;
+            z-index: 0;
         }
     </style>
 </head>
 <body class="bg-obsidian min-h-screen">
+    <div class="ashoka-watermark"></div>
     <div class="noise-overlay"></div>
     <div id="root"></div>
     <script type="text/babel">
