@@ -11,6 +11,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import mysql.connector
 import requests
+import bcrypt
 
 import config
 from db_connection import init_pool
@@ -122,37 +123,107 @@ def health():
 # ──────────────────────────────────────────────────────────────────────────────
 
 @app.route("/cases", methods=["GET"])
+@app.route("/api/cases", methods=["GET"])
 def get_cases():
     """
-    GET /cases
-    Optional query params: status, crime_type, location, search
-    Returns all matching cases with officer_ids attached.
-
-    Example:
-      GET /cases?status=Active&crime_type=Cyber+Fraud
+    Returns filtered cases from the database with pagination support.
+    Query parameters:
+      - status, crime_type, location, search (Filters)
+      - page (default: 1)
+      - limit (default: 16)
     """
     status     = request.args.get("status")
     crime_type = request.args.get("crime_type")
     location   = request.args.get("location")
     search     = request.args.get("search")
 
+    # Pagination parameters
     try:
-        cases = queries.get_all_cases(status, crime_type, location, search)
-        return _ok(_enrich_cases(cases))
-    except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        page = max(1, int(request.args.get("page", 1)))
+        limit = max(1, int(request.args.get("limit", 16)))
+    except ValueError:
+        page = 1
+        limit = 16
 
+    officer_id_str = request.headers.get("X-Officer-Id")
+    if not officer_id_str:
+        return _err("Unauthorized: Missing X-Officer-Id header", 401)
+    try:
+        officer_id = int(officer_id_str)
+    except ValueError:
+        return _err("Invalid X-Officer-Id header", 400)
+
+    try:
+        # Check officer identity and role for visibility boundary enforcement
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+
+        role = officer.get("role")
+        # Exception Rule: bypass for 'admin' or 'inspector'
+        bypass_visibility = (role in ("admin", "inspector"))
+
+        # Fetch filtered cases from the query layer with visibility constraints
+        all_filtered_cases = queries.get_all_cases(
+            status=status,
+            crime_type=crime_type,
+            location=location,
+            search=search,
+            officer_id=officer_id,
+            bypass_visibility=bypass_visibility
+        )
+        
+        total_records = len(all_filtered_cases)
+        total_pages = (total_records + limit - 1) // limit  # Ceiling division
+        
+        # Slice array for current page frame
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_cases = all_filtered_cases[start_idx:end_idx]
+
+        return _ok(
+            data=paginated_cases,
+            pagination={
+                "total_records": total_records,
+                "total_pages": total_pages,
+                "current_page": page,
+                "limit": limit
+            }
+        )
+    except Exception as e:
+        return _err(f"Database error while fetching cases: {str(e)}", 500)
 
 @app.route("/cases/<int:case_id>", methods=["GET"])
+@app.route("/api/cases/<int:case_id>", methods=["GET"])
 def get_case(case_id):
     """
     GET /cases/<case_id>
     Returns a single case with assigned officer IDs.
     """
+    officer_id_str = request.headers.get("X-Officer-Id")
+    if not officer_id_str:
+        return _err("Unauthorized: Missing X-Officer-Id header", 401)
     try:
+        officer_id = int(officer_id_str)
+    except ValueError:
+        return _err("Invalid X-Officer-Id header", 400)
+
+    try:
+        # Check officer identity and role for visibility boundary enforcement
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+
         case = queries.get_case_by_id(case_id)
         if not case:
             return _err(f"Case {case_id} not found", 404)
+
+        role = officer.get("role")
+        # Enforce visibility rules for single case retrieval
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied to this case record", 403)
+
         case["case_id_display"] = _format_case_id(case_id)
         return _ok(case)
     except mysql.connector.Error as e:
@@ -538,8 +609,8 @@ def public_stats():
 def officer_login():
     """
     POST /auth/login
-    Body: { identifier*, password*, captcha_token* }
-    identifier = badge number (BPD-XXXX) or officer name
+    Body: { badge_id*, password*, captcha_token* }
+    badge_id = distinct officer badge ID (e.g. BPD-7821)
 
     Returns: { success, officer: { officer_id, name, rank, role, badge, ... } }
     The frontend uses `role` to gate write actions:
@@ -557,18 +628,39 @@ def officer_login():
     if not is_valid:
         return _err(error_msg or "CAPTCHA verification failed", 403)
     
-    identifier = (body.get("identifier") or "").strip()
-    password   = (body.get("password")   or "").strip()
+    # Support both badge_id and legacy identifier for backward compatibility/robustness
+    badge_id = (body.get("badge_id") or body.get("identifier") or "").strip()
+    password = (body.get("password")   or "").strip()
 
-    if not identifier:
-        return _err("identifier is required")
+    if not badge_id:
+        return _err("badge_id is required")
     if not password:
         return _err("password is required")
 
     try:
-        officer = queries.verify_officer_login(identifier, password)
+        # 1. Identification & Lookup Workflow:
+        # Look up by distinct Officer Badge ID.
+        officer = queries.get_officer_by_badge(badge_id)
+        # If no matching officer row is found, immediately return an explicit JSON error
+        # ("Invalid credentials") without running hashing computations.
         if not officer:
             return _err("Invalid credentials", 401)
+
+        # 2. Secure Password Hashing & Verification:
+        stored_hash = officer.get("password_hash")
+        if not stored_hash:
+            return _err("Invalid credentials", 401)
+
+        # Core Correction: Fix reversed/buggy comparison logic
+        if not bcrypt.checkpw(password.encode(), stored_hash.encode()):
+            return _err("Invalid credentials", 401)
+
+        # Remove password_hash for security before sending to the client
+        officer.pop("password_hash", None)
+
+        # Enrich officer dict with case metrics and defaults
+        queries.enrich_officer_details(officer)
+
         return _ok(officer=officer)
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)

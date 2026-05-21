@@ -23,9 +23,10 @@ def _rows_to_list(cursor, rows):
 # CASES
 # ──────────────────────────────────────────────────────────────────────────────
 
-def get_all_cases(status=None, crime_type=None, location=None, search=None):
+def get_all_cases(status=None, crime_type=None, location=None, search=None, officer_id=None, bypass_visibility=False):
     """
     Returns all cases, optionally filtered.
+    If bypass_visibility is False and officer_id is provided, returns only cases assigned to that officer.
     Also attaches the list of officer_ids for each case (from case_officer).
     """
     conn = get_db()
@@ -33,6 +34,10 @@ def get_all_cases(status=None, crime_type=None, location=None, search=None):
     try:
         sql    = "SELECT * FROM cases WHERE 1=1"
         params = []
+
+        if not bypass_visibility and officer_id is not None:
+            sql += " AND case_id IN (SELECT case_id FROM case_officer WHERE officer_id = %s)"
+            params.append(officer_id)
 
         if status and status != "All":
             sql += " AND `status` = %s"
@@ -497,6 +502,59 @@ def reject_complaint(complaint_id, officer_id):
         )
         conn.commit()
         return cur.rowcount
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_officer_by_badge(badge: str):
+    """
+    Looks up an officer by their badge ID.
+    Returns the complete officer dictionary (including password_hash) or None if not found.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM officers WHERE badge = %s LIMIT 1", (badge,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        return _row_to_dict(cur, row)
+    finally:
+        cur.close()
+        conn.close()
+
+
+def enrich_officer_details(o: dict):
+    """Fills in computed case counts and default details for an officer dict."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        oid = o["officer_id"]
+        cur.execute(
+            """SELECT COUNT(*) FROM case_officer co
+               JOIN cases c ON co.case_id = c.case_id
+               WHERE co.officer_id = %s AND c.`status` = 'Active'""",
+            (oid,)
+        )
+        o["active_cases"] = cur.fetchone()[0]
+
+        cur.execute(
+            """SELECT COUNT(*) FROM case_officer co
+               JOIN cases c ON co.case_id = c.case_id
+               WHERE co.officer_id = %s AND c.`status` = 'Solved'""",
+            (oid,)
+        )
+        o["solved_cases"] = cur.fetchone()[0]
+
+        # Supply defaults if absent
+        o.setdefault("badge",      f"BPD-{1000 + oid}")
+        o.setdefault("station",    "Bengaluru City Police")
+        o.setdefault("phone",      "")
+        o.setdefault("email",      "")
+        o.setdefault("join_date",  "")
+
+        return o
     finally:
         cur.close()
         conn.close()

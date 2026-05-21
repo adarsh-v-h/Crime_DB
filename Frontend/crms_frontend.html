@@ -190,7 +190,6 @@
 <body class="bg-obsidian min-h-screen">
     <div class="noise-overlay"></div>
     <div id="root"></div>
-
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
         const { motion, AnimatePresence } = window.Motion;
@@ -204,9 +203,13 @@
 
         // Generic fetch helper — returns parsed JSON or throws with a readable message.
         const apiFetch = async (path, options = {}) => {
+            const { headers, ...rest } = options;
             const res = await fetch(`${API_BASE}${path}`, {
-                headers: { "Content-Type": "application/json" },
-                ...options,
+                headers: { 
+                    "Content-Type": "application/json",
+                    ...(headers || {})
+                },
+                ...rest,
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
@@ -246,23 +249,25 @@
                 }
 
                 return new Promise((resolve) => {
-                    // Create modal for CAPTCHA
+                    // Create modal for CAPTCHA challenge UI (rendered if verification is required)
                     const overlay = document.createElement('div');
                     overlay.style.cssText = `
                         position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                        background: rgba(0,0,0,0.5); z-index: 9998;
+                        background: rgba(0,0,0,0.65); z-index: 9998;
                         display: flex; align-items: center; justify-content: center;
+                        backdrop-filter: blur(3px);
                     `;
                     
                     const container = document.createElement('div');
                     container.style.cssText = `
-                        background: white; padding: 30px; border-radius: 12px;
-                        box-shadow: 0 10px 40px rgba(0,0,0,0.3); text-align: center;
+                        background: #111827; padding: 30px; border-radius: 12px;
+                        border: 1px solid #374151; text-align: center;
+                        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
                     `;
                     
                     const title = document.createElement('p');
-                    title.textContent = "Please verify you're human";
-                    title.style.cssText = 'margin-bottom: 15px; font-weight: bold; color: #333; font-size: 16px;';
+                    title.textContent = "Verifying Security Credentials";
+                    title.style.cssText = 'margin-bottom: 20px; font-weight: 500; color: #f3f4f6; font-size: 15px; font-family: monospace;';
                     
                     const captchaDiv = document.createElement('div');
                     captchaDiv.id = `g-recaptcha-${Date.now()}`;
@@ -290,23 +295,32 @@
                         clearTimeout(timeoutId);
                         console.log("[reCAPTCHA] Token received");
                         overlay.remove();
+                        try { delete window[callbackName]; } catch(e) {}
                         resolve(token);
                     };
                     
                     try {
-                        grecaptcha.render(captchaDiv.id, {
+                        // 1. Render the reCAPTCHA instance configured explicitly as 'invisible'
+                        const widgetId = grecaptcha.render(captchaDiv.id, {
                             sitekey: siteKey,
+                            size: 'invisible',
                             callback: callbackName,
                             'error-callback': () => {
+                                if (completed) return;
+                                completed = true;
                                 clearTimeout(timeoutId);
-                                console.error("[reCAPTCHA] Error");
+                                console.error("[reCAPTCHA] Execution error encountered");
                                 overlay.remove();
                                 resolve("");
                             },
                             'expired-callback': () => {
-                                console.warn("[reCAPTCHA] Expired");
+                                console.warn("[reCAPTCHA] Token expired");
                             }
                         });
+
+                        // 2. Explicitly fire the execution challenge programmatically
+                        grecaptcha.execute(widgetId);
+
                     } catch (err) {
                         clearTimeout(timeoutId);
                         console.error("[reCAPTCHA] Render error:", err);
@@ -1000,512 +1014,267 @@
         };
 
         // ─── STAFF DASHBOARD ──────────────────────────────────────────────────
-        const StaffDashboard = ({ onNavigate, userRole = "P1", officer = null, onLogout }) => {
-            const [activeView, setActiveView] = useState("cases");
-            const [cases, setCases] = useState(mockCases);
-            const [officers, setOfficers] = useState(mockOfficers);
-            const [loading, setLoading] = useState(true);
-            const [apiOnline, setApiOnline] = useState(false);
-            const [searchQuery, setSearchQuery] = useState("");
+        const StaffDashboard = ({ onNavigate, userRole, officer, onLogout }) => {
+            // Filter States
             const [statusFilter, setStatusFilter] = useState("All");
             const [typeFilter, setTypeFilter] = useState("All");
+            const [searchQuery, setSearchQuery] = useState("");
+            
+            // Core Data & Pagination States
+            const [cases, setCases] = useState([]);
+            const [currentPage, setCurrentPage] = useState(1);
+            const [totalPages, setTotalPages] = useState(1);
+            const [totalRecords, setTotalRecords] = useState(0);
+            
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
             const [selectedCase, setSelectedCase] = useState(null);
-            const [showAddModal, setShowAddModal] = useState(false);
-            const [showOfficerModal, setShowOfficerModal] = useState(false);
-            const [selectedOfficer, setSelectedOfficer] = useState(null);
-            const [sidebarOpen, setSidebarOpen] = useState(false);
 
-            // ── Load from API on mount ─────────────────────────────────────
+            // Fetch live data from backend whenever filters or page changes
             useEffect(() => {
-                const loadAll = async () => {
+                const loadCases = async () => {
                     setLoading(true);
+                    setError(null);
                     try {
-                        const [casesRes, officersRes] = await Promise.all([
-                            apiFetch("/cases"),
-                            apiFetch("/officers"),
-                        ]);
-                        const enriched = (casesRes.data || []).map(c => ({
-                            ...c,
-                            _raw_id: c.case_id,
-                            case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
-                        }));
-                        setCases(enriched);
-                        setOfficers(officersRes.data || []);
-                        setApiOnline(true);
+                        let queryParams = new URLSearchParams({
+                            page: currentPage,
+                            limit: 16
+                        });
+                        
+                        if (statusFilter !== "All") queryParams.append("status", statusFilter);
+                        if (typeFilter !== "All") queryParams.append("crime_type", typeFilter);
+                        if (searchQuery.trim() !== "") queryParams.append("search", searchQuery.trim());
+
+                        const response = await apiFetch(`/api/cases?${queryParams.toString()}`, {
+                            headers: {
+                                "X-Officer-Id": officer?.officer_id?.toString()
+                            }
+                        });
+                        if (response.success) {
+                            setCases(response.data || []);
+                            if (response.pagination) {
+                                setTotalPages(response.pagination.total_pages || 1);
+                                setTotalRecords(response.pagination.total_records || 0);
+                            }
+                        } else {
+                            setError(response.error || "Failed to sync system records.");
+                        }
                     } catch (err) {
-                        console.warn("[CRMS] API unreachable — using mock data.", err.message);
-                        setApiOnline(false);
+                        console.error("[CRMS Engine] Sync error:", err);
+                        setError(err.message || "Network isolation protocol failure.");
                     } finally {
                         setLoading(false);
                     }
                 };
-                loadAll();
-            }, []);
 
-            const filteredCases = useMemo(() => {
-                return cases.filter(c => {
-                    const matchesSearch = !searchQuery || c.title.toLowerCase().includes(searchQuery.toLowerCase()) || c.location.toLowerCase().includes(searchQuery.toLowerCase());
-                    const matchesStatus = statusFilter === "All" || c.status === statusFilter;
-                    const matchesType = typeFilter === "All" || c.crime_type === typeFilter;
-                    return matchesSearch && matchesStatus && matchesType;
-                });
-            }, [cases, searchQuery, statusFilter, typeFilter]);
+                loadCases();
+            }, [statusFilter, typeFilter, searchQuery, currentPage]);
 
-            const metrics = useMemo(() => ({
-                total: cases.length,
-                active: cases.filter(c => c.status === "Active").length,
-                solved: cases.filter(c => c.status === "Solved").length,
-                cyber: cases.filter(c => c.crime_type === "Cyber Fraud").length,
-            }), [cases]);
-
-            const assignments = useMemo(() => {
-                const result = [];
-                cases.forEach(c => {
-                    c.officer_ids.forEach(oid => {
-                        const officer = officers.find(o => o.officer_id === oid);
-                        if (officer) {
-                            result.push({
-                                case_id: c.case_id,
-                                case_title: c.title,
-                                officer_name: officer.name,
-                                officer_rank: officer.rank,
-                                status: c.status,
-                                crime_type: c.crime_type,
-                            });
-                        }
-                    });
-                });
-                return result;
-            }, [cases, officers]);
-
-            const handleAddCase = async (newCase) => {
-                if (apiOnline) {
-                    try {
-                        const res = await apiFetch("/cases", {
-                            method: "POST",
-                            body: JSON.stringify(newCase),
-                        });
-                        // Reload full list to get server-assigned ID and timestamp
-                        const updated = await apiFetch("/cases");
-                        const enriched = (updated.data || []).map(c => ({
-                            ...c,
-                            _raw_id: c.case_id,
-                            case_id: c.case_id_display || ("BLR-" + String(c.case_id).padStart(3,"0")),
-                        }));
-                        setCases(enriched);
-                    } catch (err) {
-                        console.error("[CRMS] Failed to add case:", err.message);
-                    }
-                } else {
-                    // Offline fallback
-                    setCases([...cases, { ...newCase, case_id: "BLR-" + String(cases.length + 1).padStart(3, "0"), date_reported: new Date().toISOString().split("T")[0] }]);
-                }
-                setShowAddModal(false);
+            // Reset back to page 1 if search or status filters change
+            const handleFilterChange = (type, val) => {
+                setCurrentPage(1);
+                if (type === "status") setStatusFilter(val);
+                if (type === "type") setTypeFilter(val);
             };
-
-            const handleStatusChange = async (caseId, newStatus) => {
-                // Optimistic update first so the UI feels instant
-                setCases(cases.map(c => c.case_id === caseId ? { ...c, status: newStatus } : c));
-                if (selectedCase && selectedCase.case_id === caseId) {
-                    setSelectedCase(prev => ({ ...prev, status: newStatus }));
-                }
-                if (apiOnline) {
-                    const target = cases.find(c => c.case_id === caseId);
-                    const rawId = target ? (target._raw_id || target.case_id) : caseId;
-                    try {
-                        await apiFetch("/cases/" + rawId, {
-                            method: "PATCH",
-                            headers: officer ? { "X-Officer-Id": String(officer.officer_id) } : {},
-                            body: JSON.stringify({ status: newStatus }),
-                        });
-                    } catch (err) {
-                        console.error("[CRMS] Status update failed:", err.message);
-                    }
-                }
-            };
-
-            const handleDeleteCase = async (caseId) => {
-                if (window.confirm("Are you sure you want to close this case?")) {
-                    // Treat delete as status → Closed (preserves history)
-                    await handleStatusChange(caseId, "Closed");
-                }
-            };
-
-            const navItems = [
-                { id: "cases", label: "Cases", icon: "FileText" },
-                { id: "officers", label: "Officers", icon: "Users" },
-                { id: "assignments", label: "Assignments", icon: "GitBranch" },
-                { id: "analytics", label: "Analytics", icon: "BarChart3" },
-            ];
 
             return (
-                <div className="min-h-screen bg-obsidian flex">
-                    <Particles count={15} />
+                <div className="min-h-screen bg-[#030712] text-slate-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-400">
+                    {/* TOP STATUS BAR */}
+                    <header className="border-b border-slate-800 bg-[#0b0f19]/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <h1 className="text-sm font-semibold tracking-wider text-slate-200 uppercase font-mono">
+                                BENGALURU POLICE CORE — INTRALINK
+                            </h1>
+                        </div>
+                        <div className="flex items-center space-x-6 text-xs font-mono text-slate-400">
+                            <div>OPERATOR: <span className="text-slate-200 font-bold">{officer?.name || "UNKNOWN"}</span> ({userRole?.toUpperCase()})</div>
+                            <button onClick={onLogout} className="text-rose-400 hover:text-rose-300 transition-colors border border-rose-500/20 hover:border-rose-500/40 bg-rose-950/10 px-3 py-1 rounded">
+                                TERMINATE_SESSION
+                            </button>
+                        </div>
+                    </header>
 
-                    {/* Sidebar */}
-                    <aside className={`fixed inset-y-0 left-0 z-40 w-64 glass-panel-strong border-r border-white/5 transform transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static`}>
-                        <div className="p-6">
-                            <div className="flex items-center gap-3 mb-10">
-                                <div className="w-10 h-10 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
-                                    <Icon name="Shield" size={20} className="text-cyan-glow" />
+                    <div className="max-w-[1600px] mx-auto p-6 lg:p-8 space-y-6">
+                        {/* CONTROL CONSOLE */}
+                        <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between shadow-2xl">
+                            <div className="relative w-full md:w-96">
+                                <input 
+                                    type="text" 
+                                    placeholder="Search dossier records..." 
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                    className="w-full bg-[#030712] border border-slate-700/60 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono transition-all"
+                                />
+                                <span className="absolute left-3 top-2.5 text-slate-500 text-sm">⚡</span>
+                            </div>
+                            
+                            <div className="flex flex-wrap w-full md:w-auto items-center gap-3">
+                                <select 
+                                    value={statusFilter} 
+                                    onChange={(e) => handleFilterChange("status", e.target.value)}
+                                    className="bg-[#030712] border border-slate-700/60 text-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-emerald-500"
+                                >
+                                    <option value="All">STATUS: ALL</option>
+                                    <option value="Active">ACTIVE</option>
+                                    <option value="Solved">SOLVED</option>
+                                    <option value="Closed">CLOSED</option>
+                                </select>
+
+                                <select 
+                                    value={typeFilter} 
+                                    onChange={(e) => handleFilterChange("type", e.target.value)}
+                                    className="bg-[#030712] border border-slate-700/60 text-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-emerald-500"
+                                >
+                                    <option value="All">CLASSIFICATION: ALL</option>
+                                    <option value="Cyber Fraud">CYBER FRAUD</option>
+                                    <option value="Theft">THEFT</option>
+                                    <option value="Assault">ASSAULT</option>
+                                    <option value="Fraud">FINANCIAL FRAUD</option>
+                                    <option value="Other">OTHER CATEGORIES</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* LIVE SYSTEM MESSAGES (ERROR / LOADING) */}
+                        {error && (
+                            <div className="bg-rose-950/20 border border-rose-500/30 text-rose-300 px-4 py-3 rounded-lg text-xs font-mono flex items-center space-x-2">
+                                <span>⚠️ SEC_ERROR:</span>
+                                <span>{error}</span>
+                            </div>
+                        )}
+
+                        {/* CASE DOSSIER GRID */}
+                        {loading ? (
+                            <div className="h-96 w-full flex items-center justify-center flex-col space-y-3 border border-slate-800/40 rounded-xl bg-[#0b0f19]/30">
+                                <div className="h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                                <p className="text-xs font-mono text-slate-500 tracking-widest uppercase">Querying Central DB Pool...</p>
+                            </div>
+                        ) : cases.length === 0 ? (
+                            <div className="h-96 w-full flex items-center justify-center flex-col space-y-2 border border-dashed border-slate-800 rounded-xl bg-[#0b0f19]/10">
+                                <p className="text-sm font-mono text-slate-400 font-bold">NO ALIGNED DOSSIERS FOUND</p>
+                                <p className="text-xs font-mono text-slate-600">The database query returned 0 active entries matching current filters.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    {cases.map((c) => {
+                                        const statusColors = {
+                                            Active: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+                                            Solved: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+                                            Closed: "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                                        };
+                                        return (
+                                            <div 
+                                                key={c.case_id} 
+                                                onClick={() => setSelectedCase(c)}
+                                                className="bg-[#0b0f19] border border-slate-800/80 rounded-xl p-5 hover:border-slate-700 hover:shadow-xl transition-all cursor-pointer relative group flex flex-col justify-between"
+                                            >
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <span className="text-[11px] font-mono tracking-wider font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">
+                                                            {c.display_id || `BLR-${String(c.case_id).padStart(3, '0')}`}
+                                                        </span>
+                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono tracking-wide uppercase ${statusColors[c.status] || statusColors.Active}`}>
+                                                            {c.status}
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="font-semibold text-slate-200 line-clamp-1 mb-1 text-[15px] group-hover:text-white">
+                                                        {c.title}
+                                                    </h3>
+                                                    <p className="text-xs text-slate-400 line-clamp-2 mb-4 font-normal leading-relaxed">
+                                                        {c.description || "No file logs details provided."}
+                                                    </p>
+                                                </div>
+                                                
+                                                <div className="border-t border-slate-800/60 pt-3 mt-2 flex items-center justify-between text-[11px] font-mono text-slate-500">
+                                                    <div>⚡ <span className="text-slate-400">{c.crime_type}</span></div>
+                                                    <div>📍 {c.location || "N/A"}</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <div>
-                                    <div className="text-sm font-bold font-space text-white tracking-wider">CRMS</div>
-                                    <div className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">Staff Portal</div>
+
+                                {/* INDUSTRIAL PAGINATION BAR */}
+                                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl px-6 py-4 flex items-center justify-between shadow-md text-xs font-mono">
+                                    <div className="text-slate-400">
+                                        Showing <span className="text-slate-200 font-bold">{cases.length}</span> of <span className="text-slate-200 font-bold">{totalRecords}</span> systemic entries
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2">
+                                        <button 
+                                            disabled={currentPage === 1}
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            className="px-3 py-1.5 rounded bg-[#030712] border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-800 transition-all"
+                                        >
+                                            &lt; PREV
+                                        </button>
+                                        
+                                        <div className="px-4 py-1.5 rounded bg-[#030712] border border-slate-800 text-slate-400 select-none">
+                                            PAGE <span className="text-emerald-400 font-bold">{currentPage}</span> / {totalPages}
+                                        </div>
+
+                                        <button 
+                                            disabled={currentPage === totalPages}
+                                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                            className="px-3 py-1.5 rounded bg-[#030712] border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-800 transition-all"
+                                        >
+                                            NEXT &gt;
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                        )}
+                    </div>
 
-                            <nav className="space-y-1">
-                                {navItems.map(item => (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
-                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeView === item.id ? "bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/20" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
-                                    >
-                                        <Icon name={item.icon} size={18} />
-                                        {item.label}
-                                    </button>
-                                ))}
-                            </nav>
-
-                            <div className="mt-auto pt-10">
-                                <div className="glass-panel rounded-xl p-4">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-8 h-8 rounded-full bg-cyan-glow/20 flex items-center justify-center text-xs font-bold text-cyan-glow">
-                                            {officer ? officer.name.split(" ").map(n=>n[0]).join("").slice(0,2) : userRole}
+                    {/* RENDER DETAILED VIEW MODAL */}
+                    {selectedCase && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+                            <div className="bg-[#0b0f19] border border-slate-700 max-w-2xl w-full rounded-xl overflow-hidden shadow-2xl font-mono text-xs">
+                                <div className="bg-[#030712] border-b border-slate-800 p-4 flex justify-between items-center">
+                                    <span className="text-emerald-400 font-bold">CASE_DOSSIER: {selectedCase.display_id || `BLR-${String(selectedCase.case_id).padStart(3, '0')}`}</span>
+                                    <button onClick={() => setSelectedCase(null)} className="text-slate-500 hover:text-slate-200 font-bold text-sm">✕</button>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <div>
+                                        <div className="text-slate-500 text-[10px] uppercase">Incident Heading</div>
+                                        <div className="text-sm font-sans font-bold text-slate-200 mt-0.5">{selectedCase.title}</div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 border-y border-slate-800/60 py-3">
+                                        <div>
+                                            <div className="text-slate-500 text-[10px] uppercase">Classification</div>
+                                            <div className="text-slate-300 mt-0.5">{selectedCase.crime_type}</div>
                                         </div>
                                         <div>
-                                            <div className="text-xs font-medium text-white">{officer ? officer.name.split(" ").slice(-1)[0] : "Officer"}</div>
-                                            <div className="text-[10px] text-gray-500">{userRole === "P1" ? "Inspector · Read & Write" : "Viewer · Read Only"}</div>
+                                            <div className="text-slate-500 text-[10px] uppercase">Operational Status</div>
+                                            <div className="text-slate-300 mt-0.5">{selectedCase.status}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-slate-500 text-[10px] uppercase">Jurisdiction Venue</div>
+                                            <div className="text-slate-300 mt-0.5">{selectedCase.location || "Not Registered"}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-slate-500 text-[10px] uppercase">Record Date</div>
+                                            <div className="text-slate-300 mt-0.5">{selectedCase.date_added || "N/A"}</div>
                                         </div>
                                     </div>
-                                    <button onClick={onLogout || (() => onNavigate("landing"))} className="w-full text-xs text-gray-400 hover:text-red-warn transition-colors flex items-center justify-center gap-1.5 py-2">
-                                        <Icon name="LogOut" size={12} />
-                                        Sign Out
-                                    </button>
+                                    <div>
+                                        <div className="text-slate-500 text-[10px] uppercase">Logged Case Narrative</div>
+                                        <div className="text-slate-300 font-sans mt-1 bg-[#030712] border border-slate-800/80 p-3 rounded-lg leading-relaxed whitespace-pre-wrap">
+                                            {selectedCase.description || "No documentation detailed."}
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#030712] border border-slate-800/60 p-3 rounded-lg">
+                                        <div className="text-slate-500 text-[10px] uppercase mb-1">Complainant Integrity Check</div>
+                                        <div className="text-slate-400">Name: <span className="text-slate-200 font-bold">{selectedCase.complainant_name || "Anonymous / Guarded"}</span></div>
+                                        <div className="text-slate-400">Contact: <span className="text-slate-200">{selectedCase.complainant_contact || "N/A"}</span></div>
+                                        <div className="text-slate-400">Aadhaar (Last 4): <span className="text-slate-200">{selectedCase.complainant_aadhaar || "XXXX"}</span></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </aside>
-
-                    {/* Mobile sidebar overlay */}
-                    {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-
-                    {/* Main Content */}
-                    <main className="flex-1 min-w-0">
-                        {/* Top Bar */}
-                        <header className="sticky top-0 z-20 glass-panel-strong border-b border-white/5 px-6 py-4 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-white/5 text-gray-400">
-                                    <Icon name="Menu" size={20} />
-                                </button>
-                                <div>
-                                    <h1 className="text-lg font-semibold text-white font-space">
-                                        {navItems.find(n => n.id === activeView)?.label}
-                                    </h1>
-                                    <p className="text-xs text-gray-500">Bengaluru Police Department</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg glass-panel">
-                                    <span className={"w-1.5 h-1.5 rounded-full pulse-dot " + (apiOnline ? "bg-green-tactical" : "bg-amber-warn")} />
-                                    <span className="text-xs text-gray-400">{apiOnline ? "Live" : "Demo"}</span>
-                                </div>
-                                <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors relative">
-                                    <Icon name="Bell" size={18} />
-                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-warn" />
-                                </button>
-                            </div>
-                        </header>
-
-                        <div className="p-6">
-                            {/* Metrics Strip */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                <MetricCard icon="FileText" label="Total Cases" value={metrics.total} color="cyan" delay={0} />
-                                <MetricCard icon="Activity" label="Active Cases" value={metrics.active} color="green" delay={1} />
-                                <MetricCard icon="BadgeCheck" label="Solved Cases" value={metrics.solved} color="purple" delay={2} />
-                                <MetricCard icon="Cpu" label="Cyber Cases" value={metrics.cyber} color="blue" delay={3} />
-                            </div>
-
-                            {/* Cases View */}
-                            {activeView === "cases" && (
-                                <div className="animate-fade-up">
-                                    {/* Filters */}
-                                    <div className="glass-panel rounded-xl p-4 mb-6 flex flex-wrap items-center gap-4">
-                                        <div className="flex-1 min-w-[200px] relative">
-                                            <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                                            <input
-                                                type="text"
-                                                value={searchQuery}
-                                                onChange={e => setSearchQuery(e.target.value)}
-                                                placeholder="Search cases by title or location..."
-                                                className="w-full bg-void border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                            />
-                                        </div>
-                                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                                            className="bg-void border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white input-glow transition-all appearance-none min-w-[140px]">
-                                            <option value="All" className="bg-void">All Status</option>
-                                            <option value="Active" className="bg-void">Active</option>
-                                            <option value="Solved" className="bg-void">Solved</option>
-                                            <option value="Closed" className="bg-void">Closed</option>
-                                        </select>
-                                        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-                                            className="bg-void border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white input-glow transition-all appearance-none min-w-[140px]">
-                                            <option value="All" className="bg-void">All Types</option>
-                                            <option value="Cyber Fraud" className="bg-void">Cyber Fraud</option>
-                                            <option value="Theft" className="bg-void">Theft</option>
-                                            <option value="Assault" className="bg-void">Assault</option>
-                                            <option value="Fraud" className="bg-void">Fraud</option>
-                                        </select>
-                                        {userRole === "P1" && (
-                                            <button onClick={() => setShowAddModal(true)} className="btn-primary px-5 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2">
-                                                <Icon name="Plus" size={16} />
-                                                New Case
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Cases Grid */}
-                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                        {filteredCases.map((c, i) => (
-                                            <div key={c.case_id} className="glass-panel rounded-xl p-5 card-hover animate-fade-up cursor-pointer group" style={{ animationDelay: `${i * 0.05}s` }}
-                                                onClick={() => setSelectedCase(c)}>
-                                                <div className="flex items-start justify-between mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-mono text-xs text-cyan-glow">
-                                                            {c.case_id.split("-")[1]}
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-semibold text-white group-hover:text-cyan-glow transition-colors">{c.title}</h3>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <Icon name="MapPin" size={12} className="text-gray-500" />
-                                                                <span className="text-xs text-gray-500">{c.location}</span>
-                                                                <span className="text-gray-600">|</span>
-                                                                <Icon name="Calendar" size={12} className="text-gray-500" />
-                                                                <span className="text-xs text-gray-500">{c.date_reported}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <Badge value={c.status} />
-                                                </div>
-                                                <p className="text-xs text-gray-500 leading-relaxed mb-4 line-clamp-2">{c.description}</p>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge value={c.crime_type} />
-                                                        <Badge value={c.complaint_mode} />
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Icon name="Users" size={12} className="text-gray-500" />
-                                                        <span className="text-xs text-gray-400">{c.officer_ids.length} assigned</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Officers View */}
-                            {activeView === "officers" && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fade-up">
-                                    {officers.map((officer, i) => (
-                                        <div key={officer.officer_id} className="glass-panel rounded-xl p-6 card-hover animate-fade-up" style={{ animationDelay: `${i * 0.08}s` }}
-                                            onClick={() => { setSelectedOfficer(officer); setShowOfficerModal(true); }}>
-                                            <div className="flex items-start justify-between mb-5">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-14 h-14 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center text-lg font-bold text-cyan-glow font-space">
-                                                        {officer.name.split(" ").map(n => n[0]).join("")}
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="text-sm font-semibold text-white">{officer.name}</h3>
-                                                        <p className="text-xs text-gray-500">{officer.rank}</p>
-                                                        <p className="text-[10px] text-gray-600 font-mono mt-0.5">{officer.badge}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="w-2 h-2 rounded-full bg-green-tactical pulse-dot" />
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-3 mb-4">
-                                                <div className="glass-panel rounded-lg p-3 text-center">
-                                                    <div className="text-lg font-bold text-cyan-glow font-space">{officer.active_cases}</div>
-                                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">Active</div>
-                                                </div>
-                                                <div className="glass-panel rounded-lg p-3 text-center">
-                                                    <div className="text-lg font-bold text-purple-tactical font-space">{officer.solved_cases}</div>
-                                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider">Solved</div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                                                <Icon name="MapPin" size={12} />
-                                                {officer.station}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Assignments View */}
-                            {activeView === "assignments" && (
-                                <div className="glass-panel rounded-xl overflow-hidden animate-fade-up">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full">
-                                            <thead>
-                                                <tr className="border-b border-white/5">
-                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Case ID</th>
-                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Case Title</th>
-                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Officer</th>
-                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {assignments.map((a, i) => (
-                                                    <tr key={`${a.case_id}-${a.officer_name}`} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
-                                                        <td className="px-6 py-4 font-mono text-xs text-cyan-glow">{a.case_id}</td>
-                                                        <td className="px-6 py-4 text-sm text-white">{a.case_title}</td>
-                                                        <td className="px-6 py-4 text-sm text-gray-300">{a.officer_name}</td>
-                                                        <td className="px-6 py-4 text-xs text-gray-500">{a.officer_rank}</td>
-                                                        <td className="px-6 py-4"><Badge value={a.status} /></td>
-                                                        <td className="px-6 py-4"><Badge value={a.crime_type} /></td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Analytics View */}
-                            {activeView === "analytics" && <AnalyticsView cases={cases} officers={officers} />}
-                        </div>
-                    </main>
-
-                    {/* Case Detail Modal */}
-                    <Modal isOpen={!!selectedCase} onClose={() => setSelectedCase(null)} title="Case Details" size="lg">
-                        {selectedCase && (
-                            <div className="space-y-6">
-                                <div className="flex items-start justify-between">
-                                    <div>
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <span className="font-mono text-sm text-cyan-glow">{selectedCase.case_id}</span>
-                                            <Badge value={selectedCase.status} />
-                                            <Badge value={selectedCase.crime_type} />
-                                        </div>
-                                        <h2 className="text-xl font-semibold text-white font-space">{selectedCase.title}</h2>
-                                    </div>
-                                    {userRole === "P1" && (
-                                        <div className="flex items-center gap-2">
-                                            <select
-                                                value={selectedCase.status}
-                                                onChange={e => handleStatusChange(selectedCase.case_id, e.target.value)}
-                                                className="bg-void border border-white/10 rounded-lg px-3 py-2 text-sm text-white input-glow"
-                                            >
-                                                <option value="Active" className="bg-void">Active</option>
-                                                <option value="Solved" className="bg-void">Solved</option>
-                                                <option value="Closed" className="bg-void">Closed</option>
-                                            </select>
-                                            <button onClick={() => handleDeleteCase(selectedCase.case_id)} className="p-2 rounded-lg btn-danger">
-                                                <Icon name="Trash2" size={16} />
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {[
-                                        { label: "Location", value: selectedCase.location, icon: "MapPin" },
-                                        { label: "Date Reported", value: selectedCase.date_reported, icon: "Calendar" },
-                                        { label: "Mode", value: selectedCase.complaint_mode, icon: "Globe" },
-                                        { label: "Officers", value: `${selectedCase.officer_ids.length} assigned`, icon: "Users" },
-                                    ].map((item, i) => (
-                                        <div key={i} className="glass-panel rounded-lg p-3">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <Icon name={item.icon} size={12} className="text-gray-500" />
-                                                <span className="text-[10px] text-gray-500 uppercase tracking-wider">{item.label}</span>
-                                            </div>
-                                            <div className="text-sm text-white font-medium">{item.value}</div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div>
-                                    <h3 className="text-sm font-semibold text-white mb-3 font-space">Incident Description</h3>
-                                    <div className="glass-panel rounded-xl p-4">
-                                        <p className="text-sm text-gray-400 leading-relaxed">{selectedCase.description}</p>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <h3 className="text-sm font-semibold text-white mb-3 font-space">Assigned Officers</h3>
-                                    <div className="flex flex-wrap gap-3">
-                                        {selectedCase.officer_ids.map(oid => {
-                                            const officer = officers.find(o => o.officer_id === oid);
-                                            return officer ? (
-                                                <div key={oid} className="glass-panel rounded-lg px-4 py-2 flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full bg-cyan-glow/10 flex items-center justify-center text-[10px] font-bold text-cyan-glow">
-                                                        {officer.name.split(" ").map(n => n[0]).join("")}
-                                                    </div>
-                                                    <span className="text-xs text-white">{officer.name}</span>
-                                                    <span className="text-[10px] text-gray-500">{officer.rank}</span>
-                                                </div>
-                                            ) : null;
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </Modal>
-
-                    {/* Add Case Modal */}
-                    <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="New Case" size="md">
-                        <AddCaseForm onSubmit={handleAddCase} onCancel={() => setShowAddModal(false)} />
-                    </Modal>
-
-                    {/* Officer Detail Modal */}
-                    <Modal isOpen={showOfficerModal} onClose={() => setShowOfficerModal(false)} title="Officer Profile" size="md">
-                        {selectedOfficer && (
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-16 h-16 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center text-2xl font-bold text-cyan-glow font-space">
-                                        {selectedOfficer.name.split(" ").map(n => n[0]).join("")}
-                                    </div>
-                                    <div>
-                                        <h2 className="text-lg font-semibold text-white font-space">{selectedOfficer.name}</h2>
-                                        <p className="text-sm text-gray-400">{selectedOfficer.rank}</p>
-                                        <p className="text-xs text-gray-500 font-mono">{selectedOfficer.badge}</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="glass-panel rounded-lg p-4 text-center">
-                                        <div className="text-2xl font-bold text-cyan-glow font-space">{selectedOfficer.active_cases}</div>
-                                        <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">Active Cases</div>
-                                    </div>
-                                    <div className="glass-panel rounded-lg p-4 text-center">
-                                        <div className="text-2xl font-bold text-purple-tactical font-space">{selectedOfficer.solved_cases}</div>
-                                        <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">Solved Cases</div>
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    <div className="flex items-center gap-3 text-sm">
-                                        <Icon name="MapPin" size={16} className="text-gray-500" />
-                                        <span className="text-gray-300">{selectedOfficer.station}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-sm">
-                                        <Icon name="Phone" size={16} className="text-gray-500" />
-                                        <span className="text-gray-300">{selectedOfficer.phone}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-sm">
-                                        <Icon name="Mail" size={16} className="text-gray-500" />
-                                        <span className="text-gray-300">{selectedOfficer.email}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-sm">
-                                        <Icon name="Calendar" size={16} className="text-gray-500" />
-                                        <span className="text-gray-300">Joined {selectedOfficer.join_date}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </Modal>
+                    )}
                 </div>
             );
         };
@@ -1820,10 +1589,10 @@
 
         // ─── LOGIN PAGE ───────────────────────────────────────────────────────
         const LoginPage = ({ onLogin, onBack }) => {
-            const [identifier, setIdentifier] = useState("");
-            const [password, setPassword]     = useState("");
-            const [error, setError]           = useState("");
-            const [loading, setLoading]       = useState(false);
+            const [badgeId, setBadgeId]   = useState("");
+            const [password, setPassword] = useState("");
+            const [error, setError]       = useState("");
+            const [loading, setLoading]   = useState(false);
 
             const handleLogin = async (e) => {
                 e.preventDefault();
@@ -1838,7 +1607,7 @@
                     }
                     const res = await apiFetch("/auth/login", {
                         method: "POST",
-                        body: JSON.stringify({ identifier, password, captcha_token: captchaToken }),
+                        body: JSON.stringify({ badge_id: badgeId, password, captcha_token: captchaToken }),
                     });
                     onLogin(res.officer || res.data);
                 } catch (err) {
@@ -1868,11 +1637,11 @@
 
                             <form onSubmit={handleLogin} className="space-y-5">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Badge Number or Name</label>
-                                    <input autoFocus type="text" required value={identifier}
-                                        onChange={e => setIdentifier(e.target.value)}
+                                    <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Officer Badge ID</label>
+                                    <input autoFocus type="text" required value={badgeId}
+                                        onChange={e => setBadgeId(e.target.value)}
                                         className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all font-mono"
-                                        placeholder="BPD-7821 or Inspector Arjun Nair" />
+                                        placeholder="e.g., BPD-7821" />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Password</label>
