@@ -1,29 +1,52 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env (if present)
+# Load environment variables from .env file
 load_dotenv()
 
-# Database configuration (use DB_ names for clarity)
-DB_HOST     = os.getenv("DB_HOST", "localhost")
-DB_PORT     = int(os.getenv("DB_PORT", "3306"))
-DB_USER     = os.getenv("DB_USER", "adarsh")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "root")
-DB_NAME     = os.getenv("DB_NAME", "crms")
+def _get_required_env(key):
+    """Get a required environment variable or raise error if missing."""
+    value = os.getenv(key)
+    if value is None:
+        raise ValueError(f"Missing required environment variable: {key}. Please check your .env file.")
+    return value
 
-# Flask server configuration
-FLASK_HOST  = os.getenv("FLASK_HOST", "0.0.0.0")
+def _get_optional_env(key, default=None):
+    """Get an optional environment variable with a default value."""
+    return os.getenv(key, default)
+
+# ============================================================================
+# DATABASE CONFIGURATION (Required)
+# ============================================================================
+DB_HOST     = _get_required_env("DB_HOST")
+DB_PORT     = int(_get_required_env("DB_PORT"))
+DB_USER     = _get_required_env("DB_USER")
+DB_PASSWORD = _get_required_env("DB_PASSWORD")
+DB_NAME     = _get_required_env("DB_NAME")
+
+# ============================================================================
+# FLASK SERVER CONFIGURATION (Required)
+# ============================================================================
+FLASK_HOST  = _get_required_env("FLASK_HOST")
 # Allow either PORT or FLASK_PORT to be set
-FLASK_PORT  = int(os.getenv("PORT", os.getenv("FLASK_PORT", "5000")))
-FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+FLASK_PORT  = int(_get_optional_env("PORT", _get_required_env("FLASK_PORT")))
+FLASK_DEBUG = _get_optional_env("FLASK_DEBUG", "false").lower() == "true"
 
-CORS_ORIGIN = os.getenv("CORS_ORIGIN", "*")
+# ============================================================================
+# CORS CONFIGURATION (Optional)
+# ============================================================================
+CORS_ORIGIN = _get_optional_env("CORS_ORIGIN", "*")
 
-# reCAPTCHA v2 (Invisible) configuration
-# All secret/site keys should come from environment variables.
-# Defaults are empty to avoid committing secrets in code.
-RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "")
-RECAPTCHA_PUBLIC_KEY = os.getenv("RECAPTCHA_PUBLIC_KEY", "")
+# ============================================================================
+# reCAPTCHA v2 (Invisible) CONFIGURATION (Required)
+# ============================================================================
+# All secret/site keys must be provided via environment variables.
+# These keys are critical for form security.
+RECAPTCHA_SECRET_KEY = _get_required_env("RECAPTCHA_SECRET_KEY")
+RECAPTCHA_PUBLIC_KEY = _get_required_env("RECAPTCHA_PUBLIC_KEY")
 
-# Note: RECAPTCHA_THRESHOLD is relevant for v3 scoring only
-RECAPTCHA_THRESHOLD = float(os.getenv("RECAPTCHA_THRESHOLD", "0.5"))
+# ============================================================================
+# reCAPTCHA SCORING (Optional - relevant for v3 only)
+# ============================================================================
+# Note: RECAPTCHA_THRESHOLD is only used for reCAPTCHA v3 scoring
+RECAPTCHA_THRESHOLD = float(_get_optional_env("RECAPTCHA_THRESHOLD", "0.5"))
