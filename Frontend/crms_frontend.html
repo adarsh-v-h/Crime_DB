@@ -37,6 +37,7 @@
                         'inter': ['Inter', 'sans-serif'],
                     },
                     colors: {
+                        'accent': '#5E0ED7',
                         'obsidian': '#070c1e',      // Majestic deep midnight indigo
                         'void': '#0b1129',          // Enigmatic dark navy
                         'abyss': '#0f1737',         // Tech-noir dark navy-blue
@@ -193,6 +194,21 @@
             background-position: center;
             pointer-events: none;
             z-index: 0;
+        }
+        body.landing-hero .ashoka-watermark,
+        body.landing-hero .noise-overlay { display: none; }
+        .landing-hero-text { color: #000; font-family: 'Inter', sans-serif; }
+        @keyframes crms-spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .crms-spin-orb {
+            animation: crms-spin-slow 28s linear infinite;
+            pointer-events: none;
+        }
+        .crms-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(94, 14, 215, 0.2);
         }
     </style>
 </head>
@@ -500,6 +516,105 @@
             );
         };
 
+        // ─── LANDING MOTION VARIANTS ────────────────────────────────────────────
+        const LANDING_VIDEO_URL = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260517_222138_3e3205be-3364-417b-a64a-bfe087acbec4.mp4";
+
+        const fadeDown = {
+            hidden: { opacity: 0, y: -24 },
+            visible: (i = 0) => ({
+                opacity: 1,
+                y: 0,
+                transition: { duration: 0.6, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] },
+            }),
+        };
+
+        const fadeUp = {
+            hidden: { opacity: 0, y: 32 },
+            visible: (i = 0) => ({
+                opacity: 1,
+                y: 0,
+                transition: { duration: 0.7, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] },
+            }),
+        };
+
+        const slideUpReveal = {
+            hidden: { opacity: 0, y: "110%" },
+            visible: (i = 0) => ({
+                opacity: 1,
+                y: 0,
+                transition: { duration: 0.85, delay: 0.15 + i * 0.12, ease: [0.22, 1, 0.36, 1] },
+            }),
+        };
+
+        const CRMS_INPUT = "crms-input w-full rounded-xl border-2 border-black bg-white/80 px-4 py-3 text-sm font-medium text-black placeholder-black/35 transition-all";
+        const CRMS_LABEL = "mb-2 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black";
+        const CRMS_CARD = "rounded-2xl border-2 border-black bg-white/88 p-6 shadow-lg backdrop-blur-md sm:p-8";
+
+        const HeroVideoBackground = ({ scrim = "bg-white/30" }) => (
+            <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+                <video
+                    className="absolute inset-0 h-full w-full object-cover"
+                    src={LANDING_VIDEO_URL}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                />
+                <div className={`absolute inset-0 ${scrim}`} />
+                <div className="crms-spin-orb absolute -left-24 top-1/4 h-[22rem] w-[22rem] rounded-full bg-gradient-to-br from-accent/25 via-purple-400/15 to-transparent blur-3xl sm:h-[28rem] sm:w-[28rem]" />
+                <div className="crms-spin-orb absolute -right-32 bottom-0 h-[18rem] w-[18rem] rounded-full bg-gradient-to-tl from-accent/20 via-violet-300/10 to-transparent blur-3xl" style={{ animationDirection: "reverse", animationDuration: "36s" }} />
+            </div>
+        );
+
+        const CrmsPageHeader = ({ title, subtitle, onBack }) => (
+            <motion.header
+                className="relative z-20 border-b-2 border-black/10 bg-white/50 backdrop-blur-md"
+                initial="hidden"
+                animate="visible"
+                variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
+            >
+                <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
+                    <motion.div variants={fadeDown} custom={0} className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white/80 sm:h-11 sm:w-11">
+                            <Icon name="Shield" size={18} className="text-black" />
+                        </div>
+                        <div>
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black">{title}</div>
+                            {subtitle && (
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-black/65">{subtitle}</div>
+                            )}
+                        </div>
+                    </motion.div>
+                    {onBack && (
+                        <motion.button
+                            type="button"
+                            variants={fadeDown}
+                            custom={1}
+                            onClick={onBack}
+                            className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black transition-opacity hover:opacity-60 sm:text-xs"
+                        >
+                            <Icon name="ArrowLeft" size={14} />
+                            Back to Home
+                        </motion.button>
+                    )}
+                </div>
+            </motion.header>
+        );
+
+        const CrmsPageShell = ({ children, title, subtitle, onBack, scrim, className = "" }) => {
+            useEffect(() => {
+                document.body.classList.add("landing-hero");
+                return () => document.body.classList.remove("landing-hero");
+            }, []);
+            return (
+                <div className={`landing-hero-text relative min-h-screen min-h-[100dvh] ${className}`}>
+                    <HeroVideoBackground scrim={scrim} />
+                    <CrmsPageHeader title={title} subtitle={subtitle} onBack={onBack} />
+                    <div className="relative z-10">{children}</div>
+                </div>
+            );
+        };
+
         // ─── LANDING PAGE ─────────────────────────────────────────────────────
         const LandingPage = ({ onNavigate }) => {
             const [liveStats, setLiveStats] = useState({
@@ -509,125 +624,137 @@
             useEffect(() => {
                 apiFetch("/stats").then(r => setLiveStats(r.data || r)).catch(() => {});
             }, []);
-            const [typedText, setTypedText] = useState("");
-            const fullText = "Next-Generation Cybercrime Command Network";
 
             useEffect(() => {
-                let i = 0;
-                const timer = setInterval(() => {
-                    if (i <= fullText.length) {
-                        setTypedText(fullText.slice(0, i));
-                        i++;
-                    } else {
-                        clearInterval(timer);
-                    }
-                }, 50);
-                return () => clearInterval(timer);
+                document.body.classList.add("landing-hero");
+                return () => document.body.classList.remove("landing-hero");
             }, []);
 
+            const heroStats = [
+                { label: "Active Cases", value: liveStats.active_cases },
+                { label: "Officers Deployed", value: liveStats.total_officers },
+                { label: "Cases Solved", value: liveStats.solved_cases },
+            ];
+
+            const headingWords = ["Serve", "Protect", "Justice"];
+
             return (
-                <div className="min-h-screen relative overflow-hidden">
-                    <Particles count={40} />
-                    <div className="absolute inset-0 grid-bg opacity-50" />
-                    <div className="absolute inset-0 radial-glow" />
-                    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-glow/5 rounded-full blur-[120px] animate-float" />
-                    <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-tactical/5 rounded-full blur-[100px] animate-float" style={{ animationDelay: "2s" }} />
+                <div className="landing-hero-text relative flex min-h-screen min-h-[100dvh] flex-col overflow-hidden">
+                    <HeroVideoBackground scrim="bg-white/25" />
 
                     {/* Navigation */}
-                    <nav className="relative z-10 flex items-center justify-between px-8 py-6">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
-                                <Icon name="Shield" size={20} className="text-cyan-glow" />
+                    <motion.header
+                        className="relative z-20 flex items-center justify-between px-5 py-5 sm:px-8 sm:py-6"
+                        initial="hidden"
+                        animate="visible"
+                        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
+                    >
+                        <motion.div variants={fadeDown} custom={0} className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 border-black bg-white/80 backdrop-blur-sm">
+                                <Icon name="Shield" size={20} className="text-black" />
                             </div>
-                            <div>
-                                <div className="text-sm font-bold font-space text-white tracking-wider">CRMS</div>
-                                <div className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">Bengaluru Police</div>
+                            <div className="hidden sm:block">
+                                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-black">CRMS</div>
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-black/70">Bengaluru Police</div>
                             </div>
-                        </div>
-                        <div className="flex items-center gap-6">
-                            <button onClick={() => onNavigate("public")} className="text-sm text-gray-400 hover:text-cyan-glow transition-colors font-medium">Public Portal</button>
-                            <button onClick={() => onNavigate("login")} className="text-sm text-gray-400 hover:text-cyan-glow transition-colors font-medium">Staff Access</button>
-                            <button onClick={() => onNavigate("login")} className="btn-primary px-5 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                                <Icon name="Lock" size={14} />
-                                Secure Login
-                            </button>
-                        </div>
-                    </nav>
+                        </motion.div>
+                    </motion.header>
 
-                    {/* Hero */}
-                    <div className="relative z-10 flex flex-col items-center justify-center px-8 pt-20 pb-32 text-center">
-                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-panel mb-8 animate-fade-up">
-                            <span className="w-2 h-2 rounded-full bg-green-tactical pulse-dot" />
-                            <span className="text-xs font-medium text-gray-400 tracking-wide">System Operational</span>
-                            <span className="text-xs text-gray-600">|</span>
-                            <span className="text-xs font-mono text-cyan-glow/70">v4.2.1-stable</span>
-                        </div>
-
-                        <h1 className="text-5xl md:text-7xl font-bold font-space text-white mb-6 leading-tight animate-fade-up" style={{ animationDelay: "0.2s" }}>
-                            <span className="text-glow-cyan">CRIME RECORD</span><br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-glow via-blue-electric to-purple-tactical text-glow-blue">
-                                MANAGEMENT SYSTEM
-                            </span>
-                        </h1>
-
-                        <p className="text-xl md:text-2xl text-gray-400 font-light max-w-3xl mb-4 animate-fade-up h-8" style={{ animationDelay: "0.4s" }}>
-                            {typedText}<span className="text-cyan-glow animate-pulse">|</span>
-                        </p>
-
-                        <p className="text-sm text-gray-500 max-w-xl mb-12 animate-fade-up" style={{ animationDelay: "0.5s" }}>
-                            Advanced intelligence platform for the Bengaluru Police Department. 
-                            Real-time case tracking, officer coordination, and cybercrime analytics.
-                        </p>
-
-                        <div className="flex flex-wrap items-center justify-center gap-4 animate-fade-up" style={{ animationDelay: "0.6s" }}>
-                            <button onClick={() => onNavigate("public")} className="btn-primary px-8 py-3.5 rounded-xl text-sm font-semibold flex items-center gap-2">
-                                <Icon name="Globe" size={16} />
-                                Public Portal
-                            </button>
-                            <button onClick={() => onNavigate("login")} className="glass-panel px-8 py-3.5 rounded-xl text-sm font-semibold text-white hover:border-cyan-glow/30 transition-all flex items-center gap-2">
-                                <Icon name="Shield" size={16} />
-                                Staff Dashboard
-                            </button>
-                        </div>
-
-                        {/* Floating Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 max-w-4xl w-full">
-                            {[
-                                { icon: "Fingerprint", title: "Digital Forensics", desc: "AI-powered evidence analysis and chain-of-custody tracking", color: "cyan" },
-                                { icon: "Radio", title: "Real-Time Intelligence", desc: "Live case monitoring with automated threat detection", color: "blue" },
-                                { icon: "Target", title: "Tactical Coordination", desc: "Multi-unit operations with encrypted communications", color: "purple" },
-                            ].map((card, i) => (
-                                <div key={i} className="glass-panel rounded-2xl p-6 card-hover animate-fade-up text-left" style={{ animationDelay: `${0.8 + i * 0.15}s` }}>
-                                    <div className={`w-12 h-12 rounded-xl bg-${card.color === "cyan" ? "cyan-glow/10" : card.color === "blue" ? "blue-electric/10" : "purple-tactical/10"} border border-${card.color === "cyan" ? "cyan-glow/20" : card.color === "blue" ? "blue-electric/20" : "purple-tactical/20"} flex items-center justify-center mb-4`}>
-                                        <Icon name={card.icon} size={22} className={card.color === "cyan" ? "text-cyan-glow" : card.color === "blue" ? "text-blue-electric" : "text-purple-tactical"} />
+                    {/* Stats row */}
+                    <motion.section
+                        className="relative z-10 mt-auto px-5 sm:px-8"
+                        initial="hidden"
+                        animate="visible"
+                        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }}
+                    >
+                        <div className="flex flex-col items-end gap-6 sm:gap-8 md:flex-row md:justify-end md:gap-12 lg:gap-16">
+                            {heroStats.map((stat, i) => (
+                                <motion.div
+                                    key={stat.label}
+                                    variants={fadeUp}
+                                    custom={i}
+                                    className="text-right"
+                                >
+                                    <div className="flex items-baseline justify-end gap-0.5">
+                                        <span className="text-2xl font-semibold text-accent sm:text-3xl md:text-4xl">+</span>
+                                        <span className="text-3xl font-semibold tabular-nums tracking-tight text-black sm:text-4xl md:text-5xl lg:text-6xl">
+                                            {stat.value === null
+                                                ? <span className="inline-block h-9 w-16 animate-pulse rounded bg-black/10 sm:h-11 sm:w-20" />
+                                                : <AnimatedCounter value={stat.value} />}
+                                        </span>
                                     </div>
-                                    <h3 className="text-lg font-semibold text-white mb-2 font-space">{card.title}</h3>
-                                    <p className="text-sm text-gray-500 leading-relaxed">{card.desc}</p>
-                                </div>
+                                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/80 sm:text-xs">
+                                        {stat.label}
+                                    </p>
+                                </motion.div>
                             ))}
                         </div>
-                    </div>
+                    </motion.section>
 
-                    {/* Stats Strip */}
-                    <div className="relative z-10 border-t border-white/5 bg-void/50 backdrop-blur-xl">
-                        <div className="max-w-6xl mx-auto px-8 py-8 grid grid-cols-2 md:grid-cols-4 gap-8">
-                            {[
-                                { label: "Active Cases",      value: liveStats.active_cases,   color: "cyan" },
-                                { label: "Officers Deployed", value: liveStats.total_officers,  color: "blue" },
-                                { label: "Cases Solved",      value: liveStats.solved_cases,    color: "green" },
-                                { label: "Cyber Crimes",      value: liveStats.cyber_cases,     color: "purple" },
-                            ].map((stat, i) => (
-                                <div key={i} className="text-center">
-                                    <div className={`text-2xl md:text-3xl font-bold font-space ${stat.color === "cyan" ? "text-cyan-glow" : stat.color === "blue" ? "text-blue-electric" : stat.color === "green" ? "text-green-tactical" : "text-purple-tactical"}`}>
-                                        {stat.value === null
-                                            ? <span className="inline-block w-12 h-7 rounded bg-white/5 animate-pulse" />
-                                            : <AnimatedCounter value={stat.value} />}
+                    {/* Bottom content */}
+                    <motion.section
+                        className="relative z-10 mt-8 flex flex-1 flex-col justify-end px-5 pb-8 sm:mt-12 sm:px-8 sm:pb-12 md:pb-16"
+                        variants={fadeUp}
+                        initial="hidden"
+                        animate="visible"
+                        custom={2}
+                    >
+                        <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-12">
+                            <div className="max-w-xl">
+                                <motion.p
+                                    variants={fadeUp}
+                                    custom={0}
+                                    className="mb-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-black sm:text-xs"
+                                >
+                                    Bengaluru Police Department · Crime Record Management
+                                </motion.p>
+
+                                <motion.div variants={fadeUp} custom={1} className="mb-6 flex flex-wrap gap-3 sm:gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => onNavigate("public")}
+                                        className="inline-flex items-center gap-2 rounded-full border-2 border-black bg-black px-6 py-3 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-80 sm:px-8"
+                                    >
+                                        <Icon name="Globe" size={16} />
+                                        Public Portal
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => onNavigate("login")}
+                                        className="inline-flex items-center gap-2 rounded-full border-2 border-black bg-white/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.15em] text-black backdrop-blur-sm transition-opacity hover:opacity-80 sm:px-8"
+                                    >
+                                        <Icon name="Shield" size={16} />
+                                        Staff Dashboard
+                                    </button>
+                                </motion.div>
+
+                                <motion.p
+                                    variants={fadeUp}
+                                    custom={2}
+                                    className="text-xs font-semibold uppercase leading-relaxed tracking-[0.12em] text-black/90 sm:text-sm sm:leading-relaxed sm:tracking-[0.14em]"
+                                >
+                                    Advanced intelligence platform for real-time case tracking, officer coordination,
+                                    and cybercrime analytics across Bengaluru.
+                                </motion.p>
+                            </div>
+
+                            <div className="overflow-hidden">
+                                {headingWords.map((word, i) => (
+                                    <div key={word} className="overflow-hidden">
+                                        <motion.h1
+                                            variants={slideUpReveal}
+                                            initial="hidden"
+                                            animate="visible"
+                                            custom={i}
+                                            className="text-[clamp(3rem,14vw,11rem)] font-semibold uppercase leading-[0.88] tracking-[0.02em] text-black"
+                                        >
+                                            {word}
+                                        </motion.h1>
                                     </div>
-                                    <div className="text-xs text-gray-500 mt-1 font-medium tracking-wide uppercase">{stat.label}</div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    </motion.section>
                 </div>
             );
         };
@@ -711,41 +838,30 @@
 
 
             return (
-                <div className="min-h-screen bg-obsidian">
-                    <Particles count={20} />
-                    <div className="absolute inset-0 grid-bg opacity-30" />
-
-                    {/* Header */}
-                    <div className="relative z-10 border-b border-white/5 bg-void/80 backdrop-blur-xl">
-                        <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-lg bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
-                                    <Icon name="Shield" size={18} className="text-cyan-glow" />
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold font-space text-white">CRMS Public Portal</div>
-                                    <div className="text-[10px] text-gray-500 font-medium tracking-widest uppercase">Bengaluru Police Department</div>
-                                </div>
-                            </div>
-                            <button onClick={() => onNavigate("landing")} className="text-sm text-gray-400 hover:text-cyan-glow transition-colors flex items-center gap-1.5">
-                                <Icon name="ArrowLeft" size={14} />
-                                Back to Home
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="relative z-10 max-w-4xl mx-auto px-8 py-12">
-                        <div className="text-center mb-12">
-                            <h1 className="text-3xl md:text-4xl font-bold font-space text-white mb-3">Public Services</h1>
-                            <p className="text-gray-500">File complaints and request case information securely</p>
-                        </div>
+                <CrmsPageShell
+                    title="CRMS Public Portal"
+                    subtitle="Bengaluru Police Department"
+                    onBack={() => onNavigate("landing")}
+                    scrim="bg-white/40"
+                >
+                    <motion.div
+                        className="mx-auto max-w-4xl px-5 py-10 sm:px-8 sm:py-12"
+                        initial="hidden"
+                        animate="visible"
+                        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
+                    >
+                        <motion.div variants={fadeUp} custom={0} className="mb-10 text-center sm:mb-12">
+                            <h1 className="mb-3 text-2xl font-semibold uppercase tracking-[0.12em] text-black sm:text-3xl md:text-4xl">Public Services</h1>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/70 sm:text-sm">File complaints and request case information securely</p>
+                        </motion.div>
 
                         {/* Tabs */}
-                        <div className="flex justify-center mb-10">
-                            <div className="glass-panel rounded-xl p-1 flex gap-1">
+                        <motion.div variants={fadeUp} custom={1} className="mb-10 flex justify-center">
+                            <div className="flex gap-1 rounded-full border-2 border-black bg-white/80 p-1 backdrop-blur-sm">
                                 <button
+                                    type="button"
                                     onClick={() => setActiveTab("complaint")}
-                                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "complaint" ? "bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/20" : "text-gray-400 hover:text-white"}`}
+                                    className={`rounded-full px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "complaint" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
                                 >
                                     <span className="flex items-center gap-2">
                                         <Icon name="FilePlus" size={14} />
@@ -753,8 +869,9 @@
                                     </span>
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => setActiveTab("access")}
-                                    className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "access" ? "bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/20" : "text-gray-400 hover:text-white"}`}
+                                    className={`rounded-full px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "access" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
                                 >
                                     <span className="flex items-center gap-2">
                                         <Icon name="Eye" size={14} />
@@ -762,182 +879,173 @@
                                     </span>
                                 </button>
                             </div>
-                        </div>
+                        </motion.div>
 
                         {/* Complaint Form */}
                         {activeTab === "complaint" && (
-                            <div className="glass-panel-strong rounded-2xl p-8 animate-fade-up">
-                                <div className="flex items-center gap-3 mb-8">
-                                    <div className="w-10 h-10 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center">
-                                        <Icon name="FileText" size={18} className="text-cyan-glow" />
+                            <motion.div variants={fadeUp} custom={2} className={CRMS_CARD}>
+                                <div className="mb-8 flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white">
+                                        <Icon name="FileText" size={18} className="text-black" />
                                     </div>
                                     <div>
-                                        <h2 className="text-xl font-semibold text-white font-space">File a Complaint</h2>
-                                        <p className="text-sm text-gray-500">Submit a new case to the Bengaluru Police</p>
+                                        <h2 className="text-lg font-semibold uppercase tracking-[0.1em] text-black sm:text-xl">File a Complaint</h2>
+                                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/65 sm:text-xs">Submit a new case to the Bengaluru Police</p>
                                     </div>
                                 </div>
 
                                 {submitted ? (
-                                    <div className="text-center py-12">
-                                        <div className="w-16 h-16 rounded-full bg-green-tactical/10 border border-green-tactical/30 flex items-center justify-center mx-auto mb-4">
-                                            <Icon name="CheckCircle" size={28} className="text-green-tactical" />
+                                    <div className="py-12 text-center">
+                                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-black bg-white">
+                                            <Icon name="CheckCircle" size={28} className="text-accent" />
                                         </div>
-                                        <h3 className="text-xl font-semibold text-white mb-2">Complaint Submitted</h3>
+                                        <h3 className="mb-2 text-lg font-semibold uppercase tracking-[0.1em] text-black">Complaint Submitted</h3>
                                         {caseRef && (
-                                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-glow/10 border border-cyan-glow/20 mb-4">
-                                                <span className="text-xs text-gray-400 uppercase tracking-wider">Your Reference</span>
-                                                <span className="font-mono font-bold text-cyan-glow text-lg">{caseRef}</span>
+                                            <div className="mb-4 inline-flex items-center gap-2 rounded-full border-2 border-black bg-white/80 px-4 py-2">
+                                                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/60">Your Reference</span>
+                                                <span className="font-mono text-lg font-bold text-accent">{caseRef}</span>
                                             </div>
                                         )}
-                                        <p className="text-gray-500 text-sm">Complaint logged for officer review. Save your reference number — you will need it to track your case.</p>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/70">Complaint logged for officer review. Save your reference number — you will need it to track your case.</p>
                                     </div>
                                 ) : (
                                     <form onSubmit={handleComplaintSubmit} className="space-y-5">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Complainant Name *</label>
+                                                <label className={CRMS_LABEL}>Complainant Name *</label>
                                                 <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                                    placeholder="Full name" />
+                                                    className={CRMS_INPUT} placeholder="Full name" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Contact Number *</label>
+                                                <label className={CRMS_LABEL}>Contact Number *</label>
                                                 <input type="tel" required value={formData.contact} onChange={e => setFormData({...formData, contact: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                                    placeholder="+91-XXXXXXXXXX" />
+                                                    className={CRMS_INPUT} placeholder="+91-XXXXXXXXXX" />
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Email Address</label>
+                                                <label className={CRMS_LABEL}>Email Address</label>
                                                 <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                                    placeholder="email@example.com" />
+                                                    className={CRMS_INPUT} placeholder="email@example.com" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
+                                                <label className={CRMS_LABEL}>
                                                     Aadhaar Last 4 Digits *
-                                                    <span className="ml-1 text-gray-600 normal-case tracking-normal font-normal">(identity verification)</span>
+                                                    <span className="ml-1 font-normal normal-case tracking-normal text-black/50">(identity verification)</span>
                                                 </label>
                                                 <input type="text" required maxLength={4} inputMode="numeric" pattern="[0-9]{4}"
                                                     value={formData.aadhaar_last4}
                                                     onChange={e => { setFormData({...formData, aadhaar_last4: e.target.value.replace(/\D/,"")}); setAadhaarError(""); }}
-                                                    className={`w-full bg-void border rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all font-mono tracking-widest ${aadhaarError ? "border-red-warn" : "border-white/10"}`}
+                                                    className={`${CRMS_INPUT} font-mono tracking-widest ${aadhaarError ? "border-red-600" : ""}`}
                                                     placeholder="XXXX" />
-                                                {aadhaarError && <p className="text-xs text-red-warn mt-1">{aadhaarError}</p>}
+                                                {aadhaarError && <p className="mt-1 text-xs font-semibold text-red-600">{aadhaarError}</p>}
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Crime Type</label>
+                                                <label className={CRMS_LABEL}>Crime Type</label>
                                                 <select value={formData.crime_type} onChange={e => setFormData({...formData, crime_type: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white input-glow transition-all appearance-none">
-                                                    <option value="" className="bg-void">Select type</option>
-                                                    <option value="Cyber Fraud" className="bg-void">Cyber Fraud</option>
-                                                    <option value="Theft" className="bg-void">Theft</option>
-                                                    <option value="Assault" className="bg-void">Assault</option>
-                                                    <option value="Fraud" className="bg-void">Fraud</option>
-                                                    <option value="Other" className="bg-void">Other</option>
+                                                    className={`${CRMS_INPUT} appearance-none`}>
+                                                    <option value="">Select type</option>
+                                                    <option value="Cyber Fraud">Cyber Fraud</option>
+                                                    <option value="Theft">Theft</option>
+                                                    <option value="Assault">Assault</option>
+                                                    <option value="Fraud">Fraud</option>
+                                                    <option value="Other">Other</option>
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Location</label>
+                                                <label className={CRMS_LABEL}>Location</label>
                                                 <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                                    placeholder="Bengaluru area" />
+                                                    className={CRMS_INPUT} placeholder="Bengaluru area" />
                                             </div>
                                         </div>
                                         <input type="hidden" value="Online" name="complaint_mode" />
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Incident Description</label>
+                                            <label className={CRMS_LABEL}>Incident Description</label>
                                             <textarea value={formData.incident_desc} onChange={e => setFormData({...formData, incident_desc: e.target.value})}
                                                 rows={4}
-                                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
+                                                className={`${CRMS_INPUT} resize-none`}
                                                 placeholder="Describe the incident in detail..." />
                                         </div>
-                                        <button type="submit" className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+                                        <button type="submit" disabled={submitting} className={`flex w-full items-center justify-center gap-2 rounded-full border-2 border-black bg-black py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-80 ${submitting ? "cursor-not-allowed opacity-60" : ""}`}>
                                             <Icon name="FilePlus" size={16} />
-                                            Submit Complaint
+                                            {submitting ? "Submitting..." : "Submit Complaint"}
                                         </button>
                                     </form>
                                 )}
-                            </div>
+                            </motion.div>
                         )}
 
                         {/* Access Request Form */}
                         {activeTab === "access" && (
-                            <div className="glass-panel-strong rounded-2xl p-8 animate-fade-up">
-                                <div className="flex items-center gap-3 mb-8">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-tactical/10 border border-purple-tactical/20 flex items-center justify-center">
-                                        <Icon name="Eye" size={18} className="text-purple-tactical" />
+                            <motion.div variants={fadeUp} custom={2} className={CRMS_CARD}>
+                                <div className="mb-8 flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white">
+                                        <Icon name="Eye" size={18} className="text-accent" />
                                     </div>
                                     <div>
-                                        <h2 className="text-xl font-semibold text-white font-space">Request Case Access</h2>
-                                        <p className="text-sm text-gray-500">Request read access to case information</p>
+                                        <h2 className="text-lg font-semibold uppercase tracking-[0.1em] text-black sm:text-xl">Request Case Access</h2>
+                                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/65 sm:text-xs">Request read access to case information</p>
                                     </div>
                                 </div>
 
                                 {accessSubmitted ? (
-                                    <div className="text-center py-12">
-                                        <div className="w-16 h-16 rounded-full bg-green-tactical/10 border border-green-tactical/30 flex items-center justify-center mx-auto mb-4">
-                                            <Icon name="CheckCircle" size={28} className="text-green-tactical" />
+                                    <div className="py-12 text-center">
+                                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-black bg-white">
+                                            <Icon name="CheckCircle" size={28} className="text-accent" />
                                         </div>
-                                        <h3 className="text-xl font-semibold text-white mb-2">Request Submitted</h3>
-                                        <p className="text-gray-500 text-sm">Your access request is under review. You will be notified via email.</p>
+                                        <h3 className="mb-2 text-lg font-semibold uppercase tracking-[0.1em] text-black">Request Submitted</h3>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/70">Your access request is under review. You will be notified via email.</p>
                                     </div>
                                 ) : (
                                     <form onSubmit={handleAccessSubmit} className="space-y-5">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Case ID *</label>
+                                                <label className={CRMS_LABEL}>Case ID *</label>
                                                 <input type="text" required value={accessForm.case_id} onChange={e => setAccessForm({...accessForm, case_id: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all font-mono"
-                                                    placeholder="e.g. BLR-001" />
+                                                    className={`${CRMS_INPUT} font-mono`} placeholder="e.g. BLR-001" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Contact Number *</label>
+                                                <label className={CRMS_LABEL}>Contact Number *</label>
                                                 <input type="tel" required value={accessForm.requester_number} onChange={e => setAccessForm({...accessForm, requester_number: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                                    placeholder="+91-XXXXXXXXXX" />
+                                                    className={CRMS_INPUT} placeholder="+91-XXXXXXXXXX" />
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Your Name *</label>
+                                                <label className={CRMS_LABEL}>Your Name *</label>
                                                 <input type="text" required value={accessForm.requester_name} onChange={e => setAccessForm({...accessForm, requester_name: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                                    placeholder="Full name" />
+                                                    className={CRMS_INPUT} placeholder="Full name" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Email *</label>
+                                                <label className={CRMS_LABEL}>Email *</label>
                                                 <input type="email" required value={accessForm.requester_email} onChange={e => setAccessForm({...accessForm, requester_email: e.target.value})}
-                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                                                    placeholder="email@example.com" />
+                                                    className={CRMS_INPUT} placeholder="email@example.com" />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Reason for Access *</label>
+                                            <label className={CRMS_LABEL}>Reason for Access *</label>
                                             <textarea required value={accessForm.reason} onChange={e => setAccessForm({...accessForm, reason: e.target.value})}
                                                 rows={3}
-                                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
+                                                className={`${CRMS_INPUT} resize-none`}
                                                 placeholder="Explain why you need access to this case..." />
                                         </div>
                                         {error && (
-                                            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-warn/10 border border-red-warn/20 text-sm text-red-warn font-mono">
-                                                <Icon name="AlertCircle" size={14} /> {error}
+                                            <div className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                                <Icon name="AlertTriangle" size={14} /> {error}
                                             </div>
                                         )}
-                                        <button type="submit" disabled={submitting} className={`w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 ${submitting ? "opacity-60 cursor-not-allowed" : ""}`}>
+                                        <button type="submit" disabled={submitting} className={`flex w-full items-center justify-center gap-2 rounded-full border-2 border-black bg-black py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-80 ${submitting ? "cursor-not-allowed opacity-60" : ""}`}>
                                             <Icon name={submitting ? "Clock" : "Eye"} size={16} />
                                             {submitting ? "Submitting Request..." : "Submit Access Request"}
                                         </button>
                                     </form>
-
                                 )}
-                            </div>
+                            </motion.div>
                         )}
-                    </div>
-                </div>
+                    </motion.div>
+                </CrmsPageShell>
             );
         };
 
@@ -1021,12 +1129,12 @@
 
             const requestStatusBadge = (status) => {
                 const styles = {
-                    Pending: "bg-amber-500/10 text-amber-300 border-amber-500/30",
-                    Accepted: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
-                    Rejected: "bg-rose-500/10 text-rose-300 border-rose-500/30",
+                    Pending: "bg-amber-100 text-amber-900 border-amber-400",
+                    Accepted: "bg-emerald-100 text-emerald-900 border-emerald-500",
+                    Rejected: "bg-rose-100 text-rose-900 border-rose-400",
                 };
                 return (
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold border uppercase tracking-wide ${styles[status] || styles.Pending}`}>
+                    <span className={`rounded-full border-2 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${styles[status] || styles.Pending}`}>
                         {status}
                     </span>
                 );
@@ -1120,150 +1228,164 @@
             };
 
             return (
-                <div className="min-h-screen bg-[#030712] text-slate-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-400">
-                    {/* TOP STATUS BAR */}
-                    <header className="border-b border-slate-800 bg-[#0b0f19]/80 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <h1 className="text-sm font-semibold tracking-wider text-slate-200 uppercase font-mono">
-                                BENGALURU POLICE CORE — INTRALINK
-                            </h1>
-                        </div>
-                        <div className="flex items-center space-x-6 text-xs font-mono text-slate-400">
-                            <div>OPERATOR: <span className="text-slate-200 font-bold">{officer?.name || "UNKNOWN"}</span> ({userRole?.toUpperCase()})</div>
-                            <button onClick={onLogout} className="text-rose-400 hover:text-rose-300 transition-colors border border-rose-500/20 hover:border-rose-500/40 bg-rose-950/10 px-3 py-1 rounded">
-                                TERMINATE_SESSION
+                <CrmsPageShell
+                    title="Bengaluru Police · Intralink"
+                    subtitle="Officer Command Dashboard"
+                    onBack={() => onNavigate("landing")}
+                    scrim="bg-white/42"
+                >
+                    <div className="border-b-2 border-black/10 bg-white/55 backdrop-blur-md">
+                        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/70 sm:text-xs">
+                                Operator: <span className="text-black">{officer?.name || "UNKNOWN"}</span>
+                                <span className="text-accent"> ({userRole?.toUpperCase()})</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onLogout}
+                                className="rounded-full border-2 border-black bg-black px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition-opacity hover:opacity-80 sm:text-xs"
+                            >
+                                Sign Out
                             </button>
                         </div>
-                    </header>
+                    </div>
 
-                    <div className="max-w-[1600px] mx-auto p-6 lg:p-8 space-y-6">
+                    <motion.div
+                        className="mx-auto max-w-[1600px] space-y-6 p-5 sm:p-6 lg:p-8"
+                        initial="hidden"
+                        animate="visible"
+                        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.06 } } }}
+                    >
                         {/* SUB TAB NAVIGATION BAR */}
-                        <div className="flex border-b border-slate-800 gap-6 mb-6">
+                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex gap-4 border-b-2 border-black/15 sm:gap-6">
                             <button
+                                type="button"
                                 onClick={() => setActiveSubTab("dossiers")}
-                                className={`pb-3 text-sm font-semibold tracking-wider font-mono transition-all border-b-2 ${
+                                className={`pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
                                     activeSubTab === "dossiers"
-                                        ? "border-emerald-500 text-emerald-400"
-                                        : "border-transparent text-slate-400 hover:text-slate-200"
+                                        ? "border-accent text-black"
+                                        : "border-transparent text-black/50 hover:text-black"
                                 }`}
                             >
-                                🗃️ CASE DOSSIERS
+                                Case Dossiers
                             </button>
                             <button
+                                type="button"
                                 onClick={() => setActiveSubTab("requests")}
-                                className={`pb-3 text-sm font-semibold tracking-wider font-mono transition-all border-b-2 relative ${
+                                className={`relative pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
                                     activeSubTab === "requests"
-                                        ? "border-emerald-500 text-emerald-400"
-                                        : "border-transparent text-slate-400 hover:text-slate-200"
+                                        ? "border-accent text-black"
+                                        : "border-transparent text-black/50 hover:text-black"
                                 }`}
                             >
-                                🔔 ACCESS REQUESTS
+                                Access Requests
                                 {pendingCount > 0 && (
-                                    <span className="ml-2 px-2 py-0.5 text-[10px] bg-amber-500 text-slate-900 rounded-full font-bold animate-pulse">
+                                    <span className="ml-2 animate-pulse rounded-full border-2 border-black bg-accent px-2 py-0.5 text-[10px] font-bold text-white">
                                         {pendingCount}
                                     </span>
                                 )}
                             </button>
-                        </div>
+                        </motion.div>
 
                         {activeSubTab === "dossiers" && (
                             <>
                             {/* CONTROL CONSOLE */}
 
-                        <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between shadow-2xl">
+                        <motion.div variants={fadeUp} custom={1} className={`${CRMS_CARD} flex flex-col items-center justify-between gap-4 p-4 md:flex-row`}>
                             <div className="relative w-full md:w-96">
                                 <input 
                                     type="text" 
                                     placeholder="Search dossier records..." 
                                     value={searchQuery}
                                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                    className="w-full bg-[#030712] border border-slate-700/60 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono transition-all"
+                                    className={`${CRMS_INPUT} pl-10 py-2.5 text-xs`}
                                 />
-                                <span className="absolute left-3 top-2.5 text-slate-500 text-sm">⚡</span>
+                                <span className="absolute left-3 top-3 text-accent text-sm">+</span>
                             </div>
                             
-                            <div className="flex flex-wrap w-full md:w-auto items-center gap-3">
+                            <div className="flex w-full flex-wrap items-center gap-3 md:w-auto">
                                 <select 
                                     value={statusFilter} 
                                     onChange={(e) => handleFilterChange("status", e.target.value)}
-                                    className="bg-[#030712] border border-slate-700/60 text-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-emerald-500"
+                                    className={`${CRMS_INPUT} w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
                                 >
-                                    <option value="All">STATUS: ALL</option>
-                                    <option value="Active">ACTIVE</option>
-                                    <option value="Solved">SOLVED</option>
-                                    <option value="Closed">CLOSED</option>
+                                    <option value="All">Status: All</option>
+                                    <option value="Active">Active</option>
+                                    <option value="Solved">Solved</option>
+                                    <option value="Closed">Closed</option>
                                 </select>
 
                                 <select 
                                     value={typeFilter} 
                                     onChange={(e) => handleFilterChange("type", e.target.value)}
-                                    className="bg-[#030712] border border-slate-700/60 text-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-emerald-500"
+                                    className={`${CRMS_INPUT} w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
                                 >
-                                    <option value="All">CLASSIFICATION: ALL</option>
-                                    <option value="Cyber Fraud">CYBER FRAUD</option>
-                                    <option value="Theft">THEFT</option>
-                                    <option value="Assault">ASSAULT</option>
-                                    <option value="Fraud">FINANCIAL FRAUD</option>
-                                    <option value="Other">OTHER CATEGORIES</option>
+                                    <option value="All">Classification: All</option>
+                                    <option value="Cyber Fraud">Cyber Fraud</option>
+                                    <option value="Theft">Theft</option>
+                                    <option value="Assault">Assault</option>
+                                    <option value="Fraud">Financial Fraud</option>
+                                    <option value="Other">Other</option>
                                 </select>
                             </div>
-                        </div>
+                        </motion.div>
 
-                        {/* LIVE SYSTEM MESSAGES (ERROR / LOADING) */}
                         {error && (
-                            <div className="bg-rose-950/20 border border-rose-500/30 text-rose-300 px-4 py-3 rounded-lg text-xs font-mono flex items-center space-x-2">
-                                <span>⚠️ SEC_ERROR:</span>
+                            <div className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                <Icon name="AlertTriangle" size={14} />
                                 <span>{error}</span>
                             </div>
                         )}
 
                         {/* CASE DOSSIER GRID */}
                         {loading ? (
-                            <div className="h-96 w-full flex items-center justify-center flex-col space-y-3 border border-slate-800/40 rounded-xl bg-[#0b0f19]/30">
-                                <div className="h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                                <p className="text-xs font-mono text-slate-500 tracking-widest uppercase">Querying Central DB Pool...</p>
+                            <div className={`${CRMS_CARD} flex h-96 w-full flex-col items-center justify-center space-y-3`}>
+                                <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/60">Querying central database...</p>
                             </div>
                         ) : cases.length === 0 ? (
-                            <div className="h-96 w-full flex items-center justify-center flex-col space-y-2 border border-dashed border-slate-800 rounded-xl bg-[#0b0f19]/10">
-                                <p className="text-sm font-mono text-slate-400 font-bold">NO ALIGNED DOSSIERS FOUND</p>
-                                <p className="text-xs font-mono text-slate-600">The database query returned 0 active entries matching current filters.</p>
+                            <div className={`${CRMS_CARD} flex h-96 w-full flex-col items-center justify-center space-y-2 border-dashed`}>
+                                <p className="text-sm font-semibold uppercase tracking-[0.12em] text-black">No dossiers found</p>
+                                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/55">No entries match your current filters.</p>
                             </div>
                         ) : (
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                     {cases.map((c) => {
                                         const statusColors = {
-                                            Active: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-                                            Solved: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-                                            Closed: "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                                            Active: "bg-amber-100 text-amber-900 border-amber-400",
+                                            Solved: "bg-emerald-100 text-emerald-900 border-emerald-500",
+                                            Closed: "bg-black/5 text-black/60 border-black/20"
                                         };
                                         return (
                                             <div 
                                                 key={c.case_id} 
                                                 onClick={() => setSelectedCase(c)}
-                                                className="bg-[#0b0f19] border border-slate-800/80 rounded-xl p-5 hover:border-slate-700 hover:shadow-xl transition-all cursor-pointer relative group flex flex-col justify-between"
+                                                className={`${CRMS_CARD} group relative flex cursor-pointer flex-col justify-between p-5 transition-all hover:shadow-xl`}
                                             >
                                                 <div>
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <span className="text-[11px] font-mono tracking-wider font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">
+                                                    <div className="mb-3 flex items-center justify-between">
+                                                        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/60 transition-colors group-hover:text-accent">
                                                             {c.display_id || `BLR-${String(c.case_id).padStart(3, '0')}`}
                                                         </span>
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono tracking-wide uppercase ${statusColors[c.status] || statusColors.Active}`}>
+                                                        <span className={`rounded-full border-2 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${statusColors[c.status] || statusColors.Active}`}>
                                                             {c.status}
                                                         </span>
                                                     </div>
-                                                    <h3 className="font-semibold text-slate-200 line-clamp-1 mb-1 text-[15px] group-hover:text-white">
+                                                    <h3 className="mb-1 line-clamp-1 text-[15px] font-semibold text-black group-hover:text-accent">
                                                         {c.title}
                                                     </h3>
-                                                    <p className="text-xs text-slate-400 line-clamp-2 mb-4 font-normal leading-relaxed">
+                                                    <p className="mb-4 line-clamp-2 text-xs font-medium leading-relaxed text-black/65">
                                                         {c.description || "No file logs details provided."}
                                                     </p>
                                                 </div>
                                                 
-                                                <div className="border-t border-slate-800/60 pt-3 mt-2 flex items-center justify-between text-[11px] font-mono text-slate-500">
-                                                    <div>⚡ <span className="text-slate-400">{c.crime_type}</span></div>
-                                                    <div>📍 {c.location || "N/A"}</div>
+                                                <div className="mt-2 flex items-center justify-between border-t-2 border-black/10 pt-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-black/55">
+                                                    <div><span className="text-accent">+</span> {c.crime_type}</div>
+                                                    <div className="flex items-center gap-1">
+                                                        <Icon name="MapPin" size={12} className="text-accent" />
+                                                        {c.location || "N/A"}
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -1271,30 +1393,32 @@
                                 </div>
 
                                 {/* INDUSTRIAL PAGINATION BAR */}
-                                <div className="bg-[#0b0f19] border border-slate-800 rounded-xl px-6 py-4 flex items-center justify-between shadow-md text-xs font-mono">
-                                    <div className="text-slate-400">
-                                        Showing <span className="text-slate-200 font-bold">{cases.length}</span> of <span className="text-slate-200 font-bold">{totalRecords}</span> systemic entries
+                                <div className={`${CRMS_CARD} flex flex-wrap items-center justify-between gap-3 px-6 py-4 text-xs`}>
+                                    <div className="font-semibold uppercase tracking-[0.1em] text-black/65">
+                                        Showing <span className="text-black">{cases.length}</span> of <span className="text-black">{totalRecords}</span> entries
                                     </div>
                                     
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex items-center gap-2">
                                         <button 
+                                            type="button"
                                             disabled={currentPage === 1}
                                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                            className="px-3 py-1.5 rounded bg-[#030712] border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-800 transition-all"
+                                            className="rounded-full border-2 border-black bg-white/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-black transition-all hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                                         >
-                                            &lt; PREV
+                                            Prev
                                         </button>
                                         
-                                        <div className="px-4 py-1.5 rounded bg-[#030712] border border-slate-800 text-slate-400 select-none">
-                                            PAGE <span className="text-emerald-400 font-bold">{currentPage}</span> / {totalPages}
+                                        <div className="select-none rounded-full border-2 border-black/20 bg-white/60 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-black/70">
+                                            Page <span className="text-accent">{currentPage}</span> / {totalPages}
                                         </div>
 
                                         <button 
+                                            type="button"
                                             disabled={currentPage === totalPages}
                                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                            className="px-3 py-1.5 rounded bg-[#030712] border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-800 transition-all"
+                                            className="rounded-full border-2 border-black bg-white/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-black transition-all hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                                         >
-                                            NEXT &gt;
+                                            Next
                                         </button>
                                     </div>
                                 </div>
@@ -1306,70 +1430,68 @@
                         {activeSubTab === "requests" && (
                             <div className="space-y-4">
                                 {requestActionMessage && (
-                                    <div className="bg-emerald-950/20 border border-emerald-500/30 text-emerald-300 px-4 py-3 rounded-lg text-xs font-mono">
-                                        ✓ {requestActionMessage}
+                                    <div className="rounded-xl border-2 border-emerald-500/40 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+                                        {requestActionMessage}
                                     </div>
                                 )}
                                 {requestsError && (
-                                    <div className="bg-rose-950/20 border border-rose-500/30 text-rose-300 px-4 py-3 rounded-lg text-xs font-mono flex items-center space-x-2">
-                                        <span>⚠️</span>
+                                    <div className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                        <Icon name="AlertTriangle" size={14} />
                                         <span>{requestsError}</span>
                                     </div>
                                 )}
                                 {requestsLoading ? (
-                                    <div className="h-96 w-full flex items-center justify-center flex-col space-y-3 border border-slate-800/40 rounded-xl bg-[#0b0f19]/30">
-                                        <div className="h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                                        <p className="text-xs font-mono text-slate-500 tracking-widest uppercase">Syncing Access Request Queue...</p>
+                                    <div className={`${CRMS_CARD} flex h-96 w-full flex-col items-center justify-center space-y-3`}>
+                                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/60">Syncing access requests...</p>
                                     </div>
                                 ) : requests.length === 0 ? (
-                                    <div className="h-64 w-full flex items-center justify-center flex-col space-y-2 border border-dashed border-slate-800 rounded-xl bg-[#0b0f19]/10">
-                                        <p className="text-sm font-mono text-slate-400 font-bold">NO ACCESS REQUESTS IN QUEUE</p>
-                                        <p className="text-xs font-mono text-slate-600">Citizen dossier access requests will appear here for your assigned cases.</p>
+                                    <div className={`${CRMS_CARD} flex h-64 w-full flex-col items-center justify-center space-y-2 border-dashed`}>
+                                        <p className="text-sm font-semibold uppercase tracking-[0.12em] text-black">No access requests</p>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/55">Citizen requests for your cases will appear here.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
                                         {requests.map((req) => (
-                                            <div key={req.request_id} className="bg-[#0b0f19] border border-slate-800/80 rounded-xl p-5">
-                                                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                                                    <div className="space-y-2 flex-1">
+                                            <div key={req.request_id} className={CRMS_CARD}>
+                                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                                    <div className="flex-1 space-y-2">
                                                         <div className="flex flex-wrap items-center gap-3">
-                                                            <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                                                            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">
                                                                 {req.case_id_display || `BLR-${String(req.case_id).padStart(3, "0")}`}
                                                             </span>
                                                             {requestStatusBadge(req.status)}
                                                         </div>
-                                                        <h3 className="text-base font-semibold text-slate-200">
+                                                        <h3 className="text-base font-semibold text-black">
                                                             {req.case_title || "Case dossier access request"}
                                                         </h3>
-                                                        <p className="text-xs text-slate-400">
-                                                            <span className="text-slate-500">Requester:</span>{" "}
-                                                            <span className="text-slate-200">{req.requester_name}</span>
-                                                            {" · "}
-                                                            <span className="text-slate-300">{req.requester_email}</span>
-                                                            {" · "}
-                                                            <span className="text-slate-300">{req.requester_number}</span>
+                                                        <p className="text-xs font-medium text-black/70">
+                                                            <span className="font-semibold uppercase tracking-[0.08em] text-black/50">Requester:</span>{" "}
+                                                            {req.requester_name} · {req.requester_email} · {req.requester_number}
                                                         </p>
-                                                        <p className="text-xs text-slate-400 leading-relaxed bg-[#030712] border border-slate-800/60 rounded-lg p-3">
+                                                        <p className="rounded-xl border-2 border-black/10 bg-white/70 p-3 text-xs leading-relaxed text-black/80">
                                                             {req.reason}
                                                         </p>
-                                                        <p className="text-[10px] font-mono text-slate-600">
+                                                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/50">
                                                             Filed: {req.requested_at ? new Date(req.requested_at).toLocaleString() : "N/A"}
                                                             {req.decided_by_name ? ` · Decided by ${req.decided_by_name}` : ""}
                                                         </p>
                                                     </div>
                                                     {req.status === "Pending" && (
-                                                        <div className="flex gap-2 shrink-0">
+                                                        <div className="flex shrink-0 gap-2">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleDecide(req.request_id, "approve")}
                                                                 disabled={decidingRequestId === req.request_id}
-                                                                className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                                className="rounded-full border-2 border-emerald-600 bg-emerald-50 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-900 transition-all hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                                                             >
                                                                 {decidingRequestId === req.request_id ? "Processing..." : "Approve"}
                                                             </button>
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleDecide(req.request_id, "reject")}
                                                                 disabled={decidingRequestId === req.request_id}
-                                                                className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                                className="rounded-full border-2 border-rose-500 bg-rose-50 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-rose-900 transition-all hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                                                             >
                                                                 Decline
                                                             </button>
@@ -1385,78 +1507,87 @@
 
                     {/* RENDER DETAILED VIEW MODAL */}
                     {selectedCase && (
-                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-                            <div className="bg-[#0b0f19] border border-slate-700 max-w-2xl w-full rounded-xl overflow-hidden shadow-2xl font-mono text-xs">
-                                <div className="bg-[#030712] border-b border-slate-800 p-4 flex justify-between items-center">
-                                    <span className="text-emerald-400 font-bold">CASE_DOSSIER: {selectedCase.display_id || `BLR-${String(selectedCase.case_id).padStart(3, '0')}`}</span>
-                                    <button onClick={() => setSelectedCase(null)} className="text-slate-500 hover:text-slate-200 font-bold text-sm">✕</button>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+                            <motion.div
+                                className={`max-h-[90vh] w-full max-w-2xl overflow-y-auto ${CRMS_CARD}`}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.35 }}
+                            >
+                                <div className="mb-4 flex items-center justify-between border-b-2 border-black/10 pb-4">
+                                    <span className="text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+                                        Case: {selectedCase.display_id || `BLR-${String(selectedCase.case_id).padStart(3, '0')}`}
+                                    </span>
+                                    <button type="button" onClick={() => setSelectedCase(null)} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-black text-black hover:bg-black hover:text-white">
+                                        <Icon name="X" size={14} />
+                                    </button>
                                 </div>
-                                <div className="p-6 space-y-4">
+                                <div className="space-y-4 text-xs">
                                     <div>
-                                        <div className="text-slate-500 text-[10px] uppercase">Incident Heading</div>
-                                        <div className="text-sm font-sans font-bold text-slate-200 mt-0.5">{selectedCase.title}</div>
+                                        <div className={CRMS_LABEL}>Incident Heading</div>
+                                        <div className="mt-0.5 text-sm font-semibold text-black">{selectedCase.title}</div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4 border-y border-slate-800/60 py-3">
+                                    <div className="grid grid-cols-2 gap-4 border-y-2 border-black/10 py-3">
                                         <div>
-                                            <div className="text-slate-500 text-[10px] uppercase">Classification</div>
-                                            <div className="text-slate-300 mt-0.5">{selectedCase.crime_type}</div>
+                                            <div className={CRMS_LABEL}>Classification</div>
+                                            <div className="mt-0.5 font-medium text-black">{selectedCase.crime_type}</div>
                                         </div>
                                         <div>
-                                            <div className="text-slate-500 text-[10px] uppercase">Operational Status</div>
-                                            <div className="text-slate-300 mt-0.5">{selectedCase.status}</div>
+                                            <div className={CRMS_LABEL}>Status</div>
+                                            <div className="mt-0.5 font-medium text-black">{selectedCase.status}</div>
                                         </div>
                                         <div>
-                                            <div className="text-slate-500 text-[10px] uppercase">Jurisdiction Venue</div>
-                                            <div className="text-slate-300 mt-0.5">{selectedCase.location || "Not Registered"}</div>
+                                            <div className={CRMS_LABEL}>Location</div>
+                                            <div className="mt-0.5 font-medium text-black">{selectedCase.location || "Not Registered"}</div>
                                         </div>
                                         <div>
-                                            <div className="text-slate-500 text-[10px] uppercase">Record Date</div>
-                                            <div className="text-slate-300 mt-0.5">{selectedCase.date_added || "N/A"}</div>
+                                            <div className={CRMS_LABEL}>Record Date</div>
+                                            <div className="mt-0.5 font-medium text-black">{selectedCase.date_added || "N/A"}</div>
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="text-slate-500 text-[10px] uppercase">Logged Case Narrative</div>
-                                        <div className="text-slate-300 font-sans mt-1 bg-[#030712] border border-slate-800/80 p-3 rounded-lg leading-relaxed whitespace-pre-wrap">
+                                        <div className={CRMS_LABEL}>Case Narrative</div>
+                                        <div className="mt-1 whitespace-pre-wrap rounded-xl border-2 border-black/10 bg-white/70 p-3 text-sm leading-relaxed text-black/85">
                                             {selectedCase.description || "No documentation detailed."}
                                         </div>
                                     </div>
-                                    <div className="bg-[#030712] border border-slate-800/60 p-3 rounded-lg">
-                                        <div className="text-slate-500 text-[10px] uppercase mb-1">Complainant Integrity Check</div>
-                                        <div className="text-slate-400">Name: <span className="text-slate-200 font-bold">{selectedCase.complainant_name || "Anonymous / Guarded"}</span></div>
-                                        <div className="text-slate-400">Contact: <span className="text-slate-200">{selectedCase.complainant_contact || "N/A"}</span></div>
-                                        <div className="text-slate-400">Aadhaar (Last 4): <span className="text-slate-200">{selectedCase.complainant_aadhaar || "XXXX"}</span></div>
+                                    <div className="rounded-xl border-2 border-black/10 bg-white/70 p-3">
+                                        <div className={`${CRMS_LABEL} mb-1`}>Complainant</div>
+                                        <div className="text-black/70">Name: <span className="font-semibold text-black">{selectedCase.complainant_name || "Anonymous / Guarded"}</span></div>
+                                        <div className="text-black/70">Contact: <span className="font-semibold text-black">{selectedCase.complainant_contact || "N/A"}</span></div>
+                                        <div className="text-black/70">Aadhaar (Last 4): <span className="font-semibold text-black">{selectedCase.complainant_aadhaar || "XXXX"}</span></div>
                                     </div>
 
-                                    {/* CASE STATUS UPDATE SECTION */}
-                                    <div className="bg-emerald-950/20 border border-emerald-500/30 p-4 rounded-lg">
-                                        <div className="text-slate-500 text-[10px] uppercase mb-2 font-bold">Update Case Status</div>
-                                        <div className="flex gap-2 items-center flex-wrap">
+                                    <div className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4">
+                                        <div className={`${CRMS_LABEL} mb-2`}>Update Case Status</div>
+                                        <div className="flex flex-wrap items-center gap-2">
                                             {["Active", "Solved", "Closed"].map(statusOption => (
                                                 <button
                                                     key={statusOption}
+                                                    type="button"
                                                     onClick={() => handleCaseStatusUpdate(selectedCase.case_id, statusOption)}
                                                     disabled={selectedCase.status === statusOption}
-                                                    className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all border ${
+                                                    className={`rounded-full border-2 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] transition-all ${
                                                         selectedCase.status === statusOption
-                                                            ? "bg-slate-700/50 border-slate-600 text-slate-400 cursor-not-allowed opacity-50"
+                                                            ? "cursor-not-allowed border-black/20 bg-black/5 text-black/40 opacity-50"
                                                             : statusOption === "Active"
-                                                            ? "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+                                                            ? "border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100"
                                                             : statusOption === "Solved"
-                                                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
-                                                            : "bg-slate-500/10 border-slate-500/20 text-slate-300 hover:bg-slate-500/20"
+                                                            ? "border-emerald-600 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                                                            : "border-black/30 bg-white/80 text-black hover:bg-black hover:text-white"
                                                     }`}
                                                 >
-                                                    {statusOption === "Active" ? "⏳ Mark Active" : statusOption === "Solved" ? "✓ Mark Solved" : "✕ Mark Closed"}
+                                                    {statusOption === "Active" ? "Mark Active" : statusOption === "Solved" ? "Mark Solved" : "Mark Closed"}
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </motion.div>
                         </div>
                     )}
-                    </div>
-                </div>
+                    </motion.div>
+                </CrmsPageShell>
             );
         };
 
@@ -1491,58 +1622,63 @@
             };
 
             return (
-                <div className="min-h-screen bg-obsidian flex items-center justify-center relative">
-                    <div className="absolute inset-0 grid-bg opacity-20" />
-                    <div className="absolute top-8 left-8">
-                        <button onClick={onBack} className="text-sm text-gray-400 hover:text-cyan-glow transition-colors flex items-center gap-1.5">
-                            <Icon name="ArrowLeft" size={14} /> Back
-                        </button>
-                    </div>
-                    <div className="relative z-10 w-full max-w-md px-6">
-                        <div className="glass-panel-strong rounded-2xl p-10 border border-white/8">
-                            <div className="text-center mb-10">
-                                <div className="w-14 h-14 rounded-xl bg-cyan-glow/10 border border-cyan-glow/20 flex items-center justify-center mx-auto mb-5">
-                                    <Icon name="ShieldCheck" size={24} className="text-cyan-glow" />
+                <CrmsPageShell
+                    title="Staff Login"
+                    subtitle="Bengaluru Police Department · CRMS"
+                    onBack={onBack}
+                    scrim="bg-white/45"
+                    className="flex flex-col"
+                >
+                    <div className="flex flex-1 items-center justify-center px-5 py-12">
+                        <motion.div
+                            className={`w-full max-w-md ${CRMS_CARD}`}
+                            initial={{ opacity: 0, y: 24 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                            <div className="mb-10 text-center">
+                                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border-2 border-black bg-white">
+                                    <Icon name="Shield" size={24} className="text-black" />
                                 </div>
-                                <h1 className="text-2xl font-bold font-space text-white mb-1">Staff Login</h1>
-                                <p className="text-sm text-gray-500">Bengaluru Police Department · CRMS</p>
+                                <h1 className="mb-1 text-xl font-semibold uppercase tracking-[0.12em] text-black sm:text-2xl">Staff Login</h1>
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/65 sm:text-xs">Secure officer access</p>
                             </div>
 
                             <form onSubmit={handleLogin} className="space-y-5">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Officer Badge ID</label>
+                                    <label className={CRMS_LABEL}>Officer Badge ID</label>
                                     <input autoFocus type="text" required value={badgeId}
                                         onChange={e => setBadgeId(e.target.value)}
-                                        className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all font-mono"
+                                        className={`${CRMS_INPUT} font-mono`}
                                         placeholder="e.g., BPD-7821" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Password</label>
+                                    <label className={CRMS_LABEL}>Password</label>
                                     <input type="password" required value={password}
                                         onChange={e => setPassword(e.target.value)}
-                                        className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                        className={CRMS_INPUT}
                                         placeholder="••••••••" />
                                 </div>
                                 {error && (
-                                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-warn/10 border border-red-warn/20 text-sm text-red-warn">
-                                        <Icon name="AlertCircle" size={14} /> {error}
+                                    <div className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                        <Icon name="AlertTriangle" size={14} /> {error}
                                     </div>
                                 )}
                                 <button type="submit" disabled={loading}
-                                    className={`w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 ${loading ? "opacity-60 cursor-not-allowed" : ""}`}>
-                                    <Icon name={loading ? "Clock" : "LogIn"} size={16} />
+                                    className={`flex w-full items-center justify-center gap-2 rounded-full border-2 border-black bg-black py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-80 ${loading ? "cursor-not-allowed opacity-60" : ""}`}>
+                                    <Icon name={loading ? "Clock" : "Lock"} size={16} />
                                     {loading ? "Authenticating..." : "Sign In"}
                                 </button>
                             </form>
 
-                            <div className="mt-8 p-4 rounded-xl bg-white/[0.03] border border-white/5">
-                                <p className="text-[10px] text-gray-600 text-center uppercase tracking-wider mb-2">Development credentials</p>
-                                <p className="text-xs text-gray-500 text-center">Badge: <span className="font-mono text-gray-400">BPD-7821</span> &nbsp;·&nbsp; Password: <span className="font-mono text-gray-400">crms1234</span></p>
-                                <p className="text-[10px] text-gray-600 text-center mt-1">(Inspector = read+write &nbsp;·&nbsp; Sub-Inspector = read only)</p>
+                            <div className="mt-8 rounded-xl border-2 border-black/15 bg-white/60 p-4">
+                                <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-black/50">Development credentials</p>
+                                <p className="text-center text-xs font-medium text-black/80">Badge: <span className="font-mono font-semibold">BPD-7821</span> · Password: <span className="font-mono font-semibold">crms1234</span></p>
+                                <p className="mt-1 text-center text-[10px] font-semibold uppercase tracking-[0.1em] text-black/50">(Inspector = read+write · Sub-Inspector = read only)</p>
                             </div>
-                        </div>
+                        </motion.div>
                     </div>
-                </div>
+                </CrmsPageShell>
             );
         };
 
@@ -1565,10 +1701,10 @@
             };
 
             return (
-                <div className="min-h-screen bg-obsidian">
+                <div className="min-h-screen">
                     <AnimatePresence mode="wait">
                         {currentView === "landing" && (
-                            <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+                            <motion.div key="landing" className="min-h-[100dvh]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
                                 <LandingPage onNavigate={setCurrentView} />
                             </motion.div>
                         )}
