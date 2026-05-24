@@ -12,10 +12,21 @@ from flask_cors import CORS
 import mysql.connector
 import requests
 import bcrypt
+import threading
+import time
+import logging
 
 import config
 from db_connection import init_pool
 import queries
+from assignment_algorithm import process_pending_complaints
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # App setup
@@ -23,6 +34,41 @@ import queries
 
 app = Flask(__name__)
 CORS(app, origins=config.CORS_ORIGIN)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Background Job: Automated Case Assignment Scheduler
+# ──────────────────────────────────────────────────────────────────────────────
+
+def run_assignment_scheduler():
+    """
+    Background thread that runs every 10 seconds to automatically assign
+    pending complaints to officers based on case severity and officer availability.
+    """
+    logger.info("[SCHEDULER] Case assignment scheduler started")
+    while True:
+        try:
+            time.sleep(10)
+            logger.debug("[SCHEDULER] Running pending complaint assignment check...")
+            results = process_pending_complaints()
+            
+            if results["processed"] > 0 or results["errors"] > 0:
+                logger.info(
+                    f"[SCHEDULER] Assignment run completed: "
+                    f"{results['processed']} processed, {results['errors']} errors"
+                )
+        except Exception as e:
+            logger.error(f"[SCHEDULER] Error in assignment scheduler: {str(e)}")
+
+
+def start_assignment_scheduler():
+    """
+    Starts the assignment scheduler in a background daemon thread.
+    Called during application startup.
+    """
+    scheduler_thread = threading.Thread(target=run_assignment_scheduler, daemon=True)
+    scheduler_thread.start()
+    logger.info("[STARTUP] Assignment scheduler thread started")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -489,6 +535,44 @@ def get_analytics():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# AUTOMATED ASSIGNMENTS  —  /assignments
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/assignments/pending", methods=["GET"])
+def get_pending_assignments():
+    """
+    GET /assignments/pending
+    Returns all pending complaints that are waiting to be automatically assigned to officers.
+    This shows the queue of cases waiting for the assignment algorithm to process.
+    """
+    try:
+        pending = queries.get_public_complaints(status="Pending")
+        return _ok(pending_count=len(pending), complaints=pending)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/assignments/process", methods=["POST"])
+def trigger_assignment_process():
+    """
+    POST /assignments/process
+    Manually triggers the automated assignment algorithm to process all pending complaints.
+    Useful for SHO override or testing the assignment process.
+    Returns: {success, processed, errors, details}
+    """
+    try:
+        results = process_pending_complaints()
+        return _ok(
+            processed=results["processed"],
+            errors=results["errors"],
+            details=results["details"]
+        )
+    except Exception as e:
+        logger.error(f"[API] Error in manual assignment trigger: {str(e)}")
+        return _err(f"Assignment process error: {str(e)}", 500)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC PORTAL  —  /public/complaint  /public/access-request
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -770,6 +854,7 @@ if __name__ == "__main__":
     print("  CRMS Flask API — Bengaluru Police Department")
     print("=" * 60)
     init_pool()
+    start_assignment_scheduler()
     app.run(
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,
