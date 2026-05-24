@@ -1092,6 +1092,43 @@
                 if (type === "type") setTypeFilter(val);
             };
 
+            // Handle case status update
+            const handleCaseStatusUpdate = async (caseId, newStatus) => {
+                try {
+                    const response = await apiFetch(`/cases/${caseId}`, {
+                        method: "PATCH",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Officer-Id": officer?.officer_id?.toString()
+                        },
+                        body: JSON.stringify({ status: newStatus })
+                    });
+
+                    if (response.success) {
+                        // Update the selected case in the modal
+                        setSelectedCase(prev => ({
+                            ...prev,
+                            status: newStatus
+                        }));
+                        
+                        // Reload cases to reflect the change
+                        setCurrentPage(1);
+                        setStatusFilter("All");
+                        setTypeFilter("All");
+                        setSearchQuery("");
+                        
+                        // Show success message
+                        console.log(`[CASE UPDATE] Case ${caseId} status updated to ${newStatus}`);
+                    } else {
+                        setError(response.error || "Failed to update case status");
+                        console.error("[CASE UPDATE] Error:", response.error);
+                    }
+                } catch (err) {
+                    setError(`Failed to update case status: ${err.message}`);
+                    console.error("[CASE UPDATE] Network error:", err);
+                }
+            };
+
             return (
                 <div className="min-h-screen bg-[#030712] text-slate-100 font-sans selection:bg-emerald-500/30 selection:text-emerald-400">
                     {/* TOP STATUS BAR */}
@@ -1285,6 +1322,31 @@
                                         <div className="text-slate-400">Name: <span className="text-slate-200 font-bold">{selectedCase.complainant_name || "Anonymous / Guarded"}</span></div>
                                         <div className="text-slate-400">Contact: <span className="text-slate-200">{selectedCase.complainant_contact || "N/A"}</span></div>
                                         <div className="text-slate-400">Aadhaar (Last 4): <span className="text-slate-200">{selectedCase.complainant_aadhaar || "XXXX"}</span></div>
+                                    </div>
+
+                                    {/* CASE STATUS UPDATE SECTION */}
+                                    <div className="bg-emerald-950/20 border border-emerald-500/30 p-4 rounded-lg">
+                                        <div className="text-slate-500 text-[10px] uppercase mb-2 font-bold">Update Case Status</div>
+                                        <div className="flex gap-2 items-center flex-wrap">
+                                            {["Active", "Solved", "Closed"].map(statusOption => (
+                                                <button
+                                                    key={statusOption}
+                                                    onClick={() => handleCaseStatusUpdate(selectedCase.case_id, statusOption)}
+                                                    disabled={selectedCase.status === statusOption}
+                                                    className={`px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all border ${
+                                                        selectedCase.status === statusOption
+                                                            ? "bg-slate-700/50 border-slate-600 text-slate-400 cursor-not-allowed opacity-50"
+                                                            : statusOption === "Active"
+                                                            ? "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+                                                            : statusOption === "Solved"
+                                                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                                                            : "bg-slate-500/10 border-slate-500/20 text-slate-300 hover:bg-slate-500/20"
+                                                    }`}
+                                                >
+                                                    {statusOption === "Active" ? "⏳ Mark Active" : statusOption === "Solved" ? "✓ Mark Solved" : "✕ Mark Closed"}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
