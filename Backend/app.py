@@ -20,6 +20,8 @@ import config
 from db_connection import init_pool
 import queries
 from assignment_algorithm import process_pending_complaints
+import email_utils
+
 
 # Configure logging
 logging.basicConfig(
@@ -105,6 +107,28 @@ def _enrich_cases(case_list):
     for c in case_list:
         c["case_id_display"] = _format_case_id(c["case_id"])
     return case_list
+
+
+def _parse_officer_id_header():
+    """Reads X-Officer-Id header. Returns (officer_id, error_response) or (id, None)."""
+    officer_id_str = request.headers.get("X-Officer-Id")
+    if not officer_id_str:
+        return None, _err("Unauthorized: Missing X-Officer-Id header", 401)
+    try:
+        return int(officer_id_str), None
+    except ValueError:
+        return None, _err("Invalid X-Officer-Id header", 400)
+
+
+def _officer_may_decide_access_request(officer: dict, case_id: int) -> bool:
+    """
+    Admin and inspector may act on any case access request.
+    Other roles may only decide requests for cases they are assigned to.
+    """
+    role = (officer.get("role") or "").lower()
+    if role in ("admin", "inspector"):
+        return True
+    return queries.officer_is_assigned_to_case(officer["officer_id"], case_id)
 
 
 def _verify_captcha(token):
@@ -635,22 +659,22 @@ def public_complaint():
 def public_access_request():
     """
     POST /public/access-request
-    Logs a citizen request for case access.
-    In this MVP the request is just acknowledged (logged to console / future table).
-    Body: { case_id*, requester_name*, requester_email*, reason*, captcha_token* }
+    Logs a citizen request for case access in the case_access_requests table.
+    Body: { case_id*, requester_name*, requester_email*, requester_number*, reason*, captcha_token* }
     """
     body            = request.get_json(silent=True) or {}
     captcha_token   = (body.get("captcha_token") or "").strip()
     
-    # Verify CAPTCHA first
+    # Verify reCAPTCHA first
     is_valid, score, error_msg = _verify_captcha(captcha_token)
     if not is_valid:
         return _err(error_msg or "CAPTCHA verification failed", 403)
     
-    case_id         = (body.get("case_id") or "").strip()
-    requester_name  = (body.get("requester_name") or "").strip()
-    requester_email = (body.get("requester_email") or "").strip()
-    reason          = (body.get("reason") or "").strip()
+    case_id          = (body.get("case_id") or "").strip()
+    requester_name   = (body.get("requester_name") or "").strip()
+    requester_email  = (body.get("requester_email") or "").strip()
+    requester_number = (body.get("requester_number") or "").strip()
+    reason           = (body.get("reason") or "").strip()
 
     if not case_id:
         return _err("case_id is required")
@@ -658,13 +682,145 @@ def public_access_request():
         return _err("requester_name is required")
     if not requester_email:
         return _err("requester_email is required")
+    if not requester_number:
+        return _err("contact number is required")
     if not reason:
         return _err("reason is required")
 
-    # Log the request — extend this to insert into an `access_requests` table when ready.
-    print(f"[ACCESS REQUEST] Case: {case_id} | From: {requester_name} <{requester_email}> | Reason: {reason}")
+    # Parse display case ID (BLR-XXX -> integer PK, or check if it's plain integer)
+    raw_case_id = case_id
+    parsed_case_id = None
+    if raw_case_id.upper().startswith("BLR-"):
+        try:
+            parsed_case_id = int(raw_case_id.split("-")[1])
+        except (IndexError, ValueError):
+            return _err("Invalid Case ID format. Must be BLR-XXX or a numeric ID")
+    else:
+        try:
+            parsed_case_id = int(raw_case_id)
+        except ValueError:
+            return _err("Invalid Case ID format. Must be BLR-XXX or a numeric ID")
 
-    return _ok(message="Access request submitted. You will be notified within 48 hours.")
+    try:
+        # Check if the target case dossier exists
+        case = queries.get_case_by_id(parsed_case_id)
+        if not case:
+            return _err(f"Case with dossier ID {raw_case_id} not found in system records", 404)
+            
+        new_request_id = queries.submit_case_access_request(
+            parsed_case_id, requester_name, requester_email, requester_number, reason
+        )
+        return jsonify({
+            "success": True,
+            "request_id": new_request_id,
+            "message": "Access request successfully submitted for officer review."
+        }), 201
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/api/access-requests", methods=["GET"])
+def get_access_requests():
+    """
+    GET /api/access-requests
+    Lists access requests filed for review, based on officer authority visibility boundary.
+    Header: X-Officer-Id required.
+    """
+    officer_id_str = request.headers.get("X-Officer-Id")
+    if not officer_id_str:
+        return _err("Unauthorized: Missing X-Officer-Id header", 401)
+    try:
+        officer_id = int(officer_id_str)
+    except ValueError:
+        return _err("Invalid X-Officer-Id header", 400)
+
+    try:
+        # Check officer identity and role for visibility boundary enforcement
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+
+        role = officer.get("role")
+        bypass_visibility = (role in ("admin", "inspector"))
+
+        requests_list = queries.get_case_access_requests(
+            officer_id=officer_id,
+            bypass_visibility=bypass_visibility
+        )
+        return _ok(requests_list)
+    except mysql.connector.Error as e:
+        return _err(f"Database error while fetching access requests: {str(e)}", 500)
+
+
+@app.route("/api/access-requests/<int:request_id>/approve", methods=["POST"])
+def approve_access_request(request_id):
+    """
+    POST /api/access-requests/<request_id>/approve
+    Approves the case access request, updates DB state, and sends email + PDF async.
+    Header: X-Officer-Id required.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+
+    try:
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+
+        req = queries.get_access_request_by_id(request_id)
+        if not req:
+            return _err(f"Access request {request_id} not found", 404)
+        if req.get("status") != "Pending":
+            return _err(f"Access request is already processed (Status: {req.get('status')})", 400)
+        if not _officer_may_decide_access_request(officer, req["case_id"]):
+            return _err("Unauthorized: you are not assigned to this case", 403)
+
+        rows = queries.update_access_request_status(request_id, "Accepted", officer_id)
+        if not rows:
+            return _err("Request already processed or could not be updated", 400)
+
+        email_utils.send_decision_email_async(request_id, "Accepted", officer_id)
+
+        return _ok(message=f"Access request {request_id} has been approved. Dispatching dossier via email...")
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/api/access-requests/<int:request_id>/reject", methods=["POST"])
+def reject_access_request(request_id):
+    """
+    POST /api/access-requests/<request_id>/reject
+    Declines the case access request, updates DB state, and sends notification email async.
+    Header: X-Officer-Id required.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+
+    try:
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+
+        req = queries.get_access_request_by_id(request_id)
+        if not req:
+            return _err(f"Access request {request_id} not found", 404)
+        if req.get("status") != "Pending":
+            return _err(f"Access request is already processed (Status: {req.get('status')})", 400)
+        if not _officer_may_decide_access_request(officer, req["case_id"]):
+            return _err("Unauthorized: you are not assigned to this case", 403)
+
+        rows = queries.update_access_request_status(request_id, "Rejected", officer_id)
+        if not rows:
+            return _err("Request already processed or could not be updated", 400)
+
+        email_utils.send_decision_email_async(request_id, "Rejected", officer_id)
+
+        return _ok(message=f"Access request {request_id} has been declined. Dispatching decline notification email...")
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
 
 
 

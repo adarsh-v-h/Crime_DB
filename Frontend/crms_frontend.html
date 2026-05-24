@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
     <script>
         (function(){
@@ -179,10 +178,6 @@
         .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-fade-up { animation: fadeUp 0.6s ease-out forwards; opacity: 0; }
         .metric-value { font-variant-numeric: tabular-nums; }
-        .modal-overlay {
-            background: rgba(7,12,30,0.8);
-            backdrop-filter: blur(12px);
-        }
         .hex-bg {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23ff9933' fill-opacity='0.02'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
@@ -349,47 +344,6 @@
             }
         };
 
-        // ─── FALLBACK MOCK DATA ───────────────────────────────────────────────
-        // Used only when the Flask backend is unreachable (offline / demo mode).
-        const mockCases = [
-            { case_id: "BLR-001", title: "Cyber Fraud — Wire Transfer Scam", crime_type: "Cyber Fraud", status: "Active", location: "Koramangala", complaint_mode: "Online", date_reported: "2026-04-12", description: "Victim received fraudulent email impersonating bank official. ₹12.5L transferred to unknown account. Digital forensics underway.", officer_ids: [1, 3] },
-            { case_id: "BLR-002", title: "Vehicle Theft — Swift Dzire", crime_type: "Theft", status: "Solved", location: "Whitefield", complaint_mode: "Offline", date_reported: "2026-03-28", description: "Vehicle stolen from residential parking. Recovered via GPS tracking in Electronic City. Two suspects apprehended.", officer_ids: [2] },
-            { case_id: "BLR-003", title: "Assault at Commercial Street", crime_type: "Assault", status: "Active", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-04-15", description: "Physical altercation between shop owners. Victim sustained head injuries. CCTV footage obtained. Investigation ongoing.", officer_ids: [4, 5] },
-            { case_id: "BLR-004", title: "Real Estate Fraud — Land Document Forgery", crime_type: "Fraud", status: "Active", location: "Jayanagar", complaint_mode: "Online", date_reported: "2026-04-10", description: "Forged land sale deed used to transfer property worth ₹3.2Cr. Forensic document analysis in progress.", officer_ids: [1, 6] },
-            { case_id: "BLR-005", title: "ATM Card Skimming Ring", crime_type: "Cyber Fraud", status: "Solved", location: "MG Road", complaint_mode: "Online", date_reported: "2026-03-05", description: "Multi-city ATM skimming operation dismantled. 47 cloned cards recovered. ₹8.7L fraud prevented.", officer_ids: [3, 7] },
-            { case_id: "BLR-006", title: "Jewelry Heist — Commercial District", crime_type: "Theft", status: "Closed", location: "Commercial Street", complaint_mode: "Offline", date_reported: "2026-02-18", description: "Armed robbery at jewelry store. ₹45L worth of gold ornaments stolen. Case closed after recovery.", officer_ids: [2, 5] },
-            { case_id: "BLR-007", title: "Domestic Violence Report", crime_type: "Assault", status: "Active", location: "HSR Layout", complaint_mode: "Online", date_reported: "2026-04-18", description: "Multiple domestic violence complaints filed. Protection order issued. Counseling services engaged.", officer_ids: [4] },
-            { case_id: "BLR-008", title: "Investment Ponzi Scheme", crime_type: "Fraud", status: "Active", location: "Indiranagar", complaint_mode: "Online", date_reported: "2026-04-08", description: "Fraudulent investment scheme targeting retirees. ₹1.8Cr collected from 34 victims. Financial forensics active.", officer_ids: [6, 7] },
-            { case_id: "BLR-009", title: "Data Breach — Fintech Company", crime_type: "Cyber Fraud", status: "Active", location: "Manyata Tech Park", complaint_mode: "Online", date_reported: "2026-04-20", description: "Unauthorized database access exposing 2.3M user records. Cyber cell engaged. Server logs under analysis.", officer_ids: [1, 3, 7] },
-            { case_id: "BLR-010", title: "Street Robbery — Mobile Snatching", crime_type: "Theft", status: "Solved", location: "Brigade Road", complaint_mode: "Offline", date_reported: "2026-03-22", description: "Motorcycle-mounted snatching. Victim resisted, sustained minor injuries. Suspects identified via CCTV.", officer_ids: [2, 5] },
-        ];
-
-        const mockOfficers = [
-            { officer_id: 1, name: "Inspector Arjun Nair", rank: "Inspector", badge: "BPD-7821", station: "Cyber Crime Division", phone: "+91-80-2294-2101", email: "arjun.nair@bpd.gov.in", active_cases: 3, solved_cases: 12, join_date: "2018-03-15" },
-            { officer_id: 2, name: "Sub-Inspector Priya Menon", rank: "Sub-Inspector", badge: "BPD-6543", station: "Whitefield PS", phone: "+91-80-2845-6789", email: "priya.menon@bpd.gov.in", active_cases: 2, solved_cases: 18, join_date: "2019-07-22" },
-            { officer_id: 3, name: "Inspector Vikram Rao", rank: "Inspector", badge: "BPD-8912", station: "Cyber Crime Division", phone: "+91-80-2294-2102", email: "vikram.rao@bpd.gov.in", active_cases: 3, solved_cases: 9, join_date: "2017-11-08" },
-            { officer_id: 4, name: "Sub-Inspector Deepa Krishnan", rank: "Sub-Inspector", badge: "BPD-5432", station: "HSR Layout PS", phone: "+91-80-2572-3456", email: "deepa.krishnan@bpd.gov.in", active_cases: 2, solved_cases: 15, join_date: "2020-01-14" },
-            { officer_id: 5, name: "Constable Ravi Kumar", rank: "Head Constable", badge: "BPD-3210", station: "Commercial Street PS", phone: "+91-80-2558-9012", email: "ravi.kumar@bpd.gov.in", active_cases: 3, solved_cases: 7, join_date: "2021-05-30" },
-            { officer_id: 6, name: "Inspector Meera Iyer", rank: "Inspector", badge: "BPD-7654", station: "Economic Offences Wing", phone: "+91-80-2221-4567", email: "meera.iyer@bpd.gov.in", active_cases: 2, solved_cases: 11, join_date: "2016-09-03" },
-            { officer_id: 7, name: "Sub-Inspector Karthik S", rank: "Sub-Inspector", badge: "BPD-4321", station: "Cyber Crime Division", phone: "+91-80-2294-2103", email: "karthik.s@bpd.gov.in", active_cases: 2, solved_cases: 14, join_date: "2019-04-11" },
-        ];
-
-        const crimeTypeColors = {
-            "Cyber Fraud": { bg: "rgba(124,77,255,0.1)", border: "rgba(124,77,255,0.25)", text: "#B388FF" },
-            "Theft": { bg: "rgba(255,145,0,0.1)", border: "rgba(255,145,0,0.25)", text: "#FF9100" },
-            "Assault": { bg: "rgba(255,23,68,0.1)", border: "rgba(255,23,68,0.25)", text: "#FF1744" },
-            "Fraud": { bg: "rgba(255,171,0,0.1)", border: "rgba(255,171,0,0.25)", text: "#FFAB00" },
-        };
-        const statusColors = {
-            "Active": { bg: "rgba(0,230,118,0.1)", border: "rgba(0,230,118,0.25)", text: "#00E676" },
-            "Solved": { bg: "rgba(124,77,255,0.1)", border: "rgba(124,77,255,0.25)", text: "#B388FF" },
-            "Closed": { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.12)", text: "#888" },
-        };
-        const modeColors = {
-            "Online": { bg: "rgba(0,229,255,0.08)", border: "rgba(0,229,255,0.2)", text: "#00E5FF" },
-            "Offline": { bg: "rgba(255,255,255,0.04)", border: "rgba(255,255,255,0.1)", text: "#888" },
-        };
-
         // ─── ICONS ────────────────────────────────────────────────────────────
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
@@ -546,69 +500,6 @@
             );
         };
 
-        // ─── BADGE ────────────────────────────────────────────────────────────
-        const Badge = ({ value }) => {
-            const colors = { ...crimeTypeColors, ...statusColors, ...modeColors };
-            const style = colors[value] || { bg: "rgba(255,255,255,0.05)", border: "rgba(255,255,255,0.1)", text: "#888" };
-            return (
-                <span
-                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium font-space tracking-wide"
-                    style={{ background: style.bg, border: `1px solid ${style.border}`, color: style.text }}
-                >
-                    {value === "Active" && <span className="w-1.5 h-1.5 rounded-full pulse-dot" style={{ color: style.text, background: style.text }} />}
-                    {value}
-                </span>
-            );
-        };
-
-        // ─── METRIC CARD ──────────────────────────────────────────────────────
-        const MetricCard = ({ icon, label, value, color, trend, trendValue, delay = 0 }) => {
-            const glowColors = { cyan: "glow-cyan", blue: "glow-blue", purple: "glow-purple", green: "glow-green", red: "glow-red" };
-            const textColors = { cyan: "text-cyan-glow", blue: "text-blue-electric", purple: "text-purple-tactical", green: "text-green-tactical", red: "text-red-warn" };
-
-            return (
-                <div
-                    className={`glass-panel rounded-xl p-5 card-hover animate-fade-up ${glowColors[color] || ""}`}
-                    style={{ animationDelay: `${delay * 0.1}s` }}
-                >
-                    <div className="flex items-start justify-between mb-3">
-                        <div className={`p-2 rounded-lg bg-white/5 ${textColors[color] || "text-cyan-glow"}`}>
-                            <Icon name={icon} size={20} />
-                        </div>
-                        {trend && (
-                            <div className={`flex items-center gap-1 text-xs font-medium ${trend === "up" ? "text-green-tactical" : "text-red-warn"}`}>
-                                <Icon name={trend === "up" ? "TrendingUp" : "TrendingDown"} size={14} />
-                                {trendValue}
-                            </div>
-                        )}
-                    </div>
-                    <div className={`text-3xl font-bold font-space mb-1 ${textColors[color] || "text-white"}`}>
-                        <AnimatedCounter value={value} />
-                    </div>
-                    <div className="text-xs text-gray-500 font-medium tracking-wide uppercase">{label}</div>
-                </div>
-            );
-        };
-
-        // ─── MODAL ────────────────────────────────────────────────────────────
-        const Modal = ({ isOpen, onClose, title, children, size = "md" }) => {
-            if (!isOpen) return null;
-            const sizes = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl", full: "max-w-6xl" };
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay" onClick={onClose}>
-                    <div className={`${sizes[size]} w-full glass-panel-strong rounded-2xl overflow-hidden`} onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-                            <h3 className="text-lg font-semibold font-space text-white">{title}</h3>
-                            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors">
-                                <Icon name="X" size={18} />
-                            </button>
-                        </div>
-                        <div className="p-6">{children}</div>
-                    </div>
-                </div>
-            );
-        };
-
         // ─── LANDING PAGE ─────────────────────────────────────────────────────
         const LandingPage = ({ onNavigate }) => {
             const [liveStats, setLiveStats] = useState({
@@ -744,13 +635,15 @@
         // ─── PUBLIC PORTAL ────────────────────────────────────────────────────
         const PublicPortal = ({ onNavigate }) => {
             const [activeTab, setActiveTab] = useState("complaint");
+            const [error, setError] = useState("");
             const [formData, setFormData] = useState({
                 name: "", contact: "", email: "", aadhaar_last4: "",
                 incident_desc: "", crime_type: "", location: ""
             });
             const [aadhaarError, setAadhaarError] = useState("");
             const [submitted, setSubmitted] = useState(false);
-            const [accessForm, setAccessForm] = useState({ case_id: "", requester_name: "", requester_email: "", reason: "" });
+            const [accessForm, setAccessForm] = useState({ case_id: "", requester_name: "", requester_email: "", requester_number: "", reason: "" });
+
             const [accessSubmitted, setAccessSubmitted] = useState(false);
 
             const [submitting, setSubmitting] = useState(false);
@@ -790,12 +683,14 @@
 
             const handleAccessSubmit = async (e) => {
                 e.preventDefault();
+                setError("");
                 setSubmitting(true);
                 try {
                     // Get CAPTCHA token
                     const captchaToken = await executeRecaptcha("access_request");
                     if (!captchaToken) {
                         setError("CAPTCHA verification is required for access requests");
+                        setSubmitting(false);
                         return;
                     }
                     const payload = { ...accessForm, captcha_token: captchaToken };
@@ -803,13 +698,17 @@
                         method: "POST",
                         body: JSON.stringify(payload),
                     });
+                    setAccessSubmitted(true);
+                    setAccessForm({ case_id: "", requester_name: "", requester_email: "", requester_number: "", reason: "" });
                 } catch (err) {
                     console.warn("[CRMS] Access request POST failed:", err.message);
+                    setError(err.message || "Failed to submit access request.");
+                } finally {
+                    setSubmitting(false);
                 }
-                setAccessSubmitted(true);
-                setSubmitting(false);
-                setTimeout(() => setAccessSubmitted(false), 4000);
+                setTimeout(() => setAccessSubmitted(false), 8000);
             };
+
 
             return (
                 <div className="min-h-screen bg-obsidian">
@@ -988,11 +887,19 @@
                                     </div>
                                 ) : (
                                     <form onSubmit={handleAccessSubmit} className="space-y-5">
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Case ID *</label>
-                                            <input type="text" required value={accessForm.case_id} onChange={e => setAccessForm({...accessForm, case_id: e.target.value})}
-                                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all font-mono"
-                                                placeholder="e.g. BLR-001" />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Case ID *</label>
+                                                <input type="text" required value={accessForm.case_id} onChange={e => setAccessForm({...accessForm, case_id: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all font-mono"
+                                                    placeholder="e.g. BLR-001" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Contact Number *</label>
+                                                <input type="tel" required value={accessForm.requester_number} onChange={e => setAccessForm({...accessForm, requester_number: e.target.value})}
+                                                    className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
+                                                    placeholder="+91-XXXXXXXXXX" />
+                                            </div>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                             <div>
@@ -1009,17 +916,23 @@
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Reason for Access</label>
-                                            <textarea value={accessForm.reason} onChange={e => setAccessForm({...accessForm, reason: e.target.value})}
+                                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Reason for Access *</label>
+                                            <textarea required value={accessForm.reason} onChange={e => setAccessForm({...accessForm, reason: e.target.value})}
                                                 rows={3}
                                                 className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
                                                 placeholder="Explain why you need access to this case..." />
                                         </div>
-                                        <button type="submit" className="w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
-                                            <Icon name="Eye" size={16} />
-                                            Submit Access Request
+                                        {error && (
+                                            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-warn/10 border border-red-warn/20 text-sm text-red-warn font-mono">
+                                                <Icon name="AlertCircle" size={14} /> {error}
+                                            </div>
+                                        )}
+                                        <button type="submit" disabled={submitting} className={`w-full btn-primary py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 ${submitting ? "opacity-60 cursor-not-allowed" : ""}`}>
+                                            <Icon name={submitting ? "Clock" : "Eye"} size={16} />
+                                            {submitting ? "Submitting Request..." : "Submit Access Request"}
                                         </button>
                                     </form>
+
                                 )}
                             </div>
                         )}
@@ -1044,6 +957,83 @@
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [selectedCase, setSelectedCase] = useState(null);
+
+            // Tab State
+            const [activeSubTab, setActiveSubTab] = useState("dossiers");
+            
+            // Access Requests States
+            const [requests, setRequests] = useState([]);
+            const [requestsLoading, setRequestsLoading] = useState(false);
+            const [requestsError, setRequestsError] = useState(null);
+            const [decidingRequestId, setDecidingRequestId] = useState(null);
+            const [requestActionMessage, setRequestActionMessage] = useState(null);
+
+            const loadAccessRequests = async () => {
+                setRequestsLoading(true);
+                setRequestsError(null);
+                try {
+                    const response = await apiFetch("/api/access-requests", {
+                        headers: {
+                            "X-Officer-Id": officer?.officer_id?.toString()
+                        }
+                    });
+                    if (response.success) {
+                        setRequests(response.data || []);
+                    } else {
+                        setRequestsError(response.error || "Failed to load access requests.");
+                    }
+                } catch (err) {
+                    console.error("[CRMS Engine] Requests load error:", err);
+                    setRequestsError(err.message || "Failed to contact authorization server.");
+                } finally {
+                    setRequestsLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                if (officer) {
+                    loadAccessRequests();
+                }
+            }, [activeSubTab, officer]);
+
+            const handleDecide = async (requestId, action) => {
+                setDecidingRequestId(requestId);
+                setRequestActionMessage(null);
+                try {
+                    const response = await apiFetch(`/api/access-requests/${requestId}/${action}`, {
+                        method: "POST",
+                        headers: {
+                            "X-Officer-Id": officer?.officer_id?.toString()
+                        }
+                    });
+                    if (response.success) {
+                        setRequestActionMessage(response.message || `Request ${action === "approve" ? "approved" : "declined"}.`);
+                        await loadAccessRequests();
+                    } else {
+                        setRequestsError(response.error || "Action failed.");
+                    }
+                } catch (err) {
+                    setRequestsError(err.message || "Action failed.");
+                } finally {
+                    setDecidingRequestId(null);
+                }
+            };
+
+            const requestStatusBadge = (status) => {
+                const styles = {
+                    Pending: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+                    Accepted: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+                    Rejected: "bg-rose-500/10 text-rose-300 border-rose-500/30",
+                };
+                return (
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-mono font-bold border uppercase tracking-wide ${styles[status] || styles.Pending}`}>
+                        {status}
+                    </span>
+                );
+            };
+            
+            const pendingCount = requests.filter(r => r.status === "Pending").length;
+
 
             // Fetch live data from backend whenever filters or page changes
             useEffect(() => {
@@ -1148,7 +1138,39 @@
                     </header>
 
                     <div className="max-w-[1600px] mx-auto p-6 lg:p-8 space-y-6">
-                        {/* CONTROL CONSOLE */}
+                        {/* SUB TAB NAVIGATION BAR */}
+                        <div className="flex border-b border-slate-800 gap-6 mb-6">
+                            <button
+                                onClick={() => setActiveSubTab("dossiers")}
+                                className={`pb-3 text-sm font-semibold tracking-wider font-mono transition-all border-b-2 ${
+                                    activeSubTab === "dossiers"
+                                        ? "border-emerald-500 text-emerald-400"
+                                        : "border-transparent text-slate-400 hover:text-slate-200"
+                                }`}
+                            >
+                                🗃️ CASE DOSSIERS
+                            </button>
+                            <button
+                                onClick={() => setActiveSubTab("requests")}
+                                className={`pb-3 text-sm font-semibold tracking-wider font-mono transition-all border-b-2 relative ${
+                                    activeSubTab === "requests"
+                                        ? "border-emerald-500 text-emerald-400"
+                                        : "border-transparent text-slate-400 hover:text-slate-200"
+                                }`}
+                            >
+                                🔔 ACCESS REQUESTS
+                                {pendingCount > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 text-[10px] bg-amber-500 text-slate-900 rounded-full font-bold animate-pulse">
+                                        {pendingCount}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+
+                        {activeSubTab === "dossiers" && (
+                            <>
+                            {/* CONTROL CONSOLE */}
+
                         <div className="bg-[#0b0f19] border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between shadow-2xl">
                             <div className="relative w-full md:w-96">
                                 <input 
@@ -1278,7 +1300,88 @@
                                 </div>
                             </div>
                         )}
-                    </div>
+                            </>
+                        )}
+
+                        {activeSubTab === "requests" && (
+                            <div className="space-y-4">
+                                {requestActionMessage && (
+                                    <div className="bg-emerald-950/20 border border-emerald-500/30 text-emerald-300 px-4 py-3 rounded-lg text-xs font-mono">
+                                        ✓ {requestActionMessage}
+                                    </div>
+                                )}
+                                {requestsError && (
+                                    <div className="bg-rose-950/20 border border-rose-500/30 text-rose-300 px-4 py-3 rounded-lg text-xs font-mono flex items-center space-x-2">
+                                        <span>⚠️</span>
+                                        <span>{requestsError}</span>
+                                    </div>
+                                )}
+                                {requestsLoading ? (
+                                    <div className="h-96 w-full flex items-center justify-center flex-col space-y-3 border border-slate-800/40 rounded-xl bg-[#0b0f19]/30">
+                                        <div className="h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                                        <p className="text-xs font-mono text-slate-500 tracking-widest uppercase">Syncing Access Request Queue...</p>
+                                    </div>
+                                ) : requests.length === 0 ? (
+                                    <div className="h-64 w-full flex items-center justify-center flex-col space-y-2 border border-dashed border-slate-800 rounded-xl bg-[#0b0f19]/10">
+                                        <p className="text-sm font-mono text-slate-400 font-bold">NO ACCESS REQUESTS IN QUEUE</p>
+                                        <p className="text-xs font-mono text-slate-600">Citizen dossier access requests will appear here for your assigned cases.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {requests.map((req) => (
+                                            <div key={req.request_id} className="bg-[#0b0f19] border border-slate-800/80 rounded-xl p-5">
+                                                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                                                    <div className="space-y-2 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                                                                {req.case_id_display || `BLR-${String(req.case_id).padStart(3, "0")}`}
+                                                            </span>
+                                                            {requestStatusBadge(req.status)}
+                                                        </div>
+                                                        <h3 className="text-base font-semibold text-slate-200">
+                                                            {req.case_title || "Case dossier access request"}
+                                                        </h3>
+                                                        <p className="text-xs text-slate-400">
+                                                            <span className="text-slate-500">Requester:</span>{" "}
+                                                            <span className="text-slate-200">{req.requester_name}</span>
+                                                            {" · "}
+                                                            <span className="text-slate-300">{req.requester_email}</span>
+                                                            {" · "}
+                                                            <span className="text-slate-300">{req.requester_number}</span>
+                                                        </p>
+                                                        <p className="text-xs text-slate-400 leading-relaxed bg-[#030712] border border-slate-800/60 rounded-lg p-3">
+                                                            {req.reason}
+                                                        </p>
+                                                        <p className="text-[10px] font-mono text-slate-600">
+                                                            Filed: {req.requested_at ? new Date(req.requested_at).toLocaleString() : "N/A"}
+                                                            {req.decided_by_name ? ` · Decided by ${req.decided_by_name}` : ""}
+                                                        </p>
+                                                    </div>
+                                                    {req.status === "Pending" && (
+                                                        <div className="flex gap-2 shrink-0">
+                                                            <button
+                                                                onClick={() => handleDecide(req.request_id, "approve")}
+                                                                disabled={decidingRequestId === req.request_id}
+                                                                className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                            >
+                                                                {decidingRequestId === req.request_id ? "Processing..." : "Approve"}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDecide(req.request_id, "reject")}
+                                                                disabled={decidingRequestId === req.request_id}
+                                                                className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                            >
+                                                                Decline
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                     {/* RENDER DETAILED VIEW MODAL */}
                     {selectedCase && (
@@ -1352,313 +1455,6 @@
                             </div>
                         </div>
                     )}
-                </div>
-            );
-        };
-
-        // ─── ADD CASE FORM ────────────────────────────────────────────────────
-        const AddCaseForm = ({ onSubmit, onCancel }) => {
-            const [form, setForm] = useState({
-                title: "", description: "", crime_type: "Cyber Fraud", status: "Active",
-                location: "", complaint_mode: "Online"
-            });
-
-            const handleSubmit = (e) => {
-                e.preventDefault();
-                if (!form.title.trim()) return;
-                onSubmit(form);
-            };
-
-            return (
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Title *</label>
-                        <input type="text" required value={form.title} onChange={e => setForm({...form, title: e.target.value})}
-                            className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                            placeholder="Case title" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Description</label>
-                        <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}
-                            rows={3}
-                            className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all resize-none"
-                            placeholder="Case description..." />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Crime Type</label>
-                            <select value={form.crime_type} onChange={e => setForm({...form, crime_type: e.target.value})}
-                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white input-glow transition-all appearance-none">
-                                <option value="Cyber Fraud" className="bg-void">Cyber Fraud</option>
-                                <option value="Theft" className="bg-void">Theft</option>
-                                <option value="Assault" className="bg-void">Assault</option>
-                                <option value="Fraud" className="bg-void">Fraud</option>
-                                <option value="Other" className="bg-void">Other</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Status</label>
-                            <select value={form.status} onChange={e => setForm({...form, status: e.target.value})}
-                                className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white input-glow transition-all appearance-none">
-                                <option value="Active" className="bg-void">Active</option>
-                                <option value="Solved" className="bg-void">Solved</option>
-                                <option value="Closed" className="bg-void">Closed</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Location</label>
-                        <input type="text" value={form.location} onChange={e => setForm({...form, location: e.target.value})}
-                            className="w-full bg-void border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 input-glow transition-all"
-                            placeholder="Bengaluru area" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Complaint Mode</label>
-                        <div className="flex gap-3">
-                            {["Online", "Offline"].map(mode => (
-                                <button key={mode} type="button" onClick={() => setForm({...form, complaint_mode: mode})}
-                                    className={`flex-1 py-3 rounded-xl text-sm font-medium transition-all border ${form.complaint_mode === mode ? "bg-cyan-glow/10 border-cyan-glow/30 text-cyan-glow" : "bg-void border-white/10 text-gray-400 hover:border-white/20"}`}>
-                                    {mode}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onCancel} className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all border border-white/10">
-                            Cancel
-                        </button>
-                        <button type="submit" className="flex-1 btn-primary py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
-                            <Icon name="Plus" size={16} />
-                            Create Case
-                        </button>
-                    </div>
-                </form>
-            );
-        };
-
-        // ─── ANALYTICS VIEW ───────────────────────────────────────────────────
-        const AnalyticsView = ({ cases, officers }) => {
-            const crimeTypeChartRef = useRef(null);
-            const statusChartRef = useRef(null);
-            const monthlyChartRef = useRef(null);
-            const locationChartRef = useRef(null);
-
-            useEffect(() => {
-                // Crime Type Chart
-                if (crimeTypeChartRef.current) {
-                    const ctx = crimeTypeChartRef.current.getContext("2d");
-                    const types = {};
-                    cases.forEach(c => { types[c.crime_type] = (types[c.crime_type] || 0) + 1; });
-                    new Chart(ctx, {
-                        type: "doughnut",
-                        data: {
-                            labels: Object.keys(types),
-                            datasets: [{
-                                data: Object.values(types),
-                                backgroundColor: ["#B388FF", "#FF9100", "#FF1744", "#FFAB00", "#888"],
-                                borderColor: "#12121C",
-                                borderWidth: 3,
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { position: "bottom", labels: { color: "#888", font: { family: "Space Grotesk", size: 11 }, padding: 20, usePointStyle: true } }
-                            },
-                            cutout: "65%",
-                        }
-                    });
-                }
-
-                // Status Chart
-                if (statusChartRef.current) {
-                    const ctx = statusChartRef.current.getContext("2d");
-                    const statuses = {};
-                    cases.forEach(c => { statuses[c.status] = (statuses[c.status] || 0) + 1; });
-                    new Chart(ctx, {
-                        type: "bar",
-                        data: {
-                            labels: Object.keys(statuses),
-                            datasets: [{
-                                data: Object.values(statuses),
-                                backgroundColor: ["#00E676", "#B388FF", "#888"],
-                                borderRadius: 8,
-                                barThickness: 40,
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.03)" }, ticks: { color: "#666", font: { family: "Space Grotesk" } } },
-                                x: { grid: { display: false }, ticks: { color: "#888", font: { family: "Space Grotesk" } } }
-                            }
-                        }
-                    });
-                }
-
-                // Monthly Trend Chart
-                if (monthlyChartRef.current) {
-                    const ctx = monthlyChartRef.current.getContext("2d");
-                    const months = ["Jan", "Feb", "Mar", "Apr", "May"];
-                    const data = [12, 18, 15, 22, 14];
-                    new Chart(ctx, {
-                        type: "line",
-                        data: {
-                            labels: months,
-                            datasets: [{
-                                label: "Cases Filed",
-                                data: data,
-                                borderColor: "#00E5FF",
-                                backgroundColor: "rgba(0,229,255,0.1)",
-                                fill: true,
-                                tension: 0.4,
-                                pointBackgroundColor: "#00E5FF",
-                                pointBorderColor: "#12121C",
-                                pointBorderWidth: 2,
-                                pointRadius: 5,
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.03)" }, ticks: { color: "#666", font: { family: "Space Grotesk" } } },
-                                x: { grid: { display: false }, ticks: { color: "#888", font: { family: "Space Grotesk" } } }
-                            }
-                        }
-                    });
-                }
-
-                // Location Chart
-                if (locationChartRef.current) {
-                    const ctx = locationChartRef.current.getContext("2d");
-                    const locs = {};
-                    cases.forEach(c => { locs[c.location] = (locs[c.location] || 0) + 1; });
-                    const sortedLocs = Object.entries(locs).sort((a, b) => b[1] - a[1]).slice(0, 6);
-                    new Chart(ctx, {
-                        type: "bar",
-                        data: {
-                            labels: sortedLocs.map(l => l[0]),
-                            datasets: [{
-                                data: sortedLocs.map(l => l[1]),
-                                backgroundColor: "#2962FF",
-                                borderRadius: 6,
-                                barThickness: 30,
-                            }]
-                        },
-                        options: {
-                            indexAxis: "y",
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                x: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.03)" }, ticks: { color: "#666", font: { family: "Space Grotesk" } } },
-                                y: { grid: { display: false }, ticks: { color: "#888", font: { family: "Space Grotesk" } } }
-                            }
-                        }
-                    });
-                }
-            }, [cases]);
-
-            const officerWorkload = useMemo(() => {
-                return officers.map(o => ({
-                    ...o,
-                    total: o.active_cases + o.solved_cases,
-                    efficiency: ((o.solved_cases / (o.active_cases + o.solved_cases)) * 100).toFixed(0)
-                })).sort((a, b) => b.total - a.total);
-            }, [officers]);
-
-            return (
-                <div className="space-y-6 animate-fade-up">
-                    {/* Charts Row 1 */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="glass-panel rounded-xl p-6">
-                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
-                                <Icon name="Target" size={16} className="text-cyan-glow" />
-                                Crime Type Distribution
-                            </h3>
-                            <div className="h-64">
-                                <canvas ref={crimeTypeChartRef} />
-                            </div>
-                        </div>
-                        <div className="glass-panel rounded-xl p-6">
-                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
-                                <Icon name="Activity" size={16} className="text-green-tactical" />
-                                Case Status Overview
-                            </h3>
-                            <div className="h-64">
-                                <canvas ref={statusChartRef} />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Charts Row 2 */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="glass-panel rounded-xl p-6">
-                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
-                                <Icon name="TrendingUp" size={16} className="text-blue-electric" />
-                                Monthly Case Trends
-                            </h3>
-                            <div className="h-64">
-                                <canvas ref={monthlyChartRef} />
-                            </div>
-                        </div>
-                        <div className="glass-panel rounded-xl p-6">
-                            <h3 className="text-sm font-semibold text-white mb-4 font-space flex items-center gap-2">
-                                <Icon name="MapPin" size={16} className="text-purple-tactical" />
-                                Cases by Location
-                            </h3>
-                            <div className="h-64">
-                                <canvas ref={locationChartRef} />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Officer Workload */}
-                    <div className="glass-panel rounded-xl p-6">
-                        <h3 className="text-sm font-semibold text-white mb-6 font-space flex items-center gap-2">
-                            <Icon name="Users" size={16} className="text-cyan-glow" />
-                            Officer Workload Analysis
-                        </h3>
-                        <div className="space-y-4">
-                            {officerWorkload.map((o, i) => (
-                                <div key={o.officer_id} className="flex items-center gap-4">
-                                    <div className="w-32 text-xs text-gray-400 truncate">{o.name}</div>
-                                    <div className="flex-1 h-8 bg-void rounded-lg overflow-hidden relative">
-                                        <div className="absolute inset-y-0 left-0 bg-cyan-glow/20 rounded-lg transition-all" style={{ width: `${(o.active_cases / 5) * 100}%` }} />
-                                        <div className="absolute inset-y-0 left-0 bg-purple-tactical/20 rounded-lg transition-all" style={{ width: `${(o.solved_cases / 20) * 100}%`, left: `${(o.active_cases / 5) * 100}%` }} />
-                                        <div className="absolute inset-0 flex items-center px-3">
-                                            <span className="text-xs text-white font-medium z-10">{o.active_cases} active / {o.solved_cases} solved</span>
-                                        </div>
-                                    </div>
-                                    <div className="w-16 text-right">
-                                        <span className="text-xs font-medium text-green-tactical">{o.efficiency}%</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Key Metrics */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {[
-                            { label: "Avg Resolution Time", value: "12.4 days", icon: "Clock", color: "cyan" },
-                            { label: "Cyber Crime Rate", value: "38%", icon: "Cpu", color: "blue" },
-                            { label: "Case Clearance", value: "72%", icon: "BadgeCheck", color: "green" },
-                            { label: "Active Investigations", value: "89", icon: "Crosshair", color: "purple" },
-                        ].map((m, i) => (
-                            <div key={i} className="glass-panel rounded-xl p-5 text-center card-hover">
-                                <div className={`w-10 h-10 rounded-lg bg-${m.color === "cyan" ? "cyan-glow/10" : m.color === "blue" ? "blue-electric/10" : m.color === "green" ? "green-tactical/10" : "purple-tactical/10"} border border-${m.color === "cyan" ? "cyan-glow/20" : m.color === "blue" ? "blue-electric/20" : m.color === "green" ? "green-tactical/20" : "purple-tactical/20"} flex items-center justify-center mx-auto mb-3`}>
-                                    <Icon name={m.icon} size={18} className={m.color === "cyan" ? "text-cyan-glow" : m.color === "blue" ? "text-blue-electric" : m.color === "green" ? "text-green-tactical" : "text-purple-tactical"} />
-                                </div>
-                                <div className="text-xl font-bold text-white font-space mb-1">{m.value}</div>
-                                <div className="text-[10px] text-gray-500 uppercase tracking-wider">{m.label}</div>
-                            </div>
-                        ))}
                     </div>
                 </div>
             );

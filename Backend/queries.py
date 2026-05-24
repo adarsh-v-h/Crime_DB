@@ -662,3 +662,137 @@ def get_public_stats():
     finally:
         cur.close()
         conn.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PUBLIC ACCESS REQUESTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+def submit_case_access_request(case_id: int, requester_name: str, requester_email: str, requester_number: str, reason: str):
+    """
+    Submits a new case access request into case_access_requests staging table.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO case_access_requests
+               (case_id, requester_name, requester_email, requester_number, reason, `status`)
+               VALUES (%s, %s, %s, %s, %s, 'Pending')""",
+            (case_id, requester_name, requester_email, requester_number, reason)
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_case_access_requests(officer_id: int = None, bypass_visibility: bool = False):
+    """
+    Fetches all access requests from the DB, with role-based visibility.
+    If bypass_visibility is False and officer_id is provided, returns only requests 
+    for cases where the officer is assigned.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        sql = """
+            SELECT ar.*, c.title AS case_title, c.crime_type AS case_crime_type, c.status AS case_status,
+                   o.name AS decided_by_name
+            FROM case_access_requests ar
+            JOIN cases c ON ar.case_id = c.case_id
+            LEFT JOIN officers o ON ar.decided_by = o.officer_id
+        """
+        params = []
+        
+        if not bypass_visibility and officer_id is not None:
+            sql += " WHERE ar.case_id IN (SELECT case_id FROM case_officer WHERE officer_id = %s)"
+            params.append(officer_id)
+            
+        sql += " ORDER BY ar.requested_at DESC"
+        
+        cur.execute(sql, params)
+        rows = _rows_to_list(cur, cur.fetchall())
+        
+        for r in rows:
+            # Serialise datetime fields for JSON compatibility
+            for key in ("requested_at", "decided_at"):
+                if r.get(key) and hasattr(r[key], "isoformat"):
+                    r[key] = r[key].isoformat()
+            # Attach computed display case ID
+            r["case_id_display"] = f"BLR-{str(r['case_id']).zfill(3)}"
+            
+        return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def officer_is_assigned_to_case(officer_id: int, case_id: int) -> bool:
+    """Returns True if the officer is assigned to the given case."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT 1 FROM case_officer WHERE officer_id = %s AND case_id = %s LIMIT 1",
+            (officer_id, case_id),
+        )
+        return cur.fetchone() is not None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def update_access_request_status(request_id: int, status: str, decided_by: int):
+    """
+    Updates status of an access request and registers the deciding officer.
+    Only transitions from Pending — returns 0 if already processed.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """UPDATE case_access_requests
+               SET `status` = %s, decided_by = %s, decided_at = NOW()
+               WHERE request_id = %s AND `status` = 'Pending'""",
+            (status, decided_by, request_id)
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_access_request_by_id(request_id: int):
+    """
+    Retrieves a single access request by ID.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT ar.*, c.title AS case_title, c.crime_type AS case_crime_type, 
+                      c.status AS case_status, c.description AS case_description,
+                      c.location AS case_location, c.date_reported AS case_date_reported
+               FROM case_access_requests ar
+               JOIN cases c ON ar.case_id = c.case_id
+               WHERE ar.request_id = %s""",
+            (request_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        r = _row_to_dict(cur, row)
+        
+        for key in ("requested_at", "decided_at", "case_date_reported"):
+            if r.get(key) and hasattr(r[key], "isoformat"):
+                r[key] = r[key].isoformat()
+                
+        r["case_id_display"] = f"BLR-{str(r['case_id']).zfill(3)}"
+        return r
+    finally:
+        cur.close()
+        conn.close()
+
