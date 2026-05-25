@@ -719,6 +719,35 @@ def public_access_request():
         return _err(f"Database error: {str(e)}", 500)
 
 
+@app.route("/public/cases", methods=["GET"])
+def public_browse_cases():
+    """
+    GET /public/cases
+    Returns public cases for citizen browsing/discovery.
+    Query parameters:
+      - status: filter by case status (Active, Solved, Closed, or All)
+      - crime_type: filter by crime type
+      - location: filter by location (partial match)
+      - search: search in case title
+    No authentication required — public endpoint.
+    """
+    status = request.args.get("status")
+    crime_type = request.args.get("crime_type")
+    location = request.args.get("location")
+    search = request.args.get("search")
+
+    try:
+        cases = queries.get_public_cases(
+            status=status,
+            crime_type=crime_type,
+            location=location,
+            search=search
+        )
+        return _ok(data=cases)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
 @app.route("/api/access-requests", methods=["GET"])
 def get_access_requests():
     """

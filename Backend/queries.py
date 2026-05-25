@@ -630,6 +630,60 @@ def set_officer_password(officer_id: int, plain_password: str):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# PUBLIC BROWSING — case discovery for citizens
+# ──────────────────────────────────────────────────────────────────────────────
+
+def get_public_cases(status=None, crime_type=None, location=None, search=None):
+    """
+    Returns public cases safe for citizen browsing.
+    Returns only: case_id, title, crime_type, location, date_reported, status
+    Filters: status, crime_type, location, search
+    No authentication required.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        sql = """
+            SELECT case_id, title, crime_type, `status`, date_reported, `location`
+            FROM cases
+            WHERE 1=1
+        """
+        params = []
+
+        if status and status != "All":
+            sql += " AND `status` = %s"
+            params.append(status)
+
+        if crime_type and crime_type != "All":
+            sql += " AND crime_type = %s"
+            params.append(crime_type)
+
+        if location:
+            sql += " AND `location` LIKE %s"
+            params.append(f"%{location}%")
+
+        if search:
+            sql += " AND (title LIKE %s)"
+            params.append(f"%{search}%")
+
+        sql += " ORDER BY date_reported DESC"
+
+        cur.execute(sql, params)
+        cases = _rows_to_list(cur, cur.fetchall())
+
+        # Format dates and add display_id to each case
+        for case in cases:
+            if case.get("date_reported") and hasattr(case["date_reported"], "isoformat"):
+                case["date_reported"] = case["date_reported"].isoformat()
+            case["case_id_display"] = f"BLR-{str(case['case_id']).zfill(3)}"
+
+        return cases
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # STATS — landing page strip
 # ──────────────────────────────────────────────────────────────────────────────
 

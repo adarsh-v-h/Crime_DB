@@ -776,6 +776,11 @@
             const [submitting, setSubmitting] = useState(false);
             const [caseRef, setCaseRef] = useState(null);
 
+            // Browse Cases state
+            const [browsingCases, setBrowsingCases] = useState([]);
+            const [browseCaseFilters, setBrowseCaseFilters] = useState({ status: "Active", crime_type: "", location: "", search: "" });
+            const [browseCaseLoading, setBrowseCaseLoading] = useState(false);
+
             const handleComplaintSubmit = async (e) => {
                 e.preventDefault();
                 // Validate Aadhaar last 4 digits
@@ -836,6 +841,56 @@
                 setTimeout(() => setAccessSubmitted(false), 8000);
             };
 
+            // Load cases when browse tab is selected
+            useEffect(() => {
+                if (activeTab === "browse") {
+                    loadBrowsingCases();
+                }
+            }, [activeTab]);
+
+            const loadBrowsingCases = async () => {
+                setBrowseCaseLoading(true);
+                try {
+                    const params = new URLSearchParams();
+                    if (browseCaseFilters.status) params.append("status", browseCaseFilters.status);
+                    if (browseCaseFilters.crime_type) params.append("crime_type", browseCaseFilters.crime_type);
+                    if (browseCaseFilters.location) params.append("location", browseCaseFilters.location);
+                    if (browseCaseFilters.search) params.append("search", browseCaseFilters.search);
+
+                    const res = await apiFetch(`/public/cases?${params.toString()}`, { method: "GET" });
+                    setBrowsingCases(res.data || []);
+                } catch (err) {
+                    console.warn("[CRMS] Failed to load cases:", err.message);
+                    setBrowsingCases([]);
+                } finally {
+                    setBrowseCaseLoading(false);
+                }
+            };
+
+            const handleBrowseCaseFilterChange = (field, value) => {
+                const updated = { ...browseCaseFilters, [field]: value };
+                setBrowseCaseFilters(updated);
+                // Trigger immediate filter update
+                setBrowsingCases([]); // Clear loading state
+                setTimeout(() => {
+                    const params = new URLSearchParams();
+                    if (updated.status) params.append("status", updated.status);
+                    if (updated.crime_type) params.append("crime_type", updated.crime_type);
+                    if (updated.location) params.append("location", updated.location);
+                    if (updated.search) params.append("search", updated.search);
+
+                    apiFetch(`/public/cases?${params.toString()}`, { method: "GET" })
+                        .then(res => setBrowsingCases(res.data || []))
+                        .catch(err => { console.warn(err.message); setBrowsingCases([]); });
+                }, 300);
+            };
+
+            const handleSelectCaseForAccess = (caseId, caseDisplayId) => {
+                setAccessForm({ ...accessForm, case_id: caseDisplayId });
+                setActiveTab("access");
+                setError("");
+            };
+
 
             return (
                 <CrmsPageShell
@@ -866,6 +921,16 @@
                                     <span className="flex items-center gap-2">
                                         <Icon name="FilePlus" size={14} />
                                         File Complaint
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab("browse")}
+                                    className={`rounded-full px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "browse" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <Icon name="Search" size={14} />
+                                        Browse Cases
                                     </span>
                                 </button>
                                 <button
@@ -973,6 +1038,105 @@
                                             {submitting ? "Submitting..." : "Submit Complaint"}
                                         </button>
                                     </form>
+                                )}
+                            </motion.div>
+                        )}
+
+                        {/* Browse Cases */}
+                        {activeTab === "browse" && (
+                            <motion.div variants={fadeUp} custom={2} className={CRMS_CARD}>
+                                <div className="mb-8 flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white">
+                                        <Icon name="Search" size={18} className="text-black" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-semibold uppercase tracking-[0.1em] text-black sm:text-xl">Browse Cases</h2>
+                                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/65 sm:text-xs">Find and select a case to request access</p>
+                                    </div>
+                                </div>
+
+                                <div className="mb-6 space-y-4">
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        <div>
+                                            <label className={CRMS_LABEL}>Status Filter</label>
+                                            <select value={browseCaseFilters.status} onChange={e => handleBrowseCaseFilterChange("status", e.target.value)}
+                                                className={CRMS_INPUT}>
+                                                <option value="Active">Active Cases</option>
+                                                <option value="Solved">Solved Cases</option>
+                                                <option value="Closed">Closed Cases</option>
+                                                <option value="">All Statuses</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={CRMS_LABEL}>Crime Type Filter</label>
+                                            <select value={browseCaseFilters.crime_type} onChange={e => handleBrowseCaseFilterChange("crime_type", e.target.value)}
+                                                className={CRMS_INPUT}>
+                                                <option value="">All Crime Types</option>
+                                                <option value="Cyber Fraud">Cyber Fraud</option>
+                                                <option value="Theft">Theft</option>
+                                                <option value="Assault">Assault</option>
+                                                <option value="Fraud">Fraud</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className={CRMS_LABEL}>Location Filter</label>
+                                        <input type="text" value={browseCaseFilters.location} onChange={e => handleBrowseCaseFilterChange("location", e.target.value)}
+                                            className={CRMS_INPUT} placeholder="Search by location..." />
+                                    </div>
+                                    <div>
+                                        <label className={CRMS_LABEL}>Search by Case Title</label>
+                                        <input type="text" value={browseCaseFilters.search} onChange={e => handleBrowseCaseFilterChange("search", e.target.value)}
+                                            className={CRMS_INPUT} placeholder="Search case details..." />
+                                    </div>
+                                </div>
+
+                                {browseCaseLoading ? (
+                                    <div className="flex items-center justify-center py-12">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-black/10 border-t-black"></div>
+                                            <span className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Loading cases...</span>
+                                        </div>
+                                    </div>
+                                ) : browsingCases.length > 0 ? (
+                                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                                        {browsingCases.map((c) => (
+                                            <div
+                                                key={c.case_id}
+                                                onClick={() => handleSelectCaseForAccess(c.case_id, c.case_id_display)}
+                                                className="cursor-pointer rounded-xl border-2 border-black/15 bg-white/60 p-4 transition-all hover:border-black/40 hover:bg-white/90"
+                                            >
+                                                <div className="mb-2 flex items-start justify-between">
+                                                    <div className="flex-1">
+                                                        <h3 className="font-mono text-sm font-bold text-accent">{c.case_id_display}</h3>
+                                                        <h4 className="mt-1 text-sm font-semibold text-black">{c.title}</h4>
+                                                    </div>
+                                                    <span className="ml-3 inline-block whitespace-nowrap rounded-full border-2 border-black/30 bg-black/5 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-black/70">
+                                                        {c.status}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-black/60">
+                                                    <span className="flex items-center gap-1">
+                                                        <Icon name="Shield" size={12} /> {c.crime_type}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <Icon name="MapPin" size={12} /> {c.location}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <Icon name="Calendar" size={12} /> {c.date_reported ? new Date(c.date_reported).toLocaleDateString() : "N/A"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center py-12">
+                                        <div className="text-center">
+                                            <Icon name="Search" size={32} className="mx-auto mb-3 text-black/30" />
+                                            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">No cases found. Try adjusting your filters.</p>
+                                        </div>
+                                    </div>
                                 )}
                             </motion.div>
                         )}
