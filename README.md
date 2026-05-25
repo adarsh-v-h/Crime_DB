@@ -5,7 +5,8 @@ A police investigation dashboard for the Bengaluru Police Department, built with
 ## Features
 
 - **Staff portal** — Role-based login, case CRUD, officer assignments, analytics, and case status updates
-- **Public portal** — Citizens can file complaints and request access to case records (reCAPTCHA protected)
+- **Public portal** — Citizens can file complaints, browse public cases, and request access to case records (reCAPTCHA protected)
+- **Case discovery** — Citizens can search, filter, and browse public cases by status, crime type, location, or keywords before submitting access requests
 - **Automated assignment** — Background scheduler promotes pending complaints to cases and assigns officers by crime severity and workload
 - **Access request workflow** — Officers approve or reject citizen dossier requests; approved requests trigger a PDF case dossier via email (or mock mode)
 - **Security** — bcrypt password hashing, invisible reCAPTCHA on public forms and login, role-based case visibility, `X-Officer-Id` header on protected routes
@@ -211,9 +212,21 @@ A background thread also runs the assignment algorithm every **10 seconds** whil
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `GET` | `/public/cases` | Browse public cases (search, filter by status, crime type, location) |
 | `POST` | `/public/complaint` | Submit a complaint (staged for review / auto-promotion) |
 | `POST` | `/public/access-request` | Request access to a case dossier |
 | `GET` | `/stats` | Public statistics summary |
+
+**Browse Cases query parameters** (`GET /public/cases`):
+
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `status` | string | Filter by case status | `Active`, `Solved`, `Closed`, or empty for all |
+| `crime_type` | string | Filter by crime type | `Cyber Fraud`, `Theft`, `Assault`, `Fraud`, `Other` |
+| `location` | string | Partial location match | `Kengeri`, `MG Road` |
+| `search` | string | Search in case title | `fraud`, `theft` |
+
+Response: `{ "success": true, "data": [ { "case_id": 1, "case_id_display": "BLR-001", "title": "...", "crime_type": "...", "status": "...", "location": "...", "date_reported": "..." }, ... ] }`
 
 ### Authentication
 
@@ -245,7 +258,7 @@ The UI is a single HTML file using React, Tailwind CSS, Chart.js, and Framer Mot
 
 | View | Description |
 |------|-------------|
-| **Public portal** | File complaints, request case access, view public stats |
+| **Public portal** | File complaints, browse and search public cases, request case access, view public stats |
 | **Staff login** | Badge ID + password with reCAPTCHA |
 | **Staff dashboard** | Cases (filter, paginate, update status), access request queue, analytics |
 
@@ -261,6 +274,24 @@ When a citizen files a complaint, it lands in `public_complaints` with status `P
 4. Marks the complaint as `Promoted`
 
 Inspectors and admins see all cases; viewers only see cases they are assigned to.
+
+## Case Discovery for Citizens
+
+Citizens can now browse and discover public cases directly from the public portal, solving the problem of not knowing case IDs upfront:
+
+**Browse Cases workflow:**
+1. Open the Public Portal
+2. Click the **"Browse Cases"** tab
+3. Filter cases by:
+   - **Status**: Active, Solved, Closed, or All
+   - **Crime Type**: Cyber Fraud, Theft, Assault, Fraud, Other
+   - **Location**: Search by partial location match
+   - **Keywords**: Search case titles and details
+4. View matching cases with details: Case ID (BLR-XXX), Title, Crime Type, Location, Date Reported, Status
+5. **Click any case** → Case ID auto-populates in the "Request Case Access" form
+6. Complete the request with name, email, phone, and reason
+
+The backend endpoint `GET /public/cases` supports all filters via query parameters and requires no authentication. Results are cached efficiently with debounced filtering for a smooth user experience.
 
 ## Email & PDF Dossiers
 
