@@ -17,7 +17,7 @@ import time
 import logging
 
 import config
-from db_connection import init_pool
+from db_connection import init_pool, get_db
 import queries
 from assignment_algorithm import process_pending_complaints
 import email_utils
@@ -118,6 +118,22 @@ def _parse_officer_id_header():
         return int(officer_id_str), None
     except ValueError:
         return None, _err("Invalid X-Officer-Id header", 400)
+
+
+def _row_to_dict(cursor, row):
+    """Converts a DB row tuple into a dict keyed by column names."""
+    cols = [d[0] for d in cursor.description]
+    return dict(zip(cols, row))
+
+
+def _rows_to_list(cursor, rows):
+    """Converts DB rows to list of dicts."""
+    return [_row_to_dict(cursor, r) for r in rows]
+
+
+def _is_admin(officer: dict) -> bool:
+    """Check if officer has admin role."""
+    return (officer.get("role") or "").lower() == "admin"
 
 
 def _officer_may_decide_access_request(officer: dict, case_id: int) -> bool:
@@ -866,6 +882,134 @@ def public_stats():
     """
     try:
         return _ok(queries.get_public_stats())
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ADMIN DASHBOARD  —  /admin/*
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/admin/cases", methods=["GET"])
+def admin_get_all_cases():
+    """
+    GET /admin/cases
+    Returns ALL cases (bypass visibility) for admin dashboard.
+    Admin role required.
+    Optional filters: status, crime_type, location, search
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+    
+    try:
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+        
+        if not _is_admin(officer):
+            return _err("Unauthorized: Admin role required", 403)
+        
+        status = request.args.get("status")
+        crime_type = request.args.get("crime_type")
+        location = request.args.get("location")
+        search = request.args.get("search")
+        
+        cases = queries.get_all_cases(
+            status=status,
+            crime_type=crime_type,
+            location=location,
+            search=search,
+            bypass_visibility=True
+        )
+        
+        return _ok(_enrich_cases(cases))
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/admin/dashboard", methods=["GET"])
+def admin_dashboard_stats():
+    """
+    GET /admin/dashboard
+    Returns aggregated statistics for admin dashboard.
+    Admin role required.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+    
+    try:
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+        
+        if not _is_admin(officer):
+            return _err("Unauthorized: Admin role required", 403)
+        
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            # Total counts
+            cur.execute("SELECT COUNT(*) FROM cases")
+            total_cases = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Active'")
+            active_cases = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Solved'")
+            solved_cases = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Closed'")
+            closed_cases = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM officers")
+            total_officers = cur.fetchone()[0]
+            
+            # Case distribution by type
+            cur.execute("SELECT crime_type, COUNT(*) FROM cases GROUP BY crime_type")
+            crime_dist = dict(cur.fetchall())
+            
+            # Case distribution by status
+            cur.execute("SELECT `status`, COUNT(*) FROM cases GROUP BY `status`")
+            status_dist = dict(cur.fetchall())
+            
+            # Officer workload
+            cur.execute("""
+                SELECT 
+                    o.officer_id,
+                    o.`name`,
+                    o.`rank`,
+                    o.`role`,
+                    COUNT(DISTINCT co.case_id) as case_count
+                FROM officers o
+                LEFT JOIN case_officer co ON o.officer_id = co.officer_id
+                GROUP BY o.officer_id
+                ORDER BY case_count DESC
+            """)
+            officer_workload = _rows_to_list(cur, cur.fetchall())
+            
+            stats = {
+                "cases": {
+                    "total": total_cases,
+                    "active": active_cases,
+                    "solved": solved_cases,
+                    "closed": closed_cases
+                },
+                "officers": {
+                    "total": total_officers
+                },
+                "distributions": {
+                    "by_crime_type": crime_dist,
+                    "by_status": status_dist
+                },
+                "officer_workload": officer_workload
+            }
+            
+            return _ok(stats)
+        finally:
+            cur.close()
+            conn.close()
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
 

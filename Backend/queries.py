@@ -553,6 +553,7 @@ def enrich_officer_details(o: dict):
         o.setdefault("phone",      "")
         o.setdefault("email",      "")
         o.setdefault("join_date",  "")
+        o.setdefault("role",       "viewer")
 
         return o
     finally:

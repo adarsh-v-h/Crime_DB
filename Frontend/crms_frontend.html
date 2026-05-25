@@ -1755,6 +1755,306 @@
             );
         };
 
+        // ─── ADMIN DASHBOARD ──────────────────────────────────────────────────
+        const AdminDashboard = ({ officer, onLogout, onNavigate }) => {
+            const [dashboardStats, setDashboardStats] = useState(null);
+            const [allCases, setAllCases] = useState([]);
+            const [selectedCase, setSelectedCase] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [activeTab, setActiveTab] = useState("overview");
+            const [statusFilter, setStatusFilter] = useState("All");
+            const [currentPage, setCurrentPage] = useState(1);
+            const itemsPerPage = 10;
+
+            const loadDashboardStats = async () => {
+                setLoading(true);
+                try {
+                    const res = await apiFetch("/admin/dashboard", {
+                        headers: { "X-Officer-Id": officer?.officer_id?.toString() }
+                    });
+                    if (res.success) {
+                        setDashboardStats(res.data);
+                    } else {
+                        setError(res.error || "Failed to load dashboard");
+                    }
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const loadAllCases = async () => {
+                setLoading(true);
+                try {
+                    const statusParam = statusFilter !== "All" ? `status=${statusFilter}` : "";
+                    const url = "/admin/cases" + (statusParam ? `?${statusParam}` : "");
+                    const res = await apiFetch(url, {
+                        headers: { "X-Officer-Id": officer?.officer_id?.toString() }
+                    });
+                    if (res.success) {
+                        setAllCases(res.data || []);
+                    } else {
+                        setError(res.error || "Failed to load cases");
+                    }
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                loadDashboardStats();
+                loadAllCases();
+            }, [statusFilter]);
+
+            const totalPages = Math.ceil(allCases.length / itemsPerPage);
+            const paginatedCases = allCases.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+            return (
+                <CrmsPageShell
+                    title="Bengaluru Police · Administration"
+                    subtitle="System Administrator Dashboard"
+                    onBack={() => onNavigate("landing")}
+                    scrim="bg-white/42"
+                >
+                    <div className="border-b-2 border-black/10 bg-white/55 backdrop-blur-md">
+                        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/70 sm:text-xs">
+                                Administrator: <span className="text-black">{officer?.name || "UNKNOWN"}</span>
+                                <span className="text-accent"> (ADMIN)</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onLogout}
+                                className="rounded-full border-2 border-black bg-black px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition-opacity hover:opacity-80 sm:text-xs"
+                            >
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+
+                    <motion.div
+                        className="mx-auto max-w-[1600px] space-y-6 p-5 sm:p-6 lg:p-8"
+                        initial="hidden"
+                        animate="visible"
+                        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.06 } } }}
+                    >
+                        {/* TAB NAVIGATION */}
+                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex gap-4 border-b-2 border-black/15 sm:gap-6">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("overview")}
+                                className={`pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
+                                    activeTab === "overview"
+                                        ? "border-accent text-black"
+                                        : "border-transparent text-black/50 hover:text-black"
+                                }`}
+                            >
+                                Dashboard Overview
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("cases")}
+                                className={`pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
+                                    activeTab === "cases"
+                                        ? "border-accent text-black"
+                                        : "border-transparent text-black/50 hover:text-black"
+                                }`}
+                            >
+                                All Cases
+                            </button>
+                        </motion.div>
+
+                        {/* OVERVIEW TAB */}
+                        {activeTab === "overview" && (
+                            <>
+                                {loading ? (
+                                    <motion.div variants={fadeUp} className={`${CRMS_CARD} p-8 text-center text-black/60`}>
+                                        Loading dashboard...
+                                    </motion.div>
+                                ) : error ? (
+                                    <motion.div variants={fadeUp} className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                        <Icon name="AlertTriangle" size={14} />
+                                        <span>{error}</span>
+                                    </motion.div>
+                                ) : dashboardStats ? (
+                                    <>
+                                        {/* STATISTICS CARDS */}
+                                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                                            <motion.div variants={fadeUp} custom={1} className={`${CRMS_CARD} p-4`}>
+                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Total Cases</div>
+                                                <div className="mt-2 text-3xl font-bold text-accent">{dashboardStats.cases?.total || 0}</div>
+                                            </motion.div>
+                                            <motion.div variants={fadeUp} custom={2} className={`${CRMS_CARD} p-4`}>
+                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Active Cases</div>
+                                                <div className="mt-2 text-3xl font-bold text-amber-600">{dashboardStats.cases?.active || 0}</div>
+                                            </motion.div>
+                                            <motion.div variants={fadeUp} custom={3} className={`${CRMS_CARD} p-4`}>
+                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Solved Cases</div>
+                                                <div className="mt-2 text-3xl font-bold text-emerald-600">{dashboardStats.cases?.solved || 0}</div>
+                                            </motion.div>
+                                            <motion.div variants={fadeUp} custom={4} className={`${CRMS_CARD} p-4`}>
+                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Total Officers</div>
+                                                <div className="mt-2 text-3xl font-bold text-blue-600">{dashboardStats.officers?.total || 0}</div>
+                                            </motion.div>
+                                        </div>
+
+                                        {/* OFFICER WORKLOAD */}
+                                        <motion.div variants={fadeUp} custom={5} className={`${CRMS_CARD} p-6`}>
+                                            <div className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-black">Officer Workload</div>
+                                            <div className="space-y-3">
+                                                {(dashboardStats.officer_workload || []).slice(0, 5).map((off, idx) => (
+                                                    <div key={off.officer_id} className="flex items-center justify-between border-b border-black/10 pb-2 last:border-0">
+                                                        <div>
+                                                            <div className="text-xs font-semibold text-black">{off.name}</div>
+                                                            <div className="text-[10px] text-black/60">{off.rank} · {off.role}</div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-sm font-bold text-accent">{off.case_count || 0}</div>
+                                                            <div className="text-[10px] text-black/60">Cases</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    </>
+                                ) : null}
+                            </>
+                        )}
+
+                        {/* CASES TAB */}
+                        {activeTab === "cases" && (
+                            <>
+                                <motion.div variants={fadeUp} custom={1} className={`${CRMS_CARD} flex flex-col gap-4 p-4 md:flex-row`}>
+                                    <select
+                                        value={statusFilter}
+                                        onChange={(e) => {
+                                            setStatusFilter(e.target.value);
+                                            setCurrentPage(1);
+                                        }}
+                                        className={`${CRMS_INPUT} w-full md:w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
+                                    >
+                                        <option value="All">Status: All</option>
+                                        <option value="Active">Active</option>
+                                        <option value="Solved">Solved</option>
+                                        <option value="Closed">Closed</option>
+                                    </select>
+                                </motion.div>
+
+                                {error && (
+                                    <div className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                        <Icon name="AlertTriangle" size={14} />
+                                        <span>{error}</span>
+                                    </div>
+                                )}
+
+                                {loading ? (
+                                    <motion.div variants={fadeUp} className={`${CRMS_CARD} p-8 text-center text-black/60`}>
+                                        Loading cases...
+                                    </motion.div>
+                                ) : (
+                                    <>
+                                        <motion.div variants={fadeUp} className="space-y-3">
+                                            {paginatedCases.length > 0 ? (
+                                                paginatedCases.map((c) => (
+                                                    <motion.div
+                                                        key={c.case_id}
+                                                        className={`${CRMS_CARD} cursor-pointer p-4 transition-all hover:shadow-lg`}
+                                                        onClick={() => setSelectedCase(c)}
+                                                        whileHover={{ scale: 1.01 }}
+                                                    >
+                                                        <div className="flex items-start justify-between">
+                                                            <div className="flex-1">
+                                                                <div className="text-xs font-bold uppercase tracking-[0.12em] text-accent">BLR-{String(c.case_id).padStart(3, "0")}</div>
+                                                                <div className="mt-1 text-sm font-semibold text-black">{c.title}</div>
+                                                                <div className="mt-1 text-xs text-black/60">{c.location}</div>
+                                                            </div>
+                                                            <div className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${
+                                                                c.status === "Active"
+                                                                    ? "border border-amber-500 bg-amber-50 text-amber-900"
+                                                                    : c.status === "Solved"
+                                                                    ? "border border-emerald-600 bg-emerald-50 text-emerald-900"
+                                                                    : "border border-black/20 bg-black/5 text-black/60"
+                                                            }`}>
+                                                                {c.status}
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                ))
+                                            ) : (
+                                                <motion.div variants={fadeUp} className={`${CRMS_CARD} p-8 text-center text-black/60`}>
+                                                    No cases found.
+                                                </motion.div>
+                                            )}
+                                        </motion.div>
+
+                                        {/* PAGINATION */}
+                                        {totalPages > 1 && (
+                                            <motion.div variants={fadeUp} className="flex items-center justify-center gap-2">
+                                                <button
+                                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                                    disabled={currentPage === 1}
+                                                    className="rounded-full border-2 border-black/20 px-3 py-1 text-[10px] disabled:opacity-50"
+                                                >
+                                                    ←
+                                                </button>
+                                                <span className="text-xs text-black/60">Page {currentPage} of {totalPages}</span>
+                                                <button
+                                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                                    disabled={currentPage === totalPages}
+                                                    className="rounded-full border-2 border-black/20 px-3 py-1 text-[10px] disabled:opacity-50"
+                                                >
+                                                    →
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </motion.div>
+
+                    {/* CASE DETAIL MODAL */}
+                    <AnimatePresence>
+                        {selectedCase && (
+                            <motion.div
+                                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setSelectedCase(null)}
+                            >
+                                <motion.div
+                                    className={`${CRMS_CARD} max-h-96 w-full max-w-2xl overflow-y-auto p-6`}
+                                    initial={{ scale: 0.9, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    exit={{ scale: 0.9, opacity: 0 }}
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <div className="mb-4 flex items-start justify-between">
+                                        <div>
+                                            <div className="text-xs font-bold uppercase tracking-[0.12em] text-accent">BLR-{String(selectedCase.case_id).padStart(3, "0")}</div>
+                                            <h2 className="mt-1 text-lg font-bold text-black">{selectedCase.title}</h2>
+                                        </div>
+                                        <button onClick={() => setSelectedCase(null)} className="text-black/50 hover:text-black">✕</button>
+                                    </div>
+                                    <div className="space-y-3 text-sm">
+                                        <div><span className="font-semibold">Status:</span> {selectedCase.status}</div>
+                                        <div><span className="font-semibold">Location:</span> {selectedCase.location}</div>
+                                        <div><span className="font-semibold">Crime Type:</span> {selectedCase.crime_type}</div>
+                                        <div><span className="font-semibold">Description:</span> <div className="mt-1 whitespace-pre-wrap text-xs text-black/70">{selectedCase.description}</div></div>
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </CrmsPageShell>
+            );
+        };
+
         // ─── LOGIN PAGE ───────────────────────────────────────────────────────
         const LoginPage = ({ onLogin, onBack }) => {
             const [badgeId, setBadgeId]   = useState("");
@@ -1856,7 +2156,9 @@
 
             const handleLogin = (officerData) => {
                 setOfficer(officerData);
-                setCurrentView("staff");
+                // Route to admin dashboard if role is admin, otherwise to staff dashboard
+                const targetView = (officerData.role || "").toLowerCase() === "admin" ? "admin" : "staff";
+                setCurrentView(targetView);
             };
 
             const handleLogout = () => {
@@ -1880,6 +2182,11 @@
                         {currentView === "login" && (
                             <motion.div key="login" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }}>
                                 <LoginPage onLogin={handleLogin} onBack={() => setCurrentView("landing")} />
+                            </motion.div>
+                        )}
+                        {currentView === "admin" && officer && (
+                            <motion.div key="admin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.4 }}>
+                                <AdminDashboard officer={officer} onLogout={handleLogout} onNavigate={setCurrentView} />
                             </motion.div>
                         )}
                         {currentView === "staff" && officer && (

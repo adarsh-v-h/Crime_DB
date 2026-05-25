@@ -55,5 +55,6 @@ temp/
 *.pid
 docker-compose.override.yml
 
+Doc/
 
 *CAPTCHA*
