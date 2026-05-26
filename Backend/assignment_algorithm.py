@@ -169,39 +169,85 @@ def select_officers_for_case(crime_type: str) -> list:
     return selected_officers
 
 
-def create_case_from_complaint(complaint_id: int, officer_ids: list) -> int:
+def create_recommendation(complaint_id: int, officer_ids: list) -> int:
     """
-    Promotes a public complaint to a case in the cases table.
-    Creates case_officer assignments for all selected officers.
-    Updates public_complaints status to Promoted.
+    Creates a recommendation record in assignment_recommendations.
+    Stores algorithm-generated officer recommendations for admin review.
     
-    Returns: case_id of the newly created case
+    Returns: recommendation_id of the newly created recommendation, or None on error
     """
+    import json
     conn = get_db()
     cur = conn.cursor()
     try:
-        # Fetch the complaint details
+        officers_json = json.dumps(officer_ids)
         cur.execute(
-            "SELECT * FROM public_complaints WHERE complaint_id = %s",
-            (complaint_id,)
+            """INSERT INTO assignment_recommendations
+               (complaint_id, recommended_officer_ids, status)
+               VALUES (%s, %s, 'pending')""",
+            (complaint_id, officers_json)
+        )
+        recommendation_id = cur.lastrowid
+        conn.commit()
+        return recommendation_id
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error creating recommendation for complaint {complaint_id}: {str(e)}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def approve_recommendation(recommendation_id: int, admin_officer_id: int, 
+                          final_officer_ids: list = None) -> int:
+    """
+    Approves a recommendation and creates the actual case + assignments.
+    
+    Parameters:
+    - recommendation_id: ID of the recommendation to approve
+    - admin_officer_id: Officer ID of the approving admin
+    - final_officer_ids: Optional list of officers (allows admin to modify)
+    
+    Returns: case_id of the newly created case, or None on error
+    """
+    import json
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        # Fetch the recommendation and complaint
+        cur.execute(
+            """SELECT ar.*, pc.crime_type, pc.location, pc.incident_desc,
+                      pc.complaint_mode, pc.complainant_name, pc.contact, pc.aadhaar_last4
+               FROM assignment_recommendations ar
+               JOIN public_complaints pc ON ar.complaint_id = pc.complaint_id
+               WHERE ar.recommendation_id = %s""",
+            (recommendation_id,)
         )
         row = cur.fetchone()
         if not row:
-            logger.error(f"Complaint {complaint_id} not found")
+            logger.error(f"Recommendation {recommendation_id} not found")
             return None
         
-        complaint = _row_to_dict(cur, row)
+        rec = _row_to_dict(cur, row)
+        complaint_id = rec["complaint_id"]
+        
+        # Use final_officer_ids if provided (admin modification), else use recommended
+        if final_officer_ids is None:
+            officer_ids = json.loads(rec["recommended_officer_ids"])
+        else:
+            officer_ids = final_officer_ids
         
         # Create the case in the cases table
-        title = f"{complaint['crime_type']} - {complaint['location']}"
+        title = f"{rec['crime_type']} - {rec['location']}"
         cur.execute(
             """INSERT INTO cases
                (title, description, crime_type, `status`, `location`, complaint_mode,
                 complainant_name, complainant_contact, complainant_aadhaar, `source`, last_updated)
                VALUES (%s, %s, %s, 'Active', %s, %s, %s, %s, %s, 'public', NOW())""",
-            (title, complaint["incident_desc"], complaint["crime_type"], complaint["location"],
-             complaint["complaint_mode"], complaint["complainant_name"],
-             complaint["contact"], complaint["aadhaar_last4"])
+            (title, rec["incident_desc"], rec["crime_type"], rec["location"],
+             rec["complaint_mode"], rec["complainant_name"],
+             rec["contact"], rec["aadhaar_last4"])
         )
         new_case_id = cur.lastrowid
         
@@ -213,8 +259,7 @@ def create_case_from_complaint(complaint_id: int, officer_ids: list) -> int:
                 (new_case_id, officer_id)
             )
         
-        # Mark complaint as Promoted
-        # reviewed_by is set to the first officer assigned (SHO system)
+        # Mark complaint as Promoted with case reference
         reviewed_by = officer_ids[0] if officer_ids else None
         cur.execute(
             """UPDATE public_complaints
@@ -224,29 +269,61 @@ def create_case_from_complaint(complaint_id: int, officer_ids: list) -> int:
             (new_case_id, reviewed_by, complaint_id)
         )
         
+        # Update recommendation as approved
+        final_officers_json = json.dumps(final_officer_ids) if final_officer_ids else None
+        cur.execute(
+            """UPDATE assignment_recommendations
+               SET status = 'approved', admin_approved_officer_ids = %s,
+                   approved_by = %s, approved_at = NOW()
+               WHERE recommendation_id = %s""",
+            (final_officers_json, admin_officer_id, recommendation_id)
+        )
+        
         conn.commit()
         return new_case_id
     except Exception as e:
         conn.rollback()
-        logger.error(f"Error creating case from complaint {complaint_id}: {str(e)}")
+        logger.error(f"Error approving recommendation {recommendation_id}: {str(e)}")
         return None
     finally:
         cur.close()
         conn.close()
 
 
+def create_case_from_complaint(complaint_id: int, officer_ids: list) -> int:
+    """
+    DEPRECATED: Use create_recommendation() + approve_recommendation() instead.
+    
+    Kept for backward compatibility. Creates a recommendation and auto-approves it
+    to maintain existing behavior (used by auto-approval scheduler).
+    
+    Returns: case_id of the newly created case
+    """
+    rec_id = create_recommendation(complaint_id, officer_ids)
+    if rec_id is None:
+        return None
+    
+    # Auto-approve with system (None admin_officer_id indicates auto-approval)
+    case_id = approve_recommendation(rec_id, admin_officer_id=None, 
+                                      final_officer_ids=officer_ids)
+    return case_id
+
+
 def process_pending_complaints() -> dict:
     """
     Main entry point for the automated assignment algorithm.
     
-    Workflow:
+    Workflow (NEW):
     1. Fetch all Pending complaints from public_complaints
     2. For each complaint:
        a. Determine severity and select officers
-       b. Create case and assignments
-       c. Mark complaint as Promoted
+       b. Create a recommendation record for admin review
+       c. Auto-approve the recommendation (backward compat: scheduler behavior unchanged)
     
     Returns: dict with results {processed: int, errors: int, details: list}
+    
+    NOTE: Auto-approval happens here to preserve existing scheduler behavior.
+    For manual admin review workflow, call create_recommendation() only and skip auto-approval.
     """
     conn = get_db()
     cur = conn.cursor()
@@ -268,7 +345,7 @@ def process_pending_complaints() -> dict:
             crime_type = complaint["crime_type"]
             
             try:
-                # Select officers based on crime severity
+                # Select officers based on crime severity (ALGORITHM LOGIC UNCHANGED)
                 officer_ids = select_officers_for_case(crime_type)
                 
                 if not officer_ids:
@@ -281,28 +358,44 @@ def process_pending_complaints() -> dict:
                     logger.warning(f"Could not find suitable officers for complaint {complaint_id}")
                     continue
                 
-                # Create case and assignments
-                case_id = create_case_from_complaint(complaint_id, officer_ids)
+                # Create recommendation
+                rec_id = create_recommendation(complaint_id, officer_ids)
+                
+                if not rec_id:
+                    results["errors"] += 1
+                    results["details"].append({
+                        "complaint_id": complaint_id,
+                        "status": "error",
+                        "reason": "Failed to create recommendation"
+                    })
+                    logger.error(f"Failed to create recommendation for complaint {complaint_id}")
+                    continue
+                
+                # Auto-approve recommendation (maintains scheduler behavior)
+                case_id = approve_recommendation(rec_id, admin_officer_id=None, 
+                                                  final_officer_ids=officer_ids)
                 
                 if case_id:
                     results["processed"] += 1
                     results["details"].append({
                         "complaint_id": complaint_id,
+                        "recommendation_id": rec_id,
                         "case_id": case_id,
                         "status": "success",
                         "assigned_to": officer_ids
                     })
                     logger.info(
-                        f"Complaint {complaint_id} → Case {case_id} assigned to officers {officer_ids}"
+                        f"Complaint {complaint_id} → Recommendation {rec_id} → Case {case_id} assigned to officers {officer_ids}"
                     )
                 else:
                     results["errors"] += 1
                     results["details"].append({
                         "complaint_id": complaint_id,
+                        "recommendation_id": rec_id,
                         "status": "error",
-                        "reason": "Failed to create case"
+                        "reason": "Failed to approve recommendation"
                     })
-                    logger.error(f"Failed to create case for complaint {complaint_id}")
+                    logger.error(f"Failed to approve recommendation {rec_id} for complaint {complaint_id}")
             
             except Exception as e:
                 results["errors"] += 1

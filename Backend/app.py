@@ -1201,6 +1201,212 @@ def internal_error(e):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# ADMIN: ASSIGNMENT RECOMMENDATIONS
+# Admin-reviewed recommendation workflow for public complaints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/admin/recommendations", methods=["GET"])
+@app.route("/api/admin/recommendations", methods=["GET"])
+def get_recommendations():
+    """
+    Returns pending/approved/rejected recommendations with filtering.
+    Query parameters:
+      - status: 'pending', 'approved', 'rejected' (default: all)
+      - limit (default: 50)
+    Admin only.
+    """
+    officer_id_str = request.headers.get("X-Officer-Id")
+    if not officer_id_str:
+        return _err("Unauthorized: Missing X-Officer-Id header", 401)
+    try:
+        officer_id = int(officer_id_str)
+    except ValueError:
+        return _err("Invalid X-Officer-Id header", 400)
+    
+    try:
+        # Verify admin role
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+        
+        if not _is_admin(officer):
+            return _err("Forbidden: Admin access required", 403)
+        
+        status = request.args.get("status")  # Optional filter
+        try:
+            limit = max(1, int(request.args.get("limit", 50)))
+        except ValueError:
+            limit = 50
+        
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            # Build query
+            where_clause = ""
+            params = []
+            if status:
+                where_clause = "WHERE ar.status = %s"
+                params.append(status)
+            
+            query = f"""
+                SELECT 
+                    ar.recommendation_id,
+                    ar.complaint_id,
+                    pc.complainant_name,
+                    pc.crime_type,
+                    pc.location,
+                    ar.recommended_officer_ids,
+                    ar.admin_approved_officer_ids,
+                    ar.status,
+                    ar.created_at,
+                    ar.approved_at,
+                    COALESCE(o.`name`, 'System') AS approved_by_name
+                FROM assignment_recommendations ar
+                JOIN public_complaints pc ON ar.complaint_id = pc.complaint_id
+                LEFT JOIN officers o ON ar.approved_by = o.officer_id
+                {where_clause}
+                ORDER BY ar.created_at DESC
+                LIMIT %s
+            """
+            params.append(limit)
+            
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            recommendations = _rows_to_list(cur, rows)
+            
+            import json
+            for rec in recommendations:
+                if rec.get("recommended_officer_ids"):
+                    rec["recommended_officer_ids"] = json.loads(rec["recommended_officer_ids"])
+                if rec.get("admin_approved_officer_ids"):
+                    rec["admin_approved_officer_ids"] = json.loads(rec["admin_approved_officer_ids"])
+            
+            return _ok(data=recommendations)
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/admin/recommendations/<int:recommendation_id>/approve", methods=["POST"])
+@app.route("/api/admin/recommendations/<int:recommendation_id>/approve", methods=["POST"])
+def approve_recommendation(recommendation_id):
+    """
+    Approves a recommendation and creates the case + assignments.
+    Admin can optionally modify officer list before approving.
+    Request body: { "officer_ids": [1, 2, 3] } (optional; uses recommended if omitted)
+    Admin only.
+    """
+    officer_id_str = request.headers.get("X-Officer-Id")
+    if not officer_id_str:
+        return _err("Unauthorized: Missing X-Officer-Id header", 401)
+    try:
+        admin_officer_id = int(officer_id_str)
+    except ValueError:
+        return _err("Invalid X-Officer-Id header", 400)
+    
+    try:
+        # Verify admin role
+        officer = queries.get_officer_by_id(admin_officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+        
+        if not _is_admin(officer):
+            return _err("Forbidden: Admin access required", 403)
+        
+        # Parse optional officer list modification
+        final_officer_ids = None
+        try:
+            body = request.get_json() or {}
+            if "officer_ids" in body:
+                final_officer_ids = body["officer_ids"]
+                if not isinstance(final_officer_ids, list):
+                    return _err("Invalid officer_ids: must be a list", 400)
+        except Exception:
+            return _err("Invalid JSON body", 400)
+        
+        # Call algorithm to approve recommendation
+        from assignment_algorithm import approve_recommendation as approve_rec
+        case_id = approve_rec(recommendation_id, admin_officer_id, final_officer_ids)
+        
+        if case_id is None:
+            return _err("Failed to approve recommendation or create case", 500)
+        
+        return _ok(data={
+            "recommendation_id": recommendation_id,
+            "case_id": case_id,
+            "status": "approved"
+        })
+    except Exception as e:
+        logger.error(f"Error approving recommendation {recommendation_id}: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/admin/recommendations/<int:recommendation_id>/reject", methods=["POST"])
+@app.route("/api/admin/recommendations/<int:recommendation_id>/reject", methods=["POST"])
+def reject_recommendation(recommendation_id):
+    """
+    Rejects a recommendation (prevents it from being approved).
+    Request body: { "reason": "Optional rejection reason" }
+    Admin only.
+    """
+    officer_id_str = request.headers.get("X-Officer-Id")
+    if not officer_id_str:
+        return _err("Unauthorized: Missing X-Officer-Id header", 401)
+    try:
+        admin_officer_id = int(officer_id_str)
+    except ValueError:
+        return _err("Invalid X-Officer-Id header", 400)
+    
+    try:
+        # Verify admin role
+        officer = queries.get_officer_by_id(admin_officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+        
+        if not _is_admin(officer):
+            return _err("Forbidden: Admin access required", 403)
+        
+        reason = None
+        try:
+            body = request.get_json() or {}
+            reason = body.get("reason")
+        except Exception:
+            pass
+        
+        # Update recommendation status to rejected
+        conn = get_db()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """UPDATE assignment_recommendations
+                   SET status = 'rejected', rejection_reason = %s,
+                       approved_by = %s, approved_at = NOW()
+                   WHERE recommendation_id = %s AND status = 'pending'""",
+                (reason, admin_officer_id, recommendation_id)
+            )
+            
+            if cur.rowcount == 0:
+                conn.close()
+                return _err("Recommendation not found or already processed", 404)
+            
+            conn.commit()
+            
+            return _ok(data={
+                "recommendation_id": recommendation_id,
+                "status": "rejected",
+                "reason": reason
+            })
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        logger.error(f"Error rejecting recommendation {recommendation_id}: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # FRONTEND
 # ──────────────────────────────────────────────────────────────────────────────
 
