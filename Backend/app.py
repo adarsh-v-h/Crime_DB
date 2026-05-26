@@ -138,13 +138,44 @@ def _is_admin(officer: dict) -> bool:
 
 def _officer_may_decide_access_request(officer: dict, case_id: int) -> bool:
     """
-    Admin and inspector may act on any case access request.
-    Other roles may only decide requests for cases they are assigned to.
+    Admin may always decide.
+    Only the highest-ranked officer assigned to a case may approve/reject requests.
+    Returns True if authorized, False otherwise.
     """
-    role = (officer.get("role") or "").lower()
-    if role in ("admin", "inspector"):
+    if _is_admin(officer):
         return True
-    return queries.officer_is_assigned_to_case(officer["officer_id"], case_id)
+    
+    # Check if officer is assigned to the case
+    if not queries.officer_is_assigned_to_case(officer["officer_id"], case_id):
+        return False
+    
+    # Check if officer is the highest-ranked on this case
+    highest_officer = queries.get_highest_ranked_officer_on_case(case_id)
+    if highest_officer and highest_officer["officer_id"] == officer["officer_id"]:
+        return True
+    
+    return False
+
+
+def _officer_may_update_case_status(officer: dict, case_id: int) -> bool:
+    """
+    Admin may always update case status.
+    Only the highest-ranked officer assigned to a case may update status.
+    Returns True if authorized, False otherwise.
+    """
+    if _is_admin(officer):
+        return True
+    
+    # Check if officer is assigned to the case
+    if not queries.officer_is_assigned_to_case(officer["officer_id"], case_id):
+        return False
+    
+    # Check if officer is the highest-ranked on this case
+    highest_officer = queries.get_highest_ranked_officer_on_case(case_id)
+    if highest_officer and highest_officer["officer_id"] == officer["officer_id"]:
+        return True
+    
+    return False
 
 
 def _verify_captcha(token):
@@ -379,6 +410,7 @@ def update_case(case_id):
     Body (JSON): any subset of { title, description, crime_type, status, location, complaint_mode }
 
     The frontend uses this to update case status from the detail modal.
+    Status changes require admin role or highest-ranked officer on the case.
 
     Example body: { "status": "Solved" }
     """
@@ -391,6 +423,22 @@ def update_case(case_id):
         return _err(f"crime_type must be one of: {', '.join(VALID_CRIME_TYPES)}")
     if "complaint_mode" in body and body["complaint_mode"] not in VALID_COMPLAINT_MODES:
         return _err("complaint_mode must be Online or Offline")
+
+    # If status is being updated, enforce authorization
+    if "status" in body:
+        officer_id, err = _parse_officer_id_header()
+        if err:
+            return err
+        
+        try:
+            officer = queries.get_officer_by_id(officer_id)
+            if not officer:
+                return _err("Unauthorized: Officer record not found", 401)
+            
+            if not _officer_may_update_case_status(officer, case_id):
+                return _err("Unauthorized: Only the highest-ranked officer on this case may update status", 403)
+        except mysql.connector.Error as e:
+            return _err(f"Database error: {str(e)}", 500)
 
     try:
         rows = queries.update_case(case_id, body)
@@ -819,7 +867,7 @@ def approve_access_request(request_id):
         if req.get("status") != "Pending":
             return _err(f"Access request is already processed (Status: {req.get('status')})", 400)
         if not _officer_may_decide_access_request(officer, req["case_id"]):
-            return _err("Unauthorized: you are not assigned to this case", 403)
+            return _err("Unauthorized: Only the highest-ranked officer on this case or admin may approve requests", 403)
 
         rows = queries.update_access_request_status(request_id, "Accepted", officer_id)
         if not rows:
@@ -854,7 +902,7 @@ def reject_access_request(request_id):
         if req.get("status") != "Pending":
             return _err(f"Access request is already processed (Status: {req.get('status')})", 400)
         if not _officer_may_decide_access_request(officer, req["case_id"]):
-            return _err("Unauthorized: you are not assigned to this case", 403)
+            return _err("Unauthorized: Only the highest-ranked officer on this case or admin may reject requests", 403)
 
         rows = queries.update_access_request_status(request_id, "Rejected", officer_id)
         if not rows:

@@ -799,6 +799,48 @@ def officer_is_assigned_to_case(officer_id: int, case_id: int) -> bool:
         conn.close()
 
 
+def get_highest_ranked_officer_on_case(case_id: int):
+    """
+    Returns the highest-ranked officer assigned to the case.
+    Rank hierarchy: Inspector > Sub-Inspector > Head Constable > Constable > others.
+    Returns dict with officer details or None if no officers assigned.
+    """
+    # Define rank hierarchy (higher number = higher rank)
+    rank_hierarchy = {
+        "Inspector": 4,
+        "Sub-Inspector": 3,
+        "Head Constable": 2,
+        "Constable": 1,
+    }
+    
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        # Get all officers assigned to the case with their rank info
+        cur.execute(
+            """SELECT o.officer_id, o.`name`, o.`rank`, o.`role`, o.badge
+               FROM officers o
+               JOIN case_officer co ON o.officer_id = co.officer_id
+               WHERE co.case_id = %s""",
+            (case_id,)
+        )
+        officers = _rows_to_list(cur, cur.fetchall())
+        
+        if not officers:
+            return None
+        
+        # Sort by rank hierarchy (descending)
+        def rank_value(officer):
+            rank = officer.get("rank", "")
+            return rank_hierarchy.get(rank, 0)
+        
+        highest = max(officers, key=rank_value)
+        return highest if rank_value(highest) > 0 else officers[0]  # Fallback to first if no recognized rank
+    finally:
+        cur.close()
+        conn.close()
+
+
 def update_access_request_status(request_id: int, status: str, decided_by: int):
     """
     Updates status of an access request and registers the deciding officer.
