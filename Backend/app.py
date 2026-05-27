@@ -697,7 +697,7 @@ def admin_add_officer_to_case():
         logger.info(f"[REASSIGNMENT] Officer {new_officer_id} added to case {case_id} by admin {officer_id}")
         
         return _ok(
-            message=f"Officer {new_officer.get('name')} successfully added to case {case.get('case_id_display')}. Notification email sent.",
+            message=f"Officer {new_officer.get('name')} successfully added to case {_format_case_id(case_id)}. Notification email sent.",
             assignment={
                 "case_id": int(case_id),
                 "officer_id": int(new_officer_id),
@@ -777,7 +777,7 @@ def admin_remove_officer_from_case():
         logger.info(f"[REASSIGNMENT] Officer {remove_officer_id} removed from case {case_id} by admin {officer_id}")
         
         return _ok(
-            message=f"Officer {remove_officer.get('name')} successfully removed from case {case.get('case_id_display')}. Notification email sent.",
+            message=f"Officer {remove_officer.get('name')} successfully removed from case {_format_case_id(case_id)}. Notification email sent.",
             assignment={
                 "case_id": int(case_id),
                 "officer_id": int(remove_officer_id),
@@ -793,6 +793,57 @@ def admin_remove_officer_from_case():
         return _err(f"Database error: {str(e)}", 500)
     except Exception as e:
         logger.error(f"[REASSIGNMENT] Error removing officer: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/cases/<int:case_id>/request-dossier", methods=["POST"])
+def request_case_dossier_email(case_id):
+    """
+    POST /cases/<case_id>/request-dossier
+    Allows an officer to request an updated case dossier PDF, teammate list,
+    and case details to be sent to their email.
+    
+    Header: X-Officer-Id required
+    
+    Returns: { success, message }
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    try:
+        # 1. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 2. Verify case exists
+        case = queries.get_case_by_id(case_id)
+        if not case:
+            return _err(f"Case {case_id} not found", 404)
+            
+        # 3. Check authorization (must be admin, inspector, or assigned to the case)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied: You are not assigned to this case", 403)
+                
+        # 4. Check if officer has an email
+        if not officer.get("email"):
+            return _err("Request failed: You do not have an email address configured in the system", 400)
+            
+        # 5. Dispatch email notification asynchronously
+        email_utils.send_dossier_update_notification_async(case_id, officer_id)
+        
+        logger.info(f"[DOSSIER REQUEST] Officer {officer_id} requested updated dossier for case {case_id}")
+        
+        display_id = _format_case_id(case_id)
+        return _ok(message=f"An updated case dossier PDF for case {display_id} has been requested and will be emailed to you shortly.")
+        
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[DOSSIER REQUEST] Error: {str(e)}")
         return _err(f"Internal server error: {str(e)}", 500)
 
 

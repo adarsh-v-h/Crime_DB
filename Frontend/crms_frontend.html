@@ -1229,6 +1229,9 @@
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [selectedCase, setSelectedCase] = useState(null);
+            const [dossierLoading, setDossierLoading] = useState(false);
+            const [dossierMessage, setDossierMessage] = useState(null);
+            const [dossierError, setDossierError] = useState(null);
 
             // Tab State
             const [activeSubTab, setActiveSubTab] = useState("dossiers");
@@ -1445,6 +1448,33 @@
                 } catch (err) {
                     setError(`Failed to update case status: ${err.message}`);
                     console.error("[CASE UPDATE] Network error:", err);
+                }
+            };
+
+            // Handle updated dossier request
+            const handleRequestDossier = async (caseId) => {
+                setDossierLoading(true);
+                setDossierMessage(null);
+                setDossierError(null);
+                try {
+                    const response = await apiFetch(`/cases/${caseId}/request-dossier`, {
+                        method: "POST",
+                        headers: {
+                            "X-Officer-Id": officer?.officer_id?.toString()
+                        }
+                    });
+                    if (response.success) {
+                        setDossierMessage(response.message || "Updated case dossier has been requested and will be emailed to you shortly.");
+                        setTimeout(() => setDossierMessage(null), 5000);
+                    } else {
+                        setDossierError(response.error || "Failed to request updated dossier");
+                        setTimeout(() => setDossierError(null), 5000);
+                    }
+                } catch (err) {
+                    setDossierError(err.message || "Failed to request updated dossier");
+                    setTimeout(() => setDossierError(null), 5000);
+                } finally {
+                    setDossierLoading(false);
                 }
             };
 
@@ -1807,6 +1837,36 @@
                                             <div className="text-xs text-black/60 italic">Only the highest-ranked officer on this case may update status.</div>
                                         )}
                                     </div>
+
+                                    {/* REQUEST DOSSIER EMAIL */}
+                                    <div className="rounded-xl border-2 border-emerald-600/30 bg-emerald-50/5 p-4 flex flex-col gap-2">
+                                        <div className={`${CRMS_LABEL}`}>Request Secure Dossier</div>
+                                        <div className="text-[10px] text-black/60 leading-normal">
+                                            Request the latest case details, full teammate lists, and a high-resolution secure PDF dossier to be compiled and dispatched asynchronously to your official email.
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRequestDossier(selectedCase.case_id)}
+                                            disabled={dossierLoading}
+                                            className="w-full flex items-center justify-center gap-1.5 rounded-full border-2 border-emerald-600 bg-emerald-50/20 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                        >
+                                            <Icon name={dossierLoading ? "Clock" : "Mail"} size={12} />
+                                            {dossierLoading ? "Requesting Dossier..." : "Email Updated Dossier"}
+                                        </button>
+                                        
+                                        {dossierMessage && (
+                                            <div className="mt-1 flex items-center gap-2 rounded-lg border-2 border-emerald-600/30 bg-emerald-50 px-3 py-2 text-[10px] font-medium text-emerald-800">
+                                                <Icon name="CheckCircle" size={12} />
+                                                <span>{dossierMessage}</span>
+                                            </div>
+                                        )}
+                                        {dossierError && (
+                                            <div className="mt-1 flex items-center gap-2 rounded-lg border-2 border-red-600/40 bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-700">
+                                                <Icon name="AlertTriangle" size={12} />
+                                                <span>{dossierError}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </motion.div>
                         </div>
@@ -1831,6 +1891,9 @@
             const [reassignLoading, setReassignLoading] = useState(false);
             const [reassignError, setReassignError] = useState(null);
             const [selectedOfficerToAdd, setSelectedOfficerToAdd] = useState(null);
+            const [dossierLoading, setDossierLoading] = useState(false);
+            const [dossierMessage, setDossierMessage] = useState(null);
+            const [dossierError, setDossierError] = useState(null);
             const itemsPerPage = 10;
 
             const loadDashboardStats = async () => {
@@ -1942,6 +2005,32 @@
                     setReassignError(err.message);
                 } finally {
                     setReassignLoading(false);
+                }
+            };
+
+            const handleRequestDossier = async (caseId) => {
+                setDossierLoading(true);
+                setDossierMessage(null);
+                setDossierError(null);
+                try {
+                    const response = await apiFetch(`/cases/${caseId}/request-dossier`, {
+                        method: "POST",
+                        headers: {
+                            "X-Officer-Id": officer?.officer_id?.toString()
+                        }
+                    });
+                    if (response.success) {
+                        setDossierMessage(response.message || "Updated case dossier has been requested and will be emailed to you shortly.");
+                        setTimeout(() => setDossierMessage(null), 5000);
+                    } else {
+                        setDossierError(response.error || "Failed to request updated dossier");
+                        setTimeout(() => setDossierError(null), 5000);
+                    }
+                } catch (err) {
+                    setDossierError(err.message || "Failed to request updated dossier");
+                    setTimeout(() => setDossierError(null), 5000);
+                } finally {
+                    setDossierLoading(false);
                 }
             };
 
@@ -2270,6 +2359,36 @@
                                                 </div>
                                             ) : (
                                                 <div className="text-xs text-black/60 italic">All officers are already assigned to this case.</div>
+                                            )}
+                                        </div>
+
+                                        {/* REQUEST DOSSIER EMAIL */}
+                                        <div className="rounded-lg border-2 border-emerald-600/30 bg-emerald-50/5 p-4 flex flex-col gap-2">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black">Request Secure Dossier</div>
+                                            <div className="text-[10px] text-black/60 leading-normal">
+                                                Request the latest case details, full teammate lists, and a high-resolution secure PDF dossier to be compiled and dispatched asynchronously to your official email.
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRequestDossier(selectedCase.case_id)}
+                                                disabled={dossierLoading}
+                                                className="w-full flex items-center justify-center gap-1.5 rounded-full border-2 border-emerald-600 bg-emerald-50/20 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                            >
+                                                <Icon name={dossierLoading ? "Clock" : "Mail"} size={12} />
+                                                {dossierLoading ? "Requesting Dossier..." : "Email Updated Dossier"}
+                                            </button>
+                                            
+                                            {dossierMessage && (
+                                                <div className="mt-1 flex items-center gap-2 rounded-lg border-2 border-emerald-600/30 bg-emerald-50 px-3 py-2 text-[10px] font-medium text-emerald-800">
+                                                    <Icon name="CheckCircle" size={12} />
+                                                    <span>{dossierMessage}</span>
+                                                </div>
+                                            )}
+                                            {dossierError && (
+                                                <div className="mt-1 flex items-center gap-2 rounded-lg border-2 border-red-600/40 bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-700">
+                                                    <Icon name="AlertTriangle" size={12} />
+                                                    <span>{dossierError}</span>
+                                                </div>
                                             )}
                                         </div>
 
