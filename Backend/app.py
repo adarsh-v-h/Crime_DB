@@ -705,7 +705,7 @@ def admin_add_officer_to_case():
                 "officer_rank": new_officer.get("rank"),
                 "action": "added"
             }
-        ), 200
+        )
     
     except ValueError as ve:
         return _err(f"Invalid parameter format: {str(ve)}", 400)
@@ -785,7 +785,7 @@ def admin_remove_officer_from_case():
                 "officer_rank": remove_officer.get("rank"),
                 "action": "removed"
             }
-        ), 200
+        )
     
     except ValueError as ve:
         return _err(f"Invalid parameter format: {str(ve)}", 400)
