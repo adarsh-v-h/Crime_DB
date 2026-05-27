@@ -7,7 +7,7 @@
 #
 # Server starts at http://localhost:5000
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import mysql.connector
 import requests
@@ -15,6 +15,9 @@ import bcrypt
 import threading
 import time
 import logging
+import os
+import mimetypes
+from werkzeug.utils import secure_filename
 
 import config
 from db_connection import init_pool, get_db
@@ -36,6 +39,12 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app, origins=config.CORS_ORIGIN)
+
+# Configure evidence upload parameters
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB file size limit
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -840,10 +849,382 @@ def request_case_dossier_email(case_id):
         display_id = _format_case_id(case_id)
         return _ok(message=f"An updated case dossier PDF for case {display_id} has been requested and will be emailed to you shortly.")
         
+    except Exception as e:
+        logger.error(f"[DOSSIER REQUEST] Error: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# TIMELINE & EVIDENCE ENDPOINTS
+# Route mapping:
+#   GET  /cases/<case_id>/updates
+#   POST /cases/<case_id>/updates
+#   GET  /cases/<case_id>/evidence
+#   POST /cases/<case_id>/evidence
+#   GET  /cases/evidence/file/<case_id>/<filename>
+#   DELETE /cases/evidence/<evidence_id>
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/cases/<int:case_id>/updates", methods=["GET"])
+def get_case_updates_route(case_id):
+    """
+    GET /cases/<case_id>/updates
+    Retrieves chronological timeline investigation updates for a case.
+    Requires X-Officer-Id auth header and Visibility clearance.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    try:
+        # 1. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 2. Verify case exists
+        case = queries.get_case_by_id(case_id)
+        if not case:
+            return _err(f"Case {case_id} not found", 404)
+            
+        # 3. Check authorization (must be admin, inspector, or assigned to case)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied: You are not assigned to this case", 403)
+                
+        # 4. Fetch timeline updates
+        updates = queries.get_case_updates(case_id)
+        return _ok(updates)
+        
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
     except Exception as e:
-        logger.error(f"[DOSSIER REQUEST] Error: {str(e)}")
+        logger.error(f"[TIMELINE GET] Error: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/cases/<int:case_id>/updates", methods=["POST"])
+def add_case_update_route(case_id):
+    """
+    POST /cases/<case_id>/updates
+    Allows an authorized officer to append a timeline investigation update.
+    Requires X-Officer-Id auth header and Visibility clearance.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    body = request.get_json(silent=True) or {}
+    update_text = (body.get("update_text") or "").strip()
+    
+    if not update_text:
+        return _err("update_text is required")
+        
+    try:
+        # 1. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 2. Verify case exists
+        case = queries.get_case_by_id(case_id)
+        if not case:
+            return _err(f"Case {case_id} not found", 404)
+            
+        # 3. Check authorization (must be admin, inspector, or assigned to case)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied: You are not assigned to this case", 403)
+                
+        # 4. Insert update record
+        update_id = queries.insert_case_update(case_id, officer_id, update_text)
+        logger.info(f"[TIMELINE ADD] Officer {officer_id} added timeline update {update_id} for case {case_id}")
+        
+        return _ok(
+            message="Timeline update successfully appended.",
+            update={
+                "update_id": update_id,
+                "case_id": case_id,
+                "officer_id": officer_id,
+                "officer_name": officer.get("name"),
+                "officer_rank": officer.get("rank"),
+                "update_text": update_text,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")
+            }
+        )
+        
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[TIMELINE ADD] Error: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/cases/<int:case_id>/evidence", methods=["GET"])
+def get_case_evidence_route(case_id):
+    """
+    GET /cases/<case_id>/evidence
+    Retrieves evidence metadata items for a case.
+    Requires X-Officer-Id auth header and Visibility clearance.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    try:
+        # 1. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 2. Verify case exists
+        case = queries.get_case_by_id(case_id)
+        if not case:
+            return _err(f"Case {case_id} not found", 404)
+            
+        # 3. Check authorization (must be admin, inspector, or assigned to case)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied: You are not assigned to this case", 403)
+                
+        # 4. Fetch evidence list
+        evidence = queries.get_case_evidence(case_id)
+        return _ok(evidence)
+        
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[EVIDENCE GET] Error: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+# Blocklist of file extensions capable of execution
+EXTENSION_BLOCKLIST = {
+    'py', 'js', 'html', 'htm', 'php', 'sh', 'bash', 'bat', 'exe', 
+    'dll', 'so', 'c', 'cpp', 'h', 'hpp', 'pl', 'rb', 'jar', 
+    'jsp', 'asp', 'aspx', 'com', 'cmd', 'vbs', 'scr', 'msi'
+}
+
+@app.route("/cases/<int:case_id>/evidence", methods=["POST"])
+def upload_case_evidence_route(case_id):
+    """
+    POST /cases/<case_id>/evidence
+    Handles secure evidence file uploads. Stores the file on disk and meta in DB.
+    Requires X-Officer-Id auth header and Visibility clearance.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    # Check max content size strictly
+    if request.content_length and request.content_length > 50 * 1024 * 1024:
+        return _err("File is too large. Safe limit is 50MB", 413)
+        
+    if 'file' not in request.files:
+        return _err("No file provided in the upload request")
+        
+    file = request.files['file']
+    description = request.form.get("description", "").strip() or None
+    
+    if file.filename == '':
+        return _err("No file selected for upload")
+        
+    # Extract extension safely
+    original_name = file.filename
+    ext = (original_name.rsplit('.', 1)[-1] if '.' in original_name else '').lower()
+    
+    # 1. Security extension check: reject blocklisted files
+    if ext in EXTENSION_BLOCKLIST:
+        return _err(f"Upload failed: File type .{ext} is restricted for security reasons", 400)
+        
+    try:
+        # 2. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 3. Verify case exists
+        case = queries.get_case_by_id(case_id)
+        if not case:
+            return _err(f"Case {case_id} not found", 404)
+            
+        # 4. Check authorization (must be admin, inspector, or assigned to case)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied: You are not assigned to this case", 403)
+                
+        # 5. Sanitize and organize paths
+        secure_filename_str = secure_filename(original_name)
+        if not secure_filename_str or secure_filename_str in ('.', '..'):
+            # In case secure_filename stripped everything, generate a default name
+            timestamp = int(time.time())
+            secure_filename_str = f"evidence_{timestamp}.{ext}" if ext else f"evidence_{timestamp}"
+            
+        # Add timestamp prefix to avoid filename collisions on filesystem
+        timestamp_prefix = f"{int(time.time())}_"
+        unique_filename = f"{timestamp_prefix}{secure_filename_str}"
+            
+        case_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"case_{case_id}")
+        os.makedirs(case_dir, exist_ok=True)
+        
+        final_path = os.path.join(case_dir, unique_filename)
+        
+        # 6. Path Traversal Safety bounding check
+        if not os.path.abspath(final_path).startswith(os.path.abspath(app.config['UPLOAD_FOLDER'])):
+            return _err("Path traversal attempt detected", 400)
+            
+        # Save file to filesystem
+        file.save(final_path)
+        
+        # Determine MIME type safely
+        mime_type, _ = mimetypes.guess_type(final_path)
+        mime_type = mime_type or 'application/octet-stream'
+        
+        file_size = os.path.getsize(final_path)
+        
+        # Organize relative path for static serving
+        relative_path = f"case_{case_id}/{unique_filename}"
+        
+        # 7. Insert DB metadata
+        evidence_id = queries.insert_case_evidence(
+            case_id=case_id,
+            officer_id=officer_id,
+            file_name=unique_filename,
+            original_name=original_name,
+            file_path=final_path,
+            mime_type=mime_type,
+            file_size=file_size,
+            description=description
+        )
+        
+        logger.info(f"[EVIDENCE UPLOAD] Officer {officer_id} uploaded evidence {evidence_id} for case {case_id}")
+        
+        return _ok(
+            message="Evidence file successfully uploaded.",
+            evidence={
+                "evidence_id": evidence_id,
+                "case_id": case_id,
+                "officer_id": officer_id,
+                "officer_name": officer.get("name"),
+                "file_name": unique_filename,
+                "original_name": original_name,
+                "mime_type": mime_type,
+                "file_size": file_size,
+                "description": description,
+                "relative_path": relative_path,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")
+            }
+        )
+        
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[EVIDENCE UPLOAD] Error: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/cases/evidence/file/<int:case_id>/<string:filename>", methods=["GET"])
+def serve_evidence_file_route(case_id, filename):
+    """
+    GET /cases/evidence/file/<case_id>/<filename>
+    Secure static serving endpoint. Checks officer authorization before sending file.
+    Requires X-Officer-Id auth header and Visibility clearance.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    try:
+        # 1. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 2. Verify case exists
+        case = queries.get_case_by_id(case_id)
+        if not case:
+            return _err(f"Case {case_id} not found", 404)
+            
+        # 3. Check authorization (must be admin, inspector, or assigned to case)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied: You are not assigned to this case", 403)
+                
+        # 4. Serve file securely
+        case_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"case_{case_id}")
+        final_path = os.path.join(case_dir, filename)
+        
+        # Directory bounds safety checks
+        if not os.path.abspath(final_path).startswith(os.path.abspath(app.config['UPLOAD_FOLDER'])):
+            return _err("Access denied", 400)
+            
+        if not os.path.exists(final_path):
+            return _err("Evidence file not found on disk", 404)
+            
+        return send_from_directory(case_dir, filename)
+        
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[EVIDENCE SERVE] Error: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/cases/evidence/<int:evidence_id>", methods=["DELETE"])
+def delete_case_evidence_route(evidence_id):
+    """
+    DELETE /cases/evidence/<evidence_id>
+    Removes evidence record from DB and cleans up the physical file to prevent orphans.
+    Requires X-Officer-Id auth header. Admins, inspectors, or uploader only.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    try:
+        # 1. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 2. Fetch evidence metadata
+        evidence = queries.get_evidence_by_id(evidence_id)
+        if not evidence:
+            return _err(f"Evidence {evidence_id} not found", 404)
+            
+        # 3. Check authorization (admins, inspectors, or uploading officer uploader)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector") and officer_id != evidence["officer_id"]:
+            return _err("Access denied: You are not authorized to delete this evidence", 403)
+            
+        # 4. Delete physical file from filesystem to prevent orphans
+        full_path = evidence.get("file_path")
+        if full_path and os.path.exists(full_path):
+            # Path bounds verification
+            if os.path.abspath(full_path).startswith(os.path.abspath(app.config['UPLOAD_FOLDER'])):
+                try:
+                    os.remove(full_path)
+                    logger.info(f"[EVIDENCE DELETION] Deleted file on disk: {full_path}")
+                except Exception as fe:
+                    logger.error(f"[EVIDENCE DELETION] Disk cleanup failed for {full_path}: {str(fe)}")
+            else:
+                logger.warning(f"[EVIDENCE DELETION] Security check failed: Path out of bounds: {full_path}")
+                
+        # 5. Remove DB row
+        queries.delete_case_evidence(evidence_id)
+        logger.info(f"[EVIDENCE DELETION] Evidence {evidence_id} deleted by officer {officer_id}")
+        
+        return _ok(message="Evidence metadata and physical file successfully deleted.")
+        
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[EVIDENCE DELETION] Error: {str(e)}")
         return _err(f"Internal server error: {str(e)}", 500)
 
 
