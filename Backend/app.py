@@ -7,7 +7,7 @@
 #
 # Server starts at http://localhost:5000
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 import mysql.connector
 import requests
@@ -17,6 +17,7 @@ import time
 import logging
 import os
 import mimetypes
+from pathlib import Path
 from werkzeug.utils import secure_filename
 
 import config
@@ -533,15 +534,12 @@ def get_available_officers():
         return _err("case_id query parameter is required")
     
     try:
-        # Get all officers
         all_officers = queries.get_all_officers()
-        # Get officers already on this case
         case = queries.get_case_by_id(case_id_param)
         if not case:
             return _err(f"Case {case_id_param} not found", 404)
         
         assigned_ids = set(case.get("officer_ids", []))
-        # Filter to only officers not assigned
         available = [o for o in all_officers if o["officer_id"] not in assigned_ids]
         return _ok(available)
     except mysql.connector.Error as e:
@@ -865,6 +863,7 @@ def request_case_dossier_email(case_id):
 #   DELETE /cases/evidence/<evidence_id>
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @app.route("/cases/<int:case_id>/updates", methods=["GET"])
 def get_case_updates_route(case_id):
     """
@@ -1060,11 +1059,9 @@ def upload_case_evidence_route(case_id):
         # 5. Sanitize and organize paths
         secure_filename_str = secure_filename(original_name)
         if not secure_filename_str or secure_filename_str in ('.', '..'):
-            # In case secure_filename stripped everything, generate a default name
             timestamp = int(time.time())
             secure_filename_str = f"evidence_{timestamp}.{ext}" if ext else f"evidence_{timestamp}"
             
-        # Add timestamp prefix to avoid filename collisions on filesystem
         timestamp_prefix = f"{int(time.time())}_"
         unique_filename = f"{timestamp_prefix}{secure_filename_str}"
             
@@ -1073,23 +1070,18 @@ def upload_case_evidence_route(case_id):
         
         final_path = os.path.join(case_dir, unique_filename)
         
-        # 6. Path Traversal Safety bounding check
         if not os.path.abspath(final_path).startswith(os.path.abspath(app.config['UPLOAD_FOLDER'])):
             return _err("Path traversal attempt detected", 400)
             
-        # Save file to filesystem
         file.save(final_path)
         
-        # Determine MIME type safely
         mime_type, _ = mimetypes.guess_type(final_path)
         mime_type = mime_type or 'application/octet-stream'
         
         file_size = os.path.getsize(final_path)
         
-        # Organize relative path for static serving
         relative_path = f"case_{case_id}/{unique_filename}"
         
-        # 7. Insert DB metadata
         evidence_id = queries.insert_case_evidence(
             case_id=case_id,
             officer_id=officer_id,
@@ -1159,7 +1151,6 @@ def serve_evidence_file_route(case_id, filename):
         case_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"case_{case_id}")
         final_path = os.path.join(case_dir, filename)
         
-        # Directory bounds safety checks
         if not os.path.abspath(final_path).startswith(os.path.abspath(app.config['UPLOAD_FOLDER'])):
             return _err("Access denied", 400)
             
@@ -1205,7 +1196,6 @@ def delete_case_evidence_route(evidence_id):
         # 4. Delete physical file from filesystem to prevent orphans
         full_path = evidence.get("file_path")
         if full_path and os.path.exists(full_path):
-            # Path bounds verification
             if os.path.abspath(full_path).startswith(os.path.abspath(app.config['UPLOAD_FOLDER'])):
                 try:
                     os.remove(full_path)
@@ -1228,7 +1218,7 @@ def delete_case_evidence_route(evidence_id):
         return _err(f"Internal server error: {str(e)}", 500)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # ANALYTICS  —  /analytics
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -2033,9 +2023,6 @@ def reject_recommendation(recommendation_id):
 # FRONTEND
 # ──────────────────────────────────────────────────────────────────────────────
 
-import os
-from flask import send_file
-from pathlib import Path
 @app.route("/")
 def serve_frontend():
     frontend_path = (

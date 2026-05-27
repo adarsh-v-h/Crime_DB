@@ -369,7 +369,6 @@ def send_decision_email_async(request_id: int, decision: str, officer_id: int):
 def send_officer_assignment_notification(case_id: int, officer_id: int, action: str):
     """
     Notifies an officer when they are assigned to or removed from a case.
-    Includes case PDF dossier, teammate list, and case details on assignment.
     
     Args:
         case_id: ID of the case
@@ -388,26 +387,12 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
             return False
         
         display_id = case.get("case_id_display") or f"BLR-{str(case_id).zfill(3)}"
-        case["case_id_display"] = display_id  # Ensure it is present for generate_case_pdf
-        
         officer_name = officer.get("name") or "Officer"
         officer_email = officer.get("email")
         
         if not officer_email:
             logger.warning(f"[ASSIGNMENT EMAIL] Officer {officer_id} has no email on file")
             return False
-        
-        # Get teammate list
-        teammates = []
-        for oid in case.get("officer_ids", []):
-            if oid != officer_id:
-                t_off = queries.get_officer_by_id(oid)
-                if t_off:
-                    teammates.append(f"{t_off.get('name')} ({t_off.get('rank')})")
-        teammate_str = ", ".join(teammates) if teammates else "None"
-        
-        attachment_bytes = None
-        attachment_name = ""
         
         # 2. Draft email based on action
         if action.lower() == "added":
@@ -421,16 +406,10 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 f"  Location: {case.get('location', 'N/A')}\n"
                 f"  Status: {case.get('status', 'Active')}\n"
                 f"  Date Reported: {case.get('date_reported', 'N/A')}\n\n"
-                f"Assigned Teammates on Case:\n"
-                f"  {teammate_str}\n\n"
-                f"Please find the latest secure case dossier PDF attached for your reference during the active investigation.\n\n"
                 f"Please log into CRMS to view full case details.\n\n"
                 f"Best regards,\n"
                 f"Bengaluru Police Department CRMS Team"
             )
-            # Generate the PDF attachment
-            attachment_bytes = generate_case_pdf(case)
-            attachment_name = f"{display_id}_dossier.pdf"
         else:  # removed
             subject = f"[CRMS] Case Assignment Removed - {display_id}"
             body = (
@@ -462,11 +441,6 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 msg['To'] = officer_email
                 msg['Subject'] = subject
                 msg.attach(MIMEText(body, 'plain'))
-                
-                if attachment_bytes:
-                    part = MIMEApplication(attachment_bytes, Name=attachment_name)
-                    part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
-                    msg.attach(part)
                 
                 server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
                 server.ehlo()
@@ -501,22 +475,13 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
             "body": body,
             "action": action,
             "case_id": case_id,
-            "officer_id": officer_id,
-            "attachment_provided": bool(attachment_bytes),
-            "attachment_name": attachment_name
+            "officer_id": officer_id
         }
         
         with open(email_filepath, 'w', encoding='utf-8') as f:
             json.dump(email_log, f, indent=4)
         
         logger.info(f"[ASSIGNMENT EMAIL] Mock email logged: {email_filepath}")
-        
-        if attachment_bytes:
-            pdf_filepath = os.path.join(mock_dir, f"{display_id}_dossier_{timestamp}.pdf")
-            with open(pdf_filepath, 'wb') as f:
-                f.write(attachment_bytes)
-            logger.info(f"[ASSIGNMENT EMAIL] Mock PDF dossier saved: {pdf_filepath}")
-            
         return True
     
     except Exception as e:
@@ -694,4 +659,3 @@ def send_dossier_update_notification_async(case_id: int, officer_id: int):
     )
     thread.start()
     logger.info(f"[DOSSIER UPDATE] Background thread started for Case {case_id}, Officer {officer_id}")
-

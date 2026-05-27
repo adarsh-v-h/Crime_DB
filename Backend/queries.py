@@ -1008,4 +1008,3 @@ def delete_case_evidence(evidence_id):
         cur.close()
         conn.close()
 
-
