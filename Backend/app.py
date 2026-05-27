@@ -87,7 +87,7 @@ def start_assignment_scheduler():
 # Shared helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-VALID_STATUSES       = {"Active", "Solved", "Closed"}
+VALID_STATUSES       = {"Pending Review", "Recommended", "Assigned", "Active", "Solved", "Closed", "Rejected"}
 VALID_CRIME_TYPES    = {"Cyber Fraud", "Theft", "Assault", "Fraud", "Other"}
 VALID_COMPLAINT_MODES = {"Online", "Offline"}
 
@@ -365,7 +365,7 @@ def add_case():
       title*         — string
       description    — string
       crime_type*    — Cyber Fraud | Theft | Assault | Fraud | Other
-      status         — Active (default) | Solved | Closed
+      status         — Pending Review | Recommended | Assigned | Active | Solved | Closed | Rejected
       location*      — string
       complaint_mode — Online (default) | Offline
 
@@ -501,6 +501,23 @@ def get_case_officers(case_id):
         case["officers"] = officers
         case["case_id_display"] = _format_case_id(case_id)
         return _ok(case)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/cases/<int:case_id>/highest-ranked", methods=["GET"])
+def get_case_highest_ranked(case_id):
+    """
+    GET /cases/<case_id>/highest-ranked
+    Returns the highest-ranked officer assigned to a case. No admin role required;
+    used by frontend to determine which officer may approve access-requests or
+    update status without fetching the full officers list.
+    """
+    try:
+        officer = queries.get_highest_ranked_officer_on_case(case_id)
+        if not officer:
+            return _err(f"No officers assigned to case {case_id}", 404)
+        return _ok(data=officer)
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
 
@@ -1281,7 +1298,8 @@ def trigger_assignment_process():
 def public_complaint():
     """
     POST /public/complaint
-    Inserts into public_complaints staging table (NOT directly into cases).
+    Adds a citizen complaint to public_complaints staging and creates a preliminary cases row
+    with status Pending Review for intake tracking.
     Body: { name*, contact*, aadhaar_last4*, email, crime_type*, location*,
             complaint_mode, incident_desc*, captcha_token* }
     Returns: { success, reference }   (reference = PC-XXX format)
@@ -1624,6 +1642,18 @@ def admin_dashboard_stats():
             cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Closed'")
             closed_cases = cur.fetchone()[0]
             
+            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Pending Review'")
+            pending_review_cases = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Recommended'")
+            recommended_cases = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Assigned'")
+            assigned_cases = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Rejected'")
+            rejected_cases = cur.fetchone()[0]
+            
             cur.execute("SELECT COUNT(*) FROM officers")
             total_officers = cur.fetchone()[0]
             
@@ -1653,9 +1683,13 @@ def admin_dashboard_stats():
             stats = {
                 "cases": {
                     "total": total_cases,
+                    "pending_review": pending_review_cases,
+                    "recommended": recommended_cases,
+                    "assigned": assigned_cases,
                     "active": active_cases,
                     "solved": solved_cases,
-                    "closed": closed_cases
+                    "closed": closed_cases,
+                    "rejected": rejected_cases
                 },
                 "officers": {
                     "total": total_officers
@@ -1992,6 +2026,25 @@ def reject_recommendation(recommendation_id):
         conn = get_db()
         cur = conn.cursor()
         try:
+            # Transition the linked case's status back to 'Pending Review'
+            cur.execute(
+                "SELECT complaint_id FROM assignment_recommendations WHERE recommendation_id = %s",
+                (recommendation_id,)
+            )
+            comp_row = cur.fetchone()
+            if comp_row:
+                complaint_id = comp_row[0]
+                cur.execute(
+                    "SELECT promoted_case_id FROM public_complaints WHERE complaint_id = %s",
+                    (complaint_id,)
+                )
+                case_row = cur.fetchone()
+                if case_row and case_row[0]:
+                    cur.execute(
+                        "UPDATE cases SET `status` = 'Pending Review', last_updated = NOW() WHERE case_id = %s",
+                        (case_row[0],)
+                    )
+
             cur.execute(
                 """UPDATE assignment_recommendations
                    SET status = 'rejected', rejection_reason = %s,

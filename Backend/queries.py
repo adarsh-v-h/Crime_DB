@@ -533,6 +533,18 @@ def reject_complaint(complaint_id, officer_id):
     conn = get_db()
     cur  = conn.cursor()
     try:
+        # Update the linked case status to 'Rejected' if it exists.
+        cur.execute(
+            "SELECT promoted_case_id FROM public_complaints WHERE complaint_id = %s",
+            (complaint_id,)
+        )
+        row = cur.fetchone()
+        if row and row[0]:
+            cur.execute(
+                "UPDATE cases SET `status` = 'Rejected', last_updated = NOW() WHERE case_id = %s",
+                (row[0],)
+            )
+
         cur.execute(
             """UPDATE public_complaints
                SET `status` = 'Rejected', reviewed_by = %s, reviewed_at = NOW()
