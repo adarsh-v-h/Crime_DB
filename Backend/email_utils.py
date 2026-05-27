@@ -505,3 +505,157 @@ def send_officer_assignment_notification_async(case_id: int, officer_id: int, ac
     )
     thread.start()
     logger.info(f"[ASSIGNMENT EMAIL] Background thread started for Case {case_id}, Officer {officer_id}, Action: {action}")
+
+
+def send_dossier_update_notification(case_id: int, officer_id: int):
+    """
+    Sends an updated case dossier PDF, teammate list, and case details
+    to an officer currently working on the case.
+    
+    Args:
+        case_id: ID of the case
+        officer_id: ID of the officer
+    
+    Returns: True if successful, False otherwise
+    """
+    try:
+        # 1. Fetch case and officer details
+        case = queries.get_case_by_id(case_id)
+        officer = queries.get_officer_by_id(officer_id)
+        
+        if not case or not officer:
+            logger.error(f"[DOSSIER UPDATE] Case {case_id} or Officer {officer_id} not found")
+            return False
+            
+        display_id = case.get("case_id_display") or f"BLR-{str(case_id).zfill(3)}"
+        case["case_id_display"] = display_id
+        
+        officer_name = officer.get("name") or "Officer"
+        officer_email = officer.get("email")
+        
+        if not officer_email:
+            logger.warning(f"[DOSSIER UPDATE] Officer {officer_id} has no email on file")
+            return False
+            
+        # Get teammate list
+        teammates = []
+        for oid in case.get("officer_ids", []):
+            if oid != officer_id:
+                t_off = queries.get_officer_by_id(oid)
+                if t_off:
+                    teammates.append(f"{t_off.get('name')} ({t_off.get('rank')})")
+        teammate_str = ", ".join(teammates) if teammates else "None"
+        
+        # 2. Draft email details
+        subject = f"[CRMS] Updated Case Dossier - {display_id}"
+        body = (
+            f"Dear {officer_name},\n\n"
+            f"As requested, here is the updated case dossier for Case {display_id} under active investigation.\n\n"
+            f"Updated Case Details:\n"
+            f"  Title: {case.get('title', 'N/A')}\n"
+            f"  Crime Type: {case.get('crime_type', 'N/A')}\n"
+            f"  Location: {case.get('location', 'N/A')}\n"
+            f"  Status: {case.get('status', 'Active')}\n"
+            f"  Date Reported: {case.get('date_reported', 'N/A')}\n\n"
+            f"Assigned Teammates on Case:\n"
+            f"  {teammate_str}\n\n"
+            f"Please find the latest secure case dossier PDF attached for your reference.\n\n"
+            f"Best regards,\n"
+            f"Bengaluru Police Department CRMS Team"
+        )
+        
+        # Generate the PDF attachment
+        attachment_bytes = generate_case_pdf(case)
+        attachment_name = f"{display_id}_updated_dossier.pdf"
+        
+        # 3. Check SMTP configuration
+        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port_str = os.getenv("SMTP_PORT", "587")
+        smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
+        smtp_user = os.getenv("SMTP_USER", "").strip()
+        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+        smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police CRMS Team")
+        
+        is_smtp_valid = bool(smtp_user and smtp_password)
+        
+        if is_smtp_valid:
+            logger.info(f"[DOSSIER UPDATE] Sending email to {officer_email}...")
+            try:
+                msg = MIMEMultipart()
+                msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
+                msg['To'] = officer_email
+                msg['Subject'] = subject
+                msg.attach(MIMEText(body, 'plain'))
+                
+                part = MIMEApplication(attachment_bytes, Name=attachment_name)
+                part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
+                msg.attach(part)
+                
+                server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+                server.ehlo()
+                if smtp_port == 587:
+                    server.starttls()
+                    server.ehlo()
+                server.login(smtp_user, smtp_password)
+                server.sendmail(smtp_from_email, officer_email, msg.as_string())
+                server.quit()
+                logger.info(f"[DOSSIER UPDATE] Email sent to {officer_email}")
+                return True
+            except Exception as smtp_err:
+                logger.error(f"[DOSSIER UPDATE] SMTP error: {str(smtp_err)}. Using mock mode...")
+                
+        # 4. Mock mode fallback
+        logger.info("[DOSSIER UPDATE] Running in Mock Mode...")
+        mock_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 
+            "mock_emails"
+        )
+        os.makedirs(mock_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        email_filename = f"email_{timestamp}_dossier_update_case_{case_id}_officer_{officer_id}.json"
+        email_filepath = os.path.join(mock_dir, email_filename)
+        
+        email_log = {
+            "timestamp": datetime.now().isoformat(),
+            "from": f"{smtp_from_name} <{smtp_from_email}>",
+            "to": officer_email,
+            "subject": subject,
+            "body": body,
+            "case_id": case_id,
+            "officer_id": officer_id,
+            "attachment_provided": True,
+            "attachment_name": attachment_name
+        }
+        
+        with open(email_filepath, 'w', encoding='utf-8') as f:
+            json.dump(email_log, f, indent=4)
+            
+        pdf_filepath = os.path.join(mock_dir, f"{display_id}_updated_dossier_{timestamp}.pdf")
+        with open(pdf_filepath, 'wb') as f:
+            f.write(attachment_bytes)
+            
+        logger.info(f"[DOSSIER UPDATE] Mock email and PDF logged: {pdf_filepath}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"[DOSSIER UPDATE] Fatal error: {str(e)}")
+        return False
+
+
+def send_dossier_update_notification_async(case_id: int, officer_id: int):
+    """
+    Dispatches dossier update email notification into a background thread.
+    
+    Args:
+        case_id: ID of the case
+        officer_id: ID of the officer
+    """
+    thread = threading.Thread(
+        target=send_dossier_update_notification,
+        args=(case_id, officer_id),
+        daemon=True
+    )
+    thread.start()
+    logger.info(f"[DOSSIER UPDATE] Background thread started for Case {case_id}, Officer {officer_id}")

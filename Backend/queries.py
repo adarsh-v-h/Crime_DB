@@ -893,3 +893,118 @@ def get_access_request_by_id(request_id: int):
         cur.close()
         conn.close()
 
+
+def insert_case_update(case_id, officer_id, update_text):
+    """Inserts a chronological timeline update for a case."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO case_updates (case_id, officer_id, update_text)
+               VALUES (%s, %s, %s)""",
+            (case_id, officer_id, update_text)
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_case_updates(case_id):
+    """Retrieves all timeline updates for a case, ordered chronologically."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT cu.*, o.name AS officer_name, o.rank AS officer_rank
+               FROM case_updates cu
+               JOIN officers o ON cu.officer_id = o.officer_id
+               WHERE cu.case_id = %s
+               ORDER BY cu.created_at ASC""",
+            (case_id,)
+        )
+        rows = _rows_to_list(cur, cur.fetchall())
+        for r in rows:
+            if r.get("created_at") and hasattr(r["created_at"], "isoformat"):
+                r["created_at"] = r["created_at"].isoformat()
+        return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def insert_case_evidence(case_id, officer_id, file_name, original_name, file_path, mime_type, file_size, description=None):
+    """Inserts metadata for a new case evidence upload."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO case_evidence 
+               (case_id, officer_id, file_name, original_name, file_path, mime_type, file_size, description)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (case_id, officer_id, file_name, original_name, file_path, mime_type, file_size, description)
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_case_evidence(case_id):
+    """Retrieves all evidence items for a case, ordered newest first."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT ce.*, o.name AS officer_name, o.rank AS officer_rank
+               FROM case_evidence ce
+               JOIN officers o ON ce.officer_id = o.officer_id
+               WHERE ce.case_id = %s
+               ORDER BY ce.created_at DESC""",
+            (case_id,)
+        )
+        rows = _rows_to_list(cur, cur.fetchall())
+        for r in rows:
+            if r.get("created_at") and hasattr(r["created_at"], "isoformat"):
+                r["created_at"] = r["created_at"].isoformat()
+        return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_evidence_by_id(evidence_id):
+    """Retrieves evidence metadata by ID."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT * FROM case_evidence WHERE evidence_id = %s",
+            (evidence_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return _row_to_dict(cur, row)
+    finally:
+        cur.close()
+        conn.close()
+
+
+def delete_case_evidence(evidence_id):
+    """Deletes evidence metadata by ID."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM case_evidence WHERE evidence_id = %s",
+            (evidence_id,)
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        cur.close()
+        conn.close()
+
