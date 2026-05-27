@@ -360,3 +360,148 @@ def send_decision_email_async(request_id: int, decision: str, officer_id: int):
     )
     thread.start()
     logger.info(f"[EMAIL ENGINE] Background thread dispatched for Request ID: {request_id}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OFFICER ASSIGNMENT NOTIFICATIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def send_officer_assignment_notification(case_id: int, officer_id: int, action: str):
+    """
+    Notifies an officer when they are assigned to or removed from a case.
+    
+    Args:
+        case_id: ID of the case
+        officer_id: ID of the officer
+        action: 'added' or 'removed'
+    
+    Returns: True if successful, False otherwise
+    """
+    try:
+        # 1. Fetch case and officer details
+        case = queries.get_case_by_id(case_id)
+        officer = queries.get_officer_by_id(officer_id)
+        
+        if not case or not officer:
+            logger.error(f"[ASSIGNMENT EMAIL] Case {case_id} or Officer {officer_id} not found")
+            return False
+        
+        display_id = case.get("case_id_display") or f"BLR-{str(case_id).zfill(3)}"
+        officer_name = officer.get("name") or "Officer"
+        officer_email = officer.get("email")
+        
+        if not officer_email:
+            logger.warning(f"[ASSIGNMENT EMAIL] Officer {officer_id} has no email on file")
+            return False
+        
+        # 2. Draft email based on action
+        if action.lower() == "added":
+            subject = f"[CRMS] New Case Assignment - {display_id}"
+            body = (
+                f"Dear {officer_name},\n\n"
+                f"You have been assigned to Case {display_id}.\n\n"
+                f"Case Details:\n"
+                f"  Title: {case.get('title', 'N/A')}\n"
+                f"  Crime Type: {case.get('crime_type', 'N/A')}\n"
+                f"  Location: {case.get('location', 'N/A')}\n"
+                f"  Status: {case.get('status', 'Active')}\n"
+                f"  Date Reported: {case.get('date_reported', 'N/A')}\n\n"
+                f"Please log into CRMS to view full case details.\n\n"
+                f"Best regards,\n"
+                f"Bengaluru Police Department CRMS Team"
+            )
+        else:  # removed
+            subject = f"[CRMS] Case Assignment Removed - {display_id}"
+            body = (
+                f"Dear {officer_name},\n\n"
+                f"You have been removed from Case {display_id}.\n\n"
+                f"Case: {case.get('title', 'N/A')}\n"
+                f"Crime Type: {case.get('crime_type', 'N/A')}\n\n"
+                f"If you have any questions, please contact your supervisor or the admin team.\n\n"
+                f"Best regards,\n"
+                f"Bengaluru Police Department CRMS Team"
+            )
+        
+        # 3. Check SMTP configuration
+        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port_str = os.getenv("SMTP_PORT", "587")
+        smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
+        smtp_user = os.getenv("SMTP_USER", "").strip()
+        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+        smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police CRMS Team")
+        
+        is_smtp_valid = bool(smtp_user and smtp_password)
+        
+        if is_smtp_valid:
+            logger.info(f"[ASSIGNMENT EMAIL] Sending email to {officer_email}...")
+            try:
+                msg = MIMEMultipart()
+                msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
+                msg['To'] = officer_email
+                msg['Subject'] = subject
+                msg.attach(MIMEText(body, 'plain'))
+                
+                server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+                server.ehlo()
+                if smtp_port == 587:
+                    server.starttls()
+                    server.ehlo()
+                server.login(smtp_user, smtp_password)
+                server.sendmail(smtp_from_email, officer_email, msg.as_string())
+                server.quit()
+                logger.info(f"[ASSIGNMENT EMAIL] Email sent to {officer_email}")
+                return True
+            except Exception as smtp_err:
+                logger.error(f"[ASSIGNMENT EMAIL] SMTP error: {str(smtp_err)}. Using mock mode...")
+        
+        # 4. Mock mode fallback
+        logger.info("[ASSIGNMENT EMAIL] Running in Mock Mode...")
+        mock_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 
+            "mock_emails"
+        )
+        os.makedirs(mock_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        email_filename = f"email_{timestamp}_case_{case_id}_officer_{officer_id}_{action.lower()}.json"
+        email_filepath = os.path.join(mock_dir, email_filename)
+        
+        email_log = {
+            "timestamp": datetime.now().isoformat(),
+            "from": f"{smtp_from_name} <{smtp_from_email}>",
+            "to": officer_email,
+            "subject": subject,
+            "body": body,
+            "action": action,
+            "case_id": case_id,
+            "officer_id": officer_id
+        }
+        
+        with open(email_filepath, 'w', encoding='utf-8') as f:
+            json.dump(email_log, f, indent=4)
+        
+        logger.info(f"[ASSIGNMENT EMAIL] Mock email logged: {email_filepath}")
+        return True
+    
+    except Exception as e:
+        logger.error(f"[ASSIGNMENT EMAIL] Fatal error: {str(e)}")
+        return False
+
+
+def send_officer_assignment_notification_async(case_id: int, officer_id: int, action: str):
+    """
+    Dispatches assignment notification into a background thread.
+    
+    Args:
+        case_id: ID of the case
+        officer_id: ID of the officer
+        action: 'added' or 'removed'
+    """
+    thread = threading.Thread(
+        target=send_officer_assignment_notification,
+        args=(case_id, officer_id, action),
+        daemon=True
+    )
+    thread.start()
+    logger.info(f"[ASSIGNMENT EMAIL] Background thread started for Case {case_id}, Officer {officer_id}, Action: {action}")

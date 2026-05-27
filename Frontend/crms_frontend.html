@@ -1821,11 +1821,16 @@
             const [dashboardStats, setDashboardStats] = useState(null);
             const [allCases, setAllCases] = useState([]);
             const [selectedCase, setSelectedCase] = useState(null);
+            const [caseOfficers, setCaseOfficers] = useState([]);
+            const [availableOfficers, setAvailableOfficers] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
             const [activeTab, setActiveTab] = useState("overview");
             const [statusFilter, setStatusFilter] = useState("All");
             const [currentPage, setCurrentPage] = useState(1);
+            const [reassignLoading, setReassignLoading] = useState(false);
+            const [reassignError, setReassignError] = useState(null);
+            const [selectedOfficerToAdd, setSelectedOfficerToAdd] = useState(null);
             const itemsPerPage = 10;
 
             const loadDashboardStats = async () => {
@@ -1865,6 +1870,88 @@
                     setLoading(false);
                 }
             };
+
+            const loadCaseOfficers = async (caseId) => {
+                try {
+                    const res = await apiFetch(`/cases/${caseId}/officers`, {
+                        headers: { "X-Officer-Id": officer?.officer_id?.toString() }
+                    });
+                    if (res.success) {
+                        setCaseOfficers(res.data?.officers || []);
+                    } else {
+                        setReassignError("Failed to load assigned officers");
+                    }
+                } catch (err) {
+                    setReassignError(err.message);
+                }
+            };
+
+            const loadAvailableOfficers = async (caseId) => {
+                try {
+                    const res = await apiFetch(`/officers/available?case_id=${caseId}`, {
+                        headers: { "X-Officer-Id": officer?.officer_id?.toString() }
+                    });
+                    if (res.success) {
+                        setAvailableOfficers(res.data || []);
+                    }
+                } catch (err) {
+                    console.error("Failed to load available officers:", err.message);
+                }
+            };
+
+            const handleAddOfficer = async (caseId, newOfficerId) => {
+                setReassignLoading(true);
+                setReassignError(null);
+                try {
+                    const res = await apiFetch("/case-officer/add", {
+                        method: "POST",
+                        headers: { "X-Officer-Id": officer?.officer_id?.toString() },
+                        body: JSON.stringify({ case_id: caseId, officer_id: newOfficerId })
+                    });
+                    if (res.success) {
+                        await loadCaseOfficers(caseId);
+                        await loadAvailableOfficers(caseId);
+                        setSelectedOfficerToAdd(null);
+                    } else {
+                        setReassignError(res.message || "Failed to add officer");
+                    }
+                } catch (err) {
+                    setReassignError(err.message);
+                } finally {
+                    setReassignLoading(false);
+                }
+            };
+
+            const handleRemoveOfficer = async (caseId, officerId) => {
+                if (!confirm("Remove this officer from the case? They will be notified by email.")) return;
+                setReassignLoading(true);
+                setReassignError(null);
+                try {
+                    const res = await apiFetch("/case-officer/remove", {
+                        method: "POST",
+                        headers: { "X-Officer-Id": officer?.officer_id?.toString() },
+                        body: JSON.stringify({ case_id: caseId, officer_id: officerId })
+                    });
+                    if (res.success) {
+                        await loadCaseOfficers(caseId);
+                        await loadAvailableOfficers(caseId);
+                    } else {
+                        setReassignError(res.message || "Failed to remove officer");
+                    }
+                } catch (err) {
+                    setReassignError(err.message);
+                } finally {
+                    setReassignLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                if (selectedCase) {
+                    loadCaseOfficers(selectedCase.case_id);
+                    loadAvailableOfficers(selectedCase.case_id);
+                    setReassignError(null);
+                }
+            }, [selectedCase]);
 
             useEffect(() => {
                 loadDashboardStats();
@@ -2082,31 +2169,117 @@
                     <AnimatePresence>
                         {selectedCase && (
                             <motion.div
-                                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 onClick={() => setSelectedCase(null)}
                             >
                                 <motion.div
-                                    className={`${CRMS_CARD} max-h-96 w-full max-w-2xl overflow-y-auto p-6`}
+                                    className={`${CRMS_CARD} w-full max-w-3xl my-8 overflow-y-auto max-h-[85vh] p-6`}
                                     initial={{ scale: 0.9, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
                                     exit={{ scale: 0.9, opacity: 0 }}
                                     onClick={(e) => e.stopPropagation()}
                                 >
-                                    <div className="mb-4 flex items-start justify-between">
+                                    <div className="mb-4 flex items-start justify-between border-b-2 border-black/10 pb-4">
                                         <div>
                                             <div className="text-xs font-bold uppercase tracking-[0.12em] text-accent">BLR-{String(selectedCase.case_id).padStart(3, "0")}</div>
                                             <h2 className="mt-1 text-lg font-bold text-black">{selectedCase.title}</h2>
                                         </div>
-                                        <button onClick={() => setSelectedCase(null)} className="text-black/50 hover:text-black">✕</button>
+                                        <button onClick={() => setSelectedCase(null)} className="text-black/50 hover:text-black flex-shrink-0">✕</button>
                                     </div>
-                                    <div className="space-y-3 text-sm">
-                                        <div><span className="font-semibold">Status:</span> {selectedCase.status}</div>
-                                        <div><span className="font-semibold">Location:</span> {selectedCase.location}</div>
-                                        <div><span className="font-semibold">Crime Type:</span> {selectedCase.crime_type}</div>
-                                        <div><span className="font-semibold">Description:</span> <div className="mt-1 whitespace-pre-wrap text-xs text-black/70">{selectedCase.description}</div></div>
+                                    
+                                    <div className="space-y-4">
+                                        {/* CASE DETAILS */}
+                                        <div className="grid grid-cols-2 gap-3 rounded-lg border-2 border-black/10 bg-white/50 p-3">
+                                            <div>
+                                                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/60">Status</div>
+                                                <div className="mt-1 font-medium text-black">{selectedCase.status}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/60">Crime Type</div>
+                                                <div className="mt-1 font-medium text-black">{selectedCase.crime_type}</div>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/60">Location</div>
+                                                <div className="mt-1 font-medium text-black">{selectedCase.location}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* DESCRIPTION */}
+                                        <div>
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/60 mb-1">Description</div>
+                                            <div className="rounded-lg border-2 border-black/10 bg-white/70 p-3 text-xs text-black/80 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                                                {selectedCase.description}
+                                            </div>
+                                        </div>
+
+                                        {/* ASSIGNED OFFICERS */}
+                                        <div className="rounded-lg border-2 border-accent/30 bg-accent/5 p-4">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black mb-3">Assigned Officers</div>
+                                            {caseOfficers.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {caseOfficers.map(off => (
+                                                        <div key={off.officer_id} className="flex items-center justify-between rounded-lg border-2 border-black/10 bg-white p-2">
+                                                            <div>
+                                                                <div className="text-xs font-semibold text-black">{off.name}</div>
+                                                                <div className="text-[10px] text-black/60">{off.rank} · {off.role}</div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleRemoveOfficer(selectedCase.case_id, off.officer_id)}
+                                                                disabled={reassignLoading}
+                                                                className="flex items-center gap-1 rounded-full border-2 border-red-500 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                                            >
+                                                                <Icon name="Trash2" size={12} />
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-black/60 italic">No officers assigned yet.</div>
+                                            )}
+                                        </div>
+
+                                        {/* ADD OFFICER SECTION */}
+                                        <div className="rounded-lg border-2 border-emerald-600/30 bg-emerald-50/50 p-4">
+                                            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black mb-3">Add Officer to Case</div>
+                                            {availableOfficers.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    <select
+                                                        value={selectedOfficerToAdd || ""}
+                                                        onChange={(e) => setSelectedOfficerToAdd(parseInt(e.target.value) || null)}
+                                                        className={`${CRMS_INPUT} w-full py-2 text-sm`}
+                                                        disabled={reassignLoading}
+                                                    >
+                                                        <option value="">Select an officer...</option>
+                                                        {availableOfficers.map(off => (
+                                                            <option key={off.officer_id} value={off.officer_id}>
+                                                                {off.name} ({off.rank})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <button
+                                                        onClick={() => selectedOfficerToAdd && handleAddOfficer(selectedCase.case_id, selectedOfficerToAdd)}
+                                                        disabled={!selectedOfficerToAdd || reassignLoading}
+                                                        className="w-full rounded-full border-2 border-emerald-600 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                                    >
+                                                        {reassignLoading ? "Adding..." : "Add Officer"}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-black/60 italic">All officers are already assigned to this case.</div>
+                                            )}
+                                        </div>
+
+                                        {/* ERROR MESSAGE */}
+                                        {reassignError && (
+                                            <div className="flex items-center gap-2 rounded-lg border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                                <Icon name="AlertTriangle" size={14} />
+                                                <span>{reassignError}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             </motion.div>

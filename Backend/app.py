@@ -512,6 +512,33 @@ def get_officers():
         return _err(f"Database error: {str(e)}", 500)
 
 
+@app.route("/officers/available", methods=["GET"])
+def get_available_officers():
+    """
+    GET /officers/available?case_id=<case_id>
+    Returns all officers NOT currently assigned to the given case.
+    Used by the admin modal to show available officers for reassignment.
+    """
+    case_id_param = request.args.get("case_id", type=int)
+    if case_id_param is None:
+        return _err("case_id query parameter is required")
+    
+    try:
+        # Get all officers
+        all_officers = queries.get_all_officers()
+        # Get officers already on this case
+        case = queries.get_case_by_id(case_id_param)
+        if not case:
+            return _err(f"Case {case_id_param} not found", 404)
+        
+        assigned_ids = set(case.get("officer_ids", []))
+        # Filter to only officers not assigned
+        available = [o for o in all_officers if o["officer_id"] not in assigned_ids]
+        return _ok(available)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
 @app.route("/officers", methods=["POST"])
 def add_officer():
     """
@@ -603,6 +630,170 @@ def unassign_officer():
         return _ok()
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ADMIN OFFICER REASSIGNMENT  —  /case-officer/add, /case-officer/remove
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/case-officer/add", methods=["POST"])
+def admin_add_officer_to_case():
+    """
+    POST /case-officer/add
+    Admin-only endpoint to dynamically add an officer to an active case.
+    Sends email notification to the officer.
+    
+    Body: { case_id*, officer_id* }
+    Header: X-Officer-Id required (must be admin)
+    
+    Returns: { success, message, assignment }
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+    
+    body = request.get_json(silent=True) or {}
+    case_id = body.get("case_id")
+    new_officer_id = body.get("officer_id")
+    
+    if case_id is None:
+        return _err("case_id is required")
+    if new_officer_id is None:
+        return _err("officer_id is required")
+    
+    try:
+        # 1. Verify requester is admin
+        requester = queries.get_officer_by_id(officer_id)
+        if not requester:
+            return _err("Unauthorized: Officer record not found", 401)
+        
+        if not _is_admin(requester):
+            return _err("Unauthorized: Admin role required to add officers to cases", 403)
+        
+        # 2. Verify case exists
+        case = queries.get_case_by_id(int(case_id))
+        if not case:
+            return _err(f"Case {case_id} does not exist", 404)
+        
+        # 3. Verify new officer exists
+        new_officer = queries.get_officer_by_id(int(new_officer_id))
+        if not new_officer:
+            return _err(f"Officer {new_officer_id} does not exist", 404)
+        
+        # 4. Check if already assigned (avoid duplicates)
+        if queries.officer_is_assigned_to_case(int(new_officer_id), int(case_id)):
+            return _err(f"Officer {new_officer_id} is already assigned to case {case_id}", 400)
+        
+        # 5. Add officer to case
+        rows = queries.assign_officer(int(case_id), int(new_officer_id))
+        if rows == 0:
+            return _err("Failed to add officer to case", 500)
+        
+        # 6. Send email notification asynchronously
+        email_utils.send_officer_assignment_notification_async(
+            int(case_id), int(new_officer_id), "added"
+        )
+        
+        logger.info(f"[REASSIGNMENT] Officer {new_officer_id} added to case {case_id} by admin {officer_id}")
+        
+        return _ok(
+            message=f"Officer {new_officer.get('name')} successfully added to case {case.get('case_id_display')}. Notification email sent.",
+            assignment={
+                "case_id": int(case_id),
+                "officer_id": int(new_officer_id),
+                "officer_name": new_officer.get("name"),
+                "officer_rank": new_officer.get("rank"),
+                "action": "added"
+            }
+        ), 200
+    
+    except ValueError as ve:
+        return _err(f"Invalid parameter format: {str(ve)}", 400)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[REASSIGNMENT] Error adding officer: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/case-officer/remove", methods=["POST"])
+def admin_remove_officer_from_case():
+    """
+    POST /case-officer/remove
+    Admin-only endpoint to dynamically remove an officer from an active case.
+    Sends email notification to the officer.
+    
+    Body: { case_id*, officer_id* }
+    Header: X-Officer-Id required (must be admin)
+    
+    Returns: { success, message, assignment }
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+    
+    body = request.get_json(silent=True) or {}
+    case_id = body.get("case_id")
+    remove_officer_id = body.get("officer_id")
+    
+    if case_id is None:
+        return _err("case_id is required")
+    if remove_officer_id is None:
+        return _err("officer_id is required")
+    
+    try:
+        # 1. Verify requester is admin
+        requester = queries.get_officer_by_id(officer_id)
+        if not requester:
+            return _err("Unauthorized: Officer record not found", 401)
+        
+        if not _is_admin(requester):
+            return _err("Unauthorized: Admin role required to remove officers from cases", 403)
+        
+        # 2. Verify case exists
+        case = queries.get_case_by_id(int(case_id))
+        if not case:
+            return _err(f"Case {case_id} does not exist", 404)
+        
+        # 3. Verify officer exists
+        remove_officer = queries.get_officer_by_id(int(remove_officer_id))
+        if not remove_officer:
+            return _err(f"Officer {remove_officer_id} does not exist", 404)
+        
+        # 4. Check if assignment exists
+        if not queries.officer_is_assigned_to_case(int(remove_officer_id), int(case_id)):
+            return _err(f"Officer {remove_officer_id} is not assigned to case {case_id}", 404)
+        
+        # 5. Remove officer from case
+        rows = queries.unassign_officer(int(case_id), int(remove_officer_id))
+        if rows == 0:
+            return _err("Failed to remove officer from case", 500)
+        
+        # 6. Send email notification asynchronously
+        email_utils.send_officer_assignment_notification_async(
+            int(case_id), int(remove_officer_id), "removed"
+        )
+        
+        logger.info(f"[REASSIGNMENT] Officer {remove_officer_id} removed from case {case_id} by admin {officer_id}")
+        
+        return _ok(
+            message=f"Officer {remove_officer.get('name')} successfully removed from case {case.get('case_id_display')}. Notification email sent.",
+            assignment={
+                "case_id": int(case_id),
+                "officer_id": int(remove_officer_id),
+                "officer_name": remove_officer.get("name"),
+                "officer_rank": remove_officer.get("rank"),
+                "action": "removed"
+            }
+        ), 200
+    
+    except ValueError as ve:
+        return _err(f"Invalid parameter format: {str(ve)}", 400)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[REASSIGNMENT] Error removing officer: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
