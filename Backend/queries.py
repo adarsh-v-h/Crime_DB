@@ -410,17 +410,38 @@ def submit_public_complaint(name, contact, email, aadhaar_last4,
     conn = get_db()
     cur  = conn.cursor()
     try:
+        # Create a preliminary case row so public complaints immediately
+        # exist in the unified `cases` table while retaining the
+        # `public_complaints` staging table for backward compatibility.
+        title = f"{crime_type or 'Other'} - {location or ''}"
+        new_case_id = None
+        try:
+            cur.execute(
+                """INSERT INTO cases
+                   (title, description, crime_type, `status`, `location`, complaint_mode,
+                    complainant_name, complainant_contact, complainant_aadhaar, `source`, last_updated)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())""",
+                (title, incident_desc or "", crime_type or "Other", 'Pending Review', location or "",
+                 complaint_mode or "Online", name, contact or "", aadhaar_last4 or "", 'public')
+            )
+            new_case_id = cur.lastrowid
+        except Exception:
+            # If case insert fails for any reason, continue and still record the public complaint.
+            new_case_id = None
+
+        # Insert into public_complaints and link the generated case (if created).
         cur.execute(
             """INSERT INTO public_complaints
                (complainant_name, contact, email, aadhaar_last4,
-                crime_type, `location`, incident_desc, complaint_mode)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                crime_type, `location`, incident_desc, complaint_mode, promoted_case_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (name, contact, email or "", aadhaar_last4,
              crime_type or "Other", location or "",
-             incident_desc or "", complaint_mode or "Online")
+             incident_desc or "", complaint_mode or "Online", new_case_id)
         )
+        complaint_id = cur.lastrowid
         conn.commit()
-        return cur.lastrowid
+        return complaint_id
     finally:
         cur.close()
         conn.close()
@@ -464,6 +485,24 @@ def promote_complaint(complaint_id, officer_id):
             return None
         pc = _row_to_dict(cur, row)
 
+        # If a linked case already exists (inserted at submission time), simply
+        # transition its status to Active and mark the complaint Promoted.
+        linked_case_id = pc.get("promoted_case_id")
+        if linked_case_id:
+            cur.execute(
+                "UPDATE cases SET `status` = 'Active', last_updated = NOW() WHERE case_id = %s",
+                (linked_case_id,)
+            )
+            cur.execute(
+                """UPDATE public_complaints
+                   SET `status` = 'Promoted', reviewed_by = %s, reviewed_at = NOW()
+                   WHERE complaint_id = %s""",
+                (officer_id, complaint_id)
+            )
+            conn.commit()
+            return linked_case_id
+
+        # Fallback: no linked case found — create one (classic behaviour)
         title = f"{pc['crime_type']} - {pc['location']}"
         cur.execute(
             """INSERT INTO cases
