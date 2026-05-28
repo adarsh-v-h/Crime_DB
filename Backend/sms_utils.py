@@ -36,7 +36,7 @@ def send_otp_sms(phone, otp):
     """
     Sends OTP via configured SMS provider.
     """
-    message = f"Your HeraRecord verification code is: {otp}. Valid for 2 minutes."
+    message = f"Your Themis Nomos verification code is: {otp}. Valid for 2 minutes."
     
     cleaned_phone, err = normalize_and_validate_phone(phone)
     if err:

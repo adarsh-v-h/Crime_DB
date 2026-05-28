@@ -1,4 +1,4 @@
-# ─── HeraRecord Flask API ────────────────────────────────────────────────────────────
+# ─── Themis Nomos Flask API ────────────────────────────────────────────────────────────
 # Entry point. Defines every route, validates inputs, and returns JSON.
 # All SQL lives in queries.py. All credentials live in config.py.
 #
@@ -282,7 +282,7 @@ def _verify_captcha(token):
 @app.route("/health", methods=["GET"])
 def health():
     """Quick ping to confirm the server is alive."""
-    return _ok(message="HeraRecord API is operational")
+    return _ok(message="Themis Nomos API is operational")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1057,12 +1057,8 @@ def get_case_evidence_route(case_id):
         return _err(f"Internal server error: {str(e)}", 500)
 
 
-# Blocklist of file extensions capable of execution
-EXTENSION_BLOCKLIST = {
-    'py', 'js', 'html', 'htm', 'php', 'sh', 'bash', 'bat', 'exe', 
-    'dll', 'so', 'c', 'cpp', 'h', 'hpp', 'pl', 'rb', 'jar', 
-    'jsp', 'asp', 'aspx', 'com', 'cmd', 'vbs', 'scr', 'msi'
-}
+# Whitelist of allowed file extensions
+ALLOWED_EVIDENCE_EXTENSIONS = {"pdf", "jpeg", "jpg", "png", "mp4"}
 
 @app.route("/cases/<int:case_id>/evidence", methods=["POST"])
 def upload_case_evidence_route(case_id):
@@ -1070,14 +1066,15 @@ def upload_case_evidence_route(case_id):
     POST /cases/<case_id>/evidence
     Handles secure evidence file uploads. Stores the file on disk and meta in DB.
     Requires X-Officer-Id auth header and Visibility clearance.
+    Strictly restricts uploads to PDF, JPEG/JPG, PNG, MP4 up to 10MB.
     """
     officer_id, err = _parse_officer_id_header()
     if err:
         return err
         
     # Check max content size strictly
-    if request.content_length and request.content_length > 50 * 1024 * 1024:
-        return _err("File is too large. Safe limit is 50MB", 413)
+    if request.content_length and request.content_length > 10 * 1024 * 1024:
+        return _err("File is too large. Safe limit is 10MB", 413)
         
     if 'file' not in request.files:
         return _err("No file provided in the upload request")
@@ -1092,9 +1089,16 @@ def upload_case_evidence_route(case_id):
     original_name = file.filename
     ext = (original_name.rsplit('.', 1)[-1] if '.' in original_name else '').lower()
     
-    # 1. Security extension check: reject blocklisted files
-    if ext in EXTENSION_BLOCKLIST:
-        return _err(f"Upload failed: File type .{ext} is restricted for security reasons", 400)
+    # 1. Security extension check: reject anything not in the whitelist
+    if ext not in ALLOWED_EVIDENCE_EXTENSIONS:
+        return _err(f"Upload failed: File type .{ext} is not allowed. Only PDF, JPEG, PNG, and MP4 are permitted.", 400)
+        
+    # Verify file content length via post-read check to prevent bypasses
+    file.seek(0, os.SEEK_END)
+    actual_size = file.tell()
+    file.seek(0)
+    if actual_size > 10 * 1024 * 1024:
+        return _err("File is too large. Safe limit is 10MB", 400)
         
     try:
         # 2. Verify officer exists
@@ -1151,6 +1155,9 @@ def upload_case_evidence_route(case_id):
         )
         
         logger.info(f"[EVIDENCE UPLOAD] Officer {officer_id} uploaded evidence {evidence_id} for case {case_id}")
+        
+        # 6. Dispatch email notification asynchronously to admin and assigned officers
+        email_utils.send_evidence_email_async(case_id, officer_id, evidence_id)
         
         return _ok(
             message="Evidence file successfully uploaded.",
@@ -1220,6 +1227,53 @@ def serve_evidence_file_route(case_id, filename):
         return _err(f"Database error: {str(e)}", 500)
     except Exception as e:
         logger.error(f"[EVIDENCE SERVE] Error: {str(e)}")
+        return _err(f"Internal server error: {str(e)}", 500)
+
+
+@app.route("/cases/<int:case_id>/evidence/<string:filename>/download", methods=["GET"])
+def download_evidence_file_route(case_id, filename):
+    """
+    GET /cases/<case_id>/evidence/<filename>/download
+    Secure downloading endpoint for evidence. Enforces authentication and case visibility.
+    Forces download via as_attachment=True.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
+        
+    try:
+        # 1. Verify officer exists
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+            
+        # 2. Verify case exists
+        case = queries.get_case_by_id(case_id)
+        if not case:
+            return _err(f"Case {case_id} not found", 404)
+            
+        # 3. Check authorization (must be admin, inspector, or assigned to case)
+        role = (officer.get("role") or "").lower()
+        if role not in ("admin", "inspector"):
+            if officer_id not in case.get("officer_ids", []):
+                return _err("Access denied: You are not assigned to this case", 403)
+                
+        # 4. Serve file securely for download
+        case_dir = os.path.join(app.config['UPLOAD_FOLDER'], f"case_{case_id}")
+        final_path = os.path.join(case_dir, filename)
+        
+        if not os.path.abspath(final_path).startswith(os.path.abspath(app.config['UPLOAD_FOLDER'])):
+            return _err("Access denied", 400)
+            
+        if not os.path.exists(final_path):
+            return _err("Evidence file not found on disk", 404)
+            
+        return send_from_directory(case_dir, filename, as_attachment=True)
+        
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+    except Exception as e:
+        logger.error(f"[EVIDENCE DOWNLOAD] Error: {str(e)}")
         return _err(f"Internal server error: {str(e)}", 500)
 
 
@@ -2276,7 +2330,7 @@ def serve_frontend():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  HeraRecord Flask API — Bengaluru Police Department")
+    print("  Themis Nomos Flask API — Bengaluru Police Department")
     print("=" * 60)
     init_pool()
     start_assignment_scheduler()

@@ -1,4 +1,4 @@
-# ─── HeraRecord SQL Query Layer ──────────────────────────────────────────────────────
+# ─── Themis Nomos SQL Query Layer ──────────────────────────────────────────────────────
 # All raw SQL lives here. app.py never constructs SQL directly.
 # Every function opens its own connection, executes, commits if needed, and closes.
 
@@ -1055,6 +1055,46 @@ def delete_case_evidence(evidence_id):
         )
         conn.commit()
         return cur.rowcount
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_admin_officer():
+    """
+    Looks up the admin officer.
+    Identified by role = 'admin' or badge = 'ADM-0001'.
+    Returns the officer dict, or None if not found.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT * FROM officers WHERE `role` = 'admin' OR badge = 'ADM-0001' LIMIT 1"
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return _row_to_dict(cur, row)
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_officers_assigned_to_case(case_id: int):
+    """
+    Returns a list of officer dicts assigned to the given case.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT o.* FROM officers o
+               JOIN case_officer co ON o.officer_id = co.officer_id
+               WHERE co.case_id = %s""",
+            (case_id,)
+        )
+        return _rows_to_list(cur, cur.fetchall())
     finally:
         cur.close()
         conn.close()

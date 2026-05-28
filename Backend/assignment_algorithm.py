@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# HeraRecord Automated Case Assignment Algorithm
+# Themis Nomos Automated Case Assignment Algorithm
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # PURPOSE

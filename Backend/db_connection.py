@@ -1,4 +1,4 @@
-# ─── HeraRecord Database Connection ─────────────────────────────────────────────────
+# ─── Themis Nomos Database Connection ─────────────────────────────────────────────────
 # Manages a single MySQL connection pool used across the entire application.
 # Every module imports `get_db` from here — never opens its own connection.
 

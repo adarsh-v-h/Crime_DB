@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- HeraRecord Consolidated Migration
+-- Themis Nomos Consolidated Migration
 -- This single migration creates the complete schema and seeds demo data.
 -- It is intended to replace: setup_db.sql, migrate_v2.sql, migrate_v3.sql,
 -- migrate_v4.sql, migrate_v5.sql, migrate_v6.sql, migrate_v7.sql

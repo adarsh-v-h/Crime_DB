@@ -61,3 +61,6 @@ Doc/
 
 .obsidian/
 scripts/
+
+Backend/update_officer_emails.sql
+Backend/uploads/
