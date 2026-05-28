@@ -24,6 +24,70 @@ import queries
 logger = logging.getLogger(__name__)
 
 
+def send_verification_email(recipient_email, otp):
+    """
+    Sends a simple verification OTP email. Falls back to mock logging if SMTP is not configured.
+    Returns (success, message).
+    """
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port_str = os.getenv("SMTP_PORT", "587")
+    smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
+    smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police CRMS Team")
+
+    subject = "CRMS verification code"
+    body = (
+        f"Dear Citizen,\n\n"
+        f"Your CRMS verification code is: {otp}\n"
+        f"This code is valid for 2 minutes. Do not share it with anyone.\n\n"
+        f"Bengaluru Police Department CRMS Team"
+    )
+
+    if smtp_user and smtp_password:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
+            msg['To'] = recipient_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'plain'))
+
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+            server.ehlo()
+            if smtp_port == 587:
+                server.starttls()
+                server.ehlo()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_from_email, recipient_email, msg.as_string())
+            server.quit()
+            logger.info(f"[EMAIL OTP] Sent verification email to {recipient_email}")
+            return True, "OTP sent successfully to email."
+        except Exception as e:
+            logger.error(f"[EMAIL OTP] SMTP send failed: {e}")
+
+    # Offline or mock fallback
+    mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_emails")
+    os.makedirs(mock_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(mock_dir, f"email_otp_{timestamp}.json")
+    log_data = {
+        "sent_to": recipient_email,
+        "subject": subject,
+        "body": body,
+        "otp": otp,
+        "timestamp": datetime.now().isoformat()
+    }
+    try:
+        with open(log_path, 'w', encoding='utf-8') as f:
+            json.dump(log_data, f, indent=2)
+        logger.info(f"[EMAIL OTP] Mock email logged to {log_path}")
+        return True, f"OTP email logged to {log_path}"
+    except Exception as e:
+        logger.error(f"[EMAIL OTP] Failed to write mock email log: {e}")
+        return False, "Failed to send OTP email." 
+
+
 def generate_case_pdf(case):
     """
     Generates a beautifully styled, professional PDF dossier for a case.

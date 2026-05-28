@@ -771,7 +771,7 @@
             const [activeTab, setActiveTab] = useState("complaint");
             const [error, setError] = useState("");
             const [formData, setFormData] = useState({
-                name: "", contact: "", email: "", aadhaar_last4: "",
+                name: "", contact: "", email: "", aadhaar: "",
                 incident_desc: "", crime_type: "", location: ""
             });
             const [aadhaarError, setAadhaarError] = useState("");
@@ -818,10 +818,10 @@
 
             const handleFormSubmitAttempt = (e) => {
                 e.preventDefault();
-                // Validate Aadhaar last 4 digits
-                const a4 = formData.aadhaar_last4.trim();
-                if (!/^[0-9]{4}$/.test(a4)) {
-                    setAadhaarError("Enter exactly 4 digits (last 4 of your Aadhaar)");
+                // Validate Aadhaar 12-digit number
+                const a12 = formData.aadhaar.trim();
+                if (!/^[0-9]{12}$/.test(a12)) {
+                    setAadhaarError("Enter exactly 12 digits for Aadhaar number");
                     return;
                 }
                 setAadhaarError("");
@@ -879,9 +879,12 @@
                 setError("");
                 
                 try {
+                    const payload = formData.email.trim()
+                        ? { email: formData.email.trim() }
+                        : { phone: formData.contact.trim() };
                     const res = await apiFetch("/public/otp/send", {
                         method: "POST",
-                        body: JSON.stringify({ phone: formData.contact.trim() })
+                        body: JSON.stringify(payload)
                     });
                     if (res.success) {
                         setOtpSent(true);
@@ -900,9 +903,12 @@
                 setOtpCountdown(120);
                 setError("");
                 try {
+                    const payload = formData.email.trim()
+                        ? { email: formData.email.trim() }
+                        : { phone: formData.contact.trim() };
                     const res = await apiFetch("/public/otp/send", {
                         method: "POST",
-                        body: JSON.stringify({ phone: formData.contact.trim() })
+                        body: JSON.stringify(payload)
                     });
                     if (res.success) {
                         alert("OTP resent successfully.");
@@ -921,9 +927,12 @@
                 }
                 setError("");
                 try {
+                    const payload = formData.email.trim()
+                        ? { email: formData.email.trim(), otp: otpValue }
+                        : { phone: formData.contact.trim(), otp: otpValue };
                     const res = await apiFetch("/public/otp/verify", {
                         method: "POST",
-                        body: JSON.stringify({ phone: formData.contact.trim(), otp: otpValue })
+                        body: JSON.stringify(payload)
                     });
                     if (res.success && res.verified) {
                         setOtpVerified(true);
@@ -948,12 +957,14 @@
                         setVerifyStep("form");
                         return;
                     }
-                    const payload = { 
-                        ...formData, 
-                        aadhaar_last4: formData.aadhaar_last4.trim(), 
-                        complaint_mode: "Online", 
+                    const payload = {
+                        ...formData,
+                        aadhaar: formData.aadhaar.trim(),
+                        complaint_mode: "Online",
                         captcha_token: captchaToken,
-                        phone_verification_token: token 
+                        ...(formData.email.trim()
+                            ? { email_verification_token: token }
+                            : { phone_verification_token: token })
                     };
                     const res = await apiFetch("/public/complaint", {
                         method: "POST",
@@ -962,7 +973,7 @@
                     setCaseRef(res.reference || null);
                     setSubmitted(true);
                     setFormData({
-                        name: "", contact: "", email: "", aadhaar_last4: "",
+                        name: "", contact: "", email: "", aadhaar: "",
                         incident_desc: "", crime_type: "", location: ""
                     });
                     setVerifyStep("form");
@@ -1150,9 +1161,9 @@
                                             <Icon name="Shield" size={24} className="text-black" />
                                         </div>
                                         <div className="text-center mb-6">
-                                            <h3 className="text-lg font-semibold uppercase tracking-[0.1em] text-black">Phone Number Verification</h3>
+                                            <h3 className="text-lg font-semibold uppercase tracking-[0.1em] text-black">Verification Code</h3>
                                             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/65">
-                                                We have sent a verification code to {formData.contact}
+                                                We have sent a verification code to {formData.email ? formData.email : formData.contact}
                                             </p>
                                         </div>
                                         
@@ -1234,14 +1245,14 @@
                                             </div>
                                             <div>
                                                 <label className={CRMS_LABEL}>
-                                                    Aadhaar Last 4 Digits *
-                                                    <span className="ml-1 font-normal normal-case tracking-normal text-black/50">(identity verification)</span>
+                                                    Aadhaar Number *
+                                                    <span className="ml-1 font-normal normal-case tracking-normal text-black/50">(12 digits)</span>
                                                 </label>
-                                                <input type="text" required maxLength={4} inputMode="numeric" pattern="[0-9]{4}"
-                                                    value={formData.aadhaar_last4}
-                                                    onChange={e => { setFormData({...formData, aadhaar_last4: e.target.value.replace(/\D/,"")}); setAadhaarError(""); }}
+                                                <input type="text" required maxLength={12} inputMode="numeric" pattern="[0-9]{12}"
+                                                    value={formData.aadhaar}
+                                                    onChange={e => { setFormData({...formData, aadhaar: e.target.value.replace(/\D/g,"")}); setAadhaarError(""); }}
                                                     className={`${CRMS_INPUT} font-mono tracking-widest ${aadhaarError ? "border-red-600" : ""}`}
-                                                    placeholder="XXXX" />
+                                                    placeholder="123412341234" />
                                                 {aadhaarError && <p className="mt-1 text-xs font-semibold text-red-600">{aadhaarError}</p>}
                                             </div>
                                         </div>

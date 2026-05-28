@@ -1362,65 +1362,90 @@ def verify_email_route():
 def send_otp():
     """
     POST /public/otp/send
-    Generates and sends a 6-digit OTP to the user's phone number.
+    Generates and sends a 6-digit OTP to the user's email address or phone number.
     Rate limited to 3 sends per 10 minutes.
     """
     import random
     from sms_utils import normalize_and_validate_phone, send_otp_sms
+    from email_utils import send_verification_email
     from otp_store import otp_store
 
     body = request.get_json(silent=True) or {}
+    email = (body.get("email") or "").strip()
     phone = (body.get("phone") or "").strip()
-    
-    cleaned_phone, err = normalize_and_validate_phone(phone)
-    if err:
-        return _err(err, 400)
-        
-    if not otp_store.can_send_otp(cleaned_phone):
-        return _err("Too many OTP requests. Please wait before trying again.", 429)
-        
-    otp = f"{random.randint(100000, 999999)}"
-    
-    otp_store.save_otp(cleaned_phone, otp, ttl=120)
-    otp_store.record_send(cleaned_phone)
-    
-    success, msg = send_otp_sms(cleaned_phone, otp)
-    if not success:
-        return _err(msg, 500)
-        
-    return jsonify({
-        "success": True,
-        "message": "OTP sent successfully.",
-        "expires_in": 120
-    }), 200
+
+    if email:
+        is_valid, reason = verify_email_mx(email)
+        if not is_valid:
+            return _err(reason, 400)
+        key = email.lower()
+        if not otp_store.can_send_otp(key):
+            return _err("Too many OTP requests. Please wait before trying again.", 429)
+        otp = f"{random.randint(100000, 999999)}"
+        otp_store.save_otp(key, otp, ttl=120)
+        otp_store.record_send(key)
+        success, msg = send_verification_email(key, otp)
+        if not success:
+            return _err(msg, 500)
+        return jsonify({
+            "success": True,
+            "message": "OTP sent successfully to email.",
+            "expires_in": 120
+        }), 200
+
+    if phone:
+        cleaned_phone, err = normalize_and_validate_phone(phone)
+        if err:
+            return _err(err, 400)
+        if not otp_store.can_send_otp(cleaned_phone):
+            return _err("Too many OTP requests. Please wait before trying again.", 429)
+        otp = f"{random.randint(100000, 999999)}"
+        otp_store.save_otp(cleaned_phone, otp, ttl=120)
+        otp_store.record_send(cleaned_phone)
+        success, msg = send_otp_sms(cleaned_phone, otp)
+        if not success:
+            return _err(msg, 500)
+        return jsonify({
+            "success": True,
+            "message": "OTP sent successfully.",
+            "expires_in": 120
+        }), 200
+
+    return _err("Email or phone number is required to send OTP.", 400)
 
 
 @app.route("/public/otp/verify", methods=["POST"])
 def verify_otp():
     """
     POST /public/otp/verify
-    Verifies the OTP and returns a phone verification token on success.
+    Verifies the OTP and returns a verification token on success.
     """
+    import random
     from sms_utils import normalize_and_validate_phone
     from otp_store import otp_store
 
     body = request.get_json(silent=True) or {}
+    email = (body.get("email") or "").strip()
     phone = (body.get("phone") or "").strip()
     otp = (body.get("otp") or "").strip()
-    
-    if not phone:
-        return _err("Phone number is required.", 400)
+
+    if not email and not phone:
+        return _err("Email or phone number is required.", 400)
     if not otp:
         return _err("OTP is required.", 400)
-        
-    cleaned_phone, err = normalize_and_validate_phone(phone)
-    if err:
-        return _err(err, 400)
-        
-    success, result_or_err = otp_store.verify_otp(cleaned_phone, otp)
+
+    if email:
+        key = email.lower()
+        success, result_or_err = otp_store.verify_otp(key, otp)
+    else:
+        cleaned_phone, err = normalize_and_validate_phone(phone)
+        if err:
+            return _err(err, 400)
+        success, result_or_err = otp_store.verify_otp(cleaned_phone, otp)
+
     if not success:
         return _err(result_or_err, 400)
-        
+
     return jsonify({
         "success": True,
         "verified": True,
@@ -1434,13 +1459,13 @@ def public_complaint():
     POST /public/complaint
     Adds a citizen complaint to public_complaints staging and creates a preliminary cases row
     with status Pending Review for intake tracking.
-    Body: { name*, contact*, aadhaar_last4*, email, crime_type*, location*,
-            complaint_mode, incident_desc*, captcha_token*, phone_verification_token }
+    Body: { name*, contact*, aadhaar*, email, crime_type*, location*,
+            complaint_mode, incident_desc*, captcha_token*, email_verification_token }
     Returns: { success, reference }   (reference = PC-XXX format)
     """
     body                     = request.get_json(silent=True) or {}
     captcha_token            = (body.get("captcha_token") or "").strip()
-    phone_verification_token = (body.get("phone_verification_token") or "").strip()
+    verification_token       = (body.get("email_verification_token") or body.get("phone_verification_token") or "").strip()
     
     # Verify CAPTCHA first
     is_valid, score, error_msg = _verify_captcha(captcha_token)
@@ -1450,7 +1475,7 @@ def public_complaint():
     name           = (body.get("name")           or "").strip()
     contact        = (body.get("contact")        or "").strip()
     email          = (body.get("email")          or "").strip()
-    aadhaar_last4  = (body.get("aadhaar_last4")  or "").strip()
+    aadhaar        = (body.get("aadhaar")        or "").strip()
     crime_type     = (body.get("crime_type")     or "Other").strip()
     location       = (body.get("location")       or "").strip()
     complaint_mode = (body.get("complaint_mode") or "Online").strip()
@@ -1464,28 +1489,34 @@ def public_complaint():
         return _err("location is required")
     if not incident_desc:
         return _err("incident_desc is required")
-    if not aadhaar_last4 or not aadhaar_last4.isdigit() or len(aadhaar_last4) != 4:
-        return _err("aadhaar_last4 must be exactly 4 digits")
+    if not aadhaar or not aadhaar.isdigit() or len(aadhaar) != 12:
+        return _err("aadhaar must be exactly 12 digits")
     if crime_type not in VALID_CRIME_TYPES:
         crime_type = "Other"
     if complaint_mode not in VALID_COMPLAINT_MODES:
         complaint_mode = "Online"
 
-    # Validate phone verification token if provided (optional for backward compatibility)
-    if phone_verification_token:
-        from sms_utils import normalize_and_validate_phone
+    if email and not verification_token:
+        return _err("Email verification is required when email is provided.", 400)
+
+    # Validate verification token if provided
+    if verification_token:
         from otp_store import otp_store
-        
-        cleaned_phone, err = normalize_and_validate_phone(contact)
-        if err:
-            return _err(err, 400)
-            
-        if not otp_store.verify_token(cleaned_phone, phone_verification_token):
-            return _err("Invalid or expired phone verification token. Please verify your phone number again.", 400)
+        if email:
+            key = email.lower()
+        else:
+            from sms_utils import normalize_and_validate_phone
+            cleaned_phone, err = normalize_and_validate_phone(contact)
+            if err:
+                return _err(err, 400)
+            key = cleaned_phone
+
+        if not otp_store.verify_token(key, verification_token):
+            return _err("Invalid or expired verification token. Please verify again.", 400)
 
     try:
         new_id = queries.submit_public_complaint(
-            name, contact, email, aadhaar_last4,
+            name, contact, email, aadhaar,
             crime_type, location, complaint_mode, incident_desc
         )
         return jsonify({

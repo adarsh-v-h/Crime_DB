@@ -231,7 +231,7 @@ def approve_recommendation(recommendation_id: int, admin_officer_id: int,
         # Fetch the recommendation and complaint
         cur.execute(
             """SELECT ar.*, pc.crime_type, pc.location, pc.incident_desc,
-                      pc.complaint_mode, pc.complainant_name, pc.contact, pc.aadhaar_last4, pc.promoted_case_id
+                      pc.complaint_mode, pc.complainant_name, pc.contact, pc.aadhaar, pc.promoted_case_id
                FROM assignment_recommendations ar
                JOIN public_complaints pc ON ar.complaint_id = pc.complaint_id
                WHERE ar.recommendation_id = %s""",
@@ -269,7 +269,7 @@ def approve_recommendation(recommendation_id: int, admin_officer_id: int,
                    VALUES (%s, %s, %s, 'Assigned', %s, %s, %s, %s, %s, 'public', NOW())""",
                 (title, rec["incident_desc"], rec["crime_type"], rec["location"],
                  rec["complaint_mode"], rec["complainant_name"],
-                 rec["contact"], rec["aadhaar_last4"])
+                 rec["contact"], rec["aadhaar"])
             )
             new_case_id = cur.lastrowid
         

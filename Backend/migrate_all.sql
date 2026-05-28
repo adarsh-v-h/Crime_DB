@@ -59,7 +59,7 @@ CREATE TABLE cases (
     last_updated   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     complainant_name VARCHAR(120) DEFAULT NULL,
     complainant_contact VARCHAR(120) DEFAULT NULL,
-    complainant_aadhaar CHAR(4) DEFAULT NULL,
+    complainant_aadhaar CHAR(12) DEFAULT NULL,
     `source` ENUM('public','officer') NOT NULL DEFAULT 'officer',
     PRIMARY KEY (case_id)
 ) ENGINE=InnoDB
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS public_complaints (
     complainant_name VARCHAR(120) NOT NULL,
     contact VARCHAR(120) NOT NULL,
     email VARCHAR(120) DEFAULT NULL,
-    aadhaar_last4 CHAR(4) NOT NULL,
+    aadhaar CHAR(12) NOT NULL,
     crime_type VARCHAR(60) NOT NULL,
     `location` VARCHAR(120) NOT NULL,
     incident_desc TEXT NOT NULL,
@@ -292,9 +292,9 @@ INSERT INTO case_officer VALUES (10, 2), (10, 5);
 -- ────────────────────────────────────────────────────────────────────────────
 -- SEED: public_complaints examples (optional)
 -- ────────────────────────────────────────────────────────────────────────────
-INSERT INTO public_complaints (complainant_name, contact, email, aadhaar_last4, crime_type, `location`, incident_desc, complaint_mode, `status`, submitted_at)
+INSERT INTO public_complaints (complainant_name, contact, email, aadhaar, crime_type, `location`, incident_desc, complaint_mode, `status`, submitted_at)
 VALUES
-('John Doe', '+91-9000000001', 'john.doe@example.com', '1234', 'Theft', 'Indiranagar', 'Stolen wallet at cafe', 'Online', 'Pending', NOW() - INTERVAL 2 DAY);
+('John Doe', '+91-9000000001', 'john.doe@example.com', '123456789012', 'Theft', 'Indiranagar', 'Stolen wallet at cafe', 'Online', 'Pending', NOW() - INTERVAL 2 DAY);
 
 
 -- ────────────────────────────────────────────────────────────────────────────

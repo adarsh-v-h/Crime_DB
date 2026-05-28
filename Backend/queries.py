@@ -397,15 +397,15 @@ def get_analytics():
 # PUBLIC PORTAL — complaint + access request
 # ──────────────────────────────────────────────────────────────────────────────
 
-def submit_public_complaint(name, contact, email, aadhaar_last4,
+def submit_public_complaint(name, contact, email, aadhaar,
                              crime_type, location, complaint_mode, incident_desc):
     """
     Inserts a citizen complaint into the public_complaints staging table.
     Officers then review and promote to the main cases table.
     Returns the new complaint_id as the citizen's reference number.
 
-    aadhaar_last4: last 4 digits of Aadhaar for basic identity anchoring.
-    Never store the full Aadhaar — validate the format before calling this.
+    aadhaar: 12-digit Aadhaar number for identity anchoring.
+    Never store this outside trusted systems unless absolutely required.
     """
     conn = get_db()
     cur  = conn.cursor()
@@ -422,7 +422,7 @@ def submit_public_complaint(name, contact, email, aadhaar_last4,
                     complainant_name, complainant_contact, complainant_aadhaar, `source`, last_updated)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())""",
                 (title, incident_desc or "", crime_type or "Other", 'Pending Review', location or "",
-                 complaint_mode or "Online", name, contact or "", aadhaar_last4 or "", 'public')
+                 complaint_mode or "Online", name, contact or "", aadhaar or "", 'public')
             )
             new_case_id = cur.lastrowid
         except Exception:
@@ -432,10 +432,10 @@ def submit_public_complaint(name, contact, email, aadhaar_last4,
         # Insert into public_complaints and link the generated case (if created).
         cur.execute(
             """INSERT INTO public_complaints
-               (complainant_name, contact, email, aadhaar_last4,
+               (complainant_name, contact, email, aadhaar,
                 crime_type, `location`, incident_desc, complaint_mode, promoted_case_id)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            (name, contact, email or "", aadhaar_last4,
+            (name, contact, email or "", aadhaar,
              crime_type or "Other", location or "",
              incident_desc or "", complaint_mode or "Online", new_case_id)
         )
@@ -510,7 +510,7 @@ def promote_complaint(complaint_id, officer_id):
                 complainant_name, complainant_contact, complainant_aadhaar, `source`, last_updated)
                VALUES (%s, %s, %s, 'Active', %s, %s, %s, %s, %s, 'public', NOW())""",
             (title, pc["incident_desc"], pc["crime_type"], pc["location"],
-             pc["complaint_mode"], pc["complainant_name"], pc["contact"], pc["aadhaar_last4"])
+             pc["complaint_mode"], pc["complainant_name"], pc["contact"], pc["aadhaar"])
         )
         new_case_id = cur.lastrowid
 
