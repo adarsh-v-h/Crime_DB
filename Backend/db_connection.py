@@ -4,7 +4,11 @@
 
 import mysql.connector
 from mysql.connector import pooling
-from config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+
+try:
+    from .config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+except ImportError:
+    from config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
 
 _pool = None
 

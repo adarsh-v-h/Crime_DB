@@ -22,11 +22,18 @@ from werkzeug.utils import secure_filename
 import re
 import dns.resolver
 
-import config
-from db_connection import init_pool, get_db
-import queries
-from assignment_algorithm import process_pending_complaints
-import email_utils
+if __package__:
+    from . import config
+    from .db_connection import init_pool, get_db
+    from . import queries
+    from .assignment_algorithm import process_pending_complaints
+    from . import email_utils
+else:
+    import config
+    from db_connection import init_pool, get_db
+    import queries
+    from assignment_algorithm import process_pending_complaints
+    import email_utils
 
 def verify_email_mx(email):
     """
@@ -121,6 +128,19 @@ def start_assignment_scheduler():
     scheduler_thread = threading.Thread(target=run_assignment_scheduler, daemon=True)
     scheduler_thread.start()
     logger.info("[STARTUP] Assignment scheduler thread started")
+
+
+def startup_services():
+    """
+    Initializes process-local services for both Gunicorn and local Flask runs.
+    Gunicorn imports `Backend.app:app`, so this cannot live only in __main__.
+    """
+    init_pool()
+    if os.getenv("ENABLE_ASSIGNMENT_SCHEDULER", "true").lower() == "true":
+        start_assignment_scheduler()
+
+
+startup_services()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1422,8 +1442,12 @@ def send_otp():
     Rate limited to 3 sends per 10 minutes.
     """
     import random
-    from email_utils import send_verification_email
-    from otp_store import otp_store
+    if __package__:
+        from .email_utils import send_verification_email
+        from .otp_store import otp_store
+    else:
+        from email_utils import send_verification_email
+        from otp_store import otp_store
 
     body = request.get_json(silent=True) or {}
     email = (body.get("email") or "").strip()
@@ -1460,7 +1484,10 @@ def verify_otp():
     Verifies the OTP and returns a verification token on success.
     """
     import random
-    from otp_store import otp_store
+    if __package__:
+        from .otp_store import otp_store
+    else:
+        from otp_store import otp_store
 
     body = request.get_json(silent=True) or {}
     email = (body.get("email") or "").strip()
@@ -1532,7 +1559,10 @@ def public_complaint():
     if not verification_token:
         return _err("Email verification is required.", 400)
 
-    from otp_store import otp_store
+    if __package__:
+        from .otp_store import otp_store
+    else:
+        from otp_store import otp_store
     if not otp_store.verify_token(email.lower(), verification_token):
         return _err("Invalid or expired verification token. Please verify again.", 400)
 
@@ -2175,7 +2205,10 @@ def approve_recommendation(recommendation_id):
             return _err("Invalid JSON body", 400)
         
         # Call algorithm to approve recommendation
-        from assignment_algorithm import approve_recommendation as approve_rec
+        if __package__:
+            from .assignment_algorithm import approve_recommendation as approve_rec
+        else:
+            from assignment_algorithm import approve_recommendation as approve_rec
         case_id = approve_rec(recommendation_id, admin_officer_id, final_officer_ids)
         
         if case_id is None:
@@ -2300,8 +2333,6 @@ if __name__ == "__main__":
     print("=" * 60)
     print("  Themis's Domain Flask API — Bengaluru Police Department")
     print("=" * 60)
-    init_pool()
-    start_assignment_scheduler()
     app.run(
         host=config.FLASK_HOST,
         port=config.FLASK_PORT,

@@ -23,7 +23,10 @@
 # - Medium (Theft, Fraud, Other): 1 Sub-Inspector + 1 Head Constable
 # ─────────────────────────────────────────────────────────────────────────────
 
-from db_connection import get_db
+try:
+    from .db_connection import get_db
+except ImportError:
+    from db_connection import get_db
 from datetime import datetime
 import logging
 

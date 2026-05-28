@@ -2,7 +2,10 @@
 # All raw SQL lives here. app.py never constructs SQL directly.
 # Every function opens its own connection, executes, commits if needed, and closes.
 
-from db_connection import get_db
+try:
+    from .db_connection import get_db
+except ImportError:
+    from db_connection import get_db
 import bcrypt
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1098,4 +1101,3 @@ def get_officers_assigned_to_case(case_id: int):
     finally:
         cur.close()
         conn.close()
-

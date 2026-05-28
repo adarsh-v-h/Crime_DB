@@ -20,7 +20,10 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-import queries
+try:
+    from . import queries
+except ImportError:
+    import queries
 
 logger = logging.getLogger(__name__)
 
