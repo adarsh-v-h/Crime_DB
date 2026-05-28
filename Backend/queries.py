@@ -1,4 +1,4 @@
-# ─── CRMS SQL Query Layer ──────────────────────────────────────────────────────
+# ─── HeraRecord SQL Query Layer ──────────────────────────────────────────────────────
 # All raw SQL lives here. app.py never constructs SQL directly.
 # Every function opens its own connection, executes, commits if needed, and closes.
 

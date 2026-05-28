@@ -1,4 +1,4 @@
-# ─── CRMS Flask API ────────────────────────────────────────────────────────────
+# ─── HeraRecord Flask API ────────────────────────────────────────────────────────────
 # Entry point. Defines every route, validates inputs, and returns JSON.
 # All SQL lives in queries.py. All credentials live in config.py.
 #
@@ -282,7 +282,7 @@ def _verify_captcha(token):
 @app.route("/health", methods=["GET"])
 def health():
     """Quick ping to confirm the server is alive."""
-    return _ok(message="CRMS API is operational")
+    return _ok(message="HeraRecord API is operational")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2276,7 +2276,7 @@ def serve_frontend():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  CRMS Flask API — Bengaluru Police Department")
+    print("  HeraRecord Flask API — Bengaluru Police Department")
     print("=" * 60)
     init_pool()
     start_assignment_scheduler()

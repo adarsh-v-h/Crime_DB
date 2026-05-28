@@ -1,4 +1,4 @@
-# ─── CRMS Secure Email & PDF Generation Engine ───────────────────────────────
+# ─── HeraRecord Secure Email & PDF Generation Engine ───────────────────────────────
 # Handles building high-resolution case dossiers in PDF format and dispatches
 # notifications to citizens asynchronously.
 # Features a Mock Fallback Mode for seamless offline testing.
@@ -35,14 +35,14 @@ def send_verification_email(recipient_email, otp):
     smtp_user = os.getenv("SMTP_USER", "").strip()
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
     smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-    smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police CRMS Team")
+    smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police HeraRecord Team")
 
-    subject = "CRMS verification code"
+    subject = "HeraRecord verification code"
     body = (
         f"Dear Citizen,\n\n"
-        f"Your CRMS verification code is: {otp}\n"
+        f"Your HeraRecord verification code is: {otp}\n"
         f"This code is valid for 2 minutes. Do not share it with anyone.\n\n"
-        f"Bengaluru Police Department CRMS Team"
+        f"Bengaluru Police Department HeraRecord Team"
     )
 
     if smtp_user and smtp_password:
@@ -242,7 +242,7 @@ def generate_case_pdf(case):
     story.append(Paragraph("II. SYSTEM INTEGRITY & SECURITY DISCLOSURE", h2_style))
     disclaimer_text = (
         "This dossier record is compiled automatically from the Bengaluru Police Department's "
-        "Crime Record Management System (CRMS). Access is granted strictly to the approved applicant "
+        "Crime Record Management System (HeraRecord). Access is granted strictly to the approved applicant "
         "and is subject to privacy and judicial security laws. Unauthorized replication, modification, "
         "or sharing of this document is a punishable offense under digital secrecy protocols."
     )
@@ -253,7 +253,7 @@ def generate_case_pdf(case):
     sig_data = [
         [
             Paragraph("Generated on: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"), meta_value_style),
-            Paragraph("<b>CRMS DIGITAL SIGNATURE</b>", ParagraphStyle('Sig', parent=meta_value_style, alignment=2))
+            Paragraph("<b>HeraRecord DIGITAL SIGNATURE</b>", ParagraphStyle('Sig', parent=meta_value_style, alignment=2))
         ]
     ]
     sig_table = Table(sig_data, colWidths=[250, 254])
@@ -300,7 +300,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
         attachment_name = ""
         
         if decision.lower() == "accept" or decision.lower() == "accepted":
-            subject = f"[CRMS] Secure Case Access Approved - Case {display_id}"
+            subject = f"[HeraRecord] Secure Case Access Approved - Case {display_id}"
             body = (
                 f"Dear {requester_name},\n\n"
                 f"We are pleased to inform you that your request for access to Case {display_id} "
@@ -308,7 +308,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 f"Please find the officially generated and digitally signed case dossier details attached in the "
                 f"document: {display_id}.pdf.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department CRMS Team\n"
+                f"Bengaluru Police Department HeraRecord Team\n"
                 f"(Deciding Officer: {officer_name})"
             )
             # Generate the PDF attachment
@@ -316,7 +316,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
             attachment_name = f"{display_id}.pdf"
             
         else:
-            subject = f"[CRMS] Secure Case Access Declined - Case {display_id}"
+            subject = f"[HeraRecord] Secure Case Access Declined - Case {display_id}"
             body = (
                 f"Dear {requester_name},\n\n"
                 f"We regret to inform you that your request for access to Case {display_id} "
@@ -324,7 +324,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 f"Bengaluru Police Department Cybercrime Division is unable to grant public clearance for this dossier "
                 f"due to sensitive investigation protocols.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department CRMS Team\n"
+                f"Bengaluru Police Department HeraRecord Team\n"
                 f"(Deciding Officer: {officer_name})"
             )
             
@@ -335,7 +335,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
         smtp_user = os.getenv("SMTP_USER", "").strip()
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police CRMS Team")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police HeraRecord Team")
         
         # Determine whether to send for real or run in Mock Mode
         is_smtp_valid = bool(smtp_user and smtp_password)
@@ -460,7 +460,7 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
         
         # 2. Draft email based on action
         if action.lower() == "added":
-            subject = f"[CRMS] New Case Assignment - {display_id}"
+            subject = f"[HeraRecord] New Case Assignment - {display_id}"
             body = (
                 f"Dear {officer_name},\n\n"
                 f"You have been assigned to Case {display_id}.\n\n"
@@ -470,12 +470,12 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 f"  Location: {case.get('location', 'N/A')}\n"
                 f"  Status: {case.get('status', 'Active')}\n"
                 f"  Date Reported: {case.get('date_reported', 'N/A')}\n\n"
-                f"Please log into CRMS to view full case details.\n\n"
+                f"Please log into HeraRecord to view full case details.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department CRMS Team"
+                f"Bengaluru Police Department HeraRecord Team"
             )
         else:  # removed
-            subject = f"[CRMS] Case Assignment Removed - {display_id}"
+            subject = f"[HeraRecord] Case Assignment Removed - {display_id}"
             body = (
                 f"Dear {officer_name},\n\n"
                 f"You have been removed from Case {display_id}.\n\n"
@@ -483,7 +483,7 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 f"Crime Type: {case.get('crime_type', 'N/A')}\n\n"
                 f"If you have any questions, please contact your supervisor or the admin team.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department CRMS Team"
+                f"Bengaluru Police Department HeraRecord Team"
             )
         
         # 3. Check SMTP configuration
@@ -493,7 +493,7 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
         smtp_user = os.getenv("SMTP_USER", "").strip()
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police CRMS Team")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police HeraRecord Team")
         
         is_smtp_valid = bool(smtp_user and smtp_password)
         
@@ -611,7 +611,7 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
         teammate_str = ", ".join(teammates) if teammates else "None"
         
         # 2. Draft email details
-        subject = f"[CRMS] Updated Case Dossier - {display_id}"
+        subject = f"[HeraRecord] Updated Case Dossier - {display_id}"
         body = (
             f"Dear {officer_name},\n\n"
             f"As requested, here is the updated case dossier for Case {display_id} under active investigation.\n\n"
@@ -625,7 +625,7 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
             f"  {teammate_str}\n\n"
             f"Please find the latest secure case dossier PDF attached for your reference.\n\n"
             f"Best regards,\n"
-            f"Bengaluru Police Department CRMS Team"
+            f"Bengaluru Police Department HeraRecord Team"
         )
         
         # Generate the PDF attachment
@@ -639,7 +639,7 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
         smtp_user = os.getenv("SMTP_USER", "").strip()
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police CRMS Team")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police HeraRecord Team")
         
         is_smtp_valid = bool(smtp_user and smtp_password)
         

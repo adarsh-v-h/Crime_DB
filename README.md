@@ -1,9 +1,10 @@
-# CRMS — Crime Record Management System 🎯
+<div align="center">
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)  
-[![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)  
-[![Build Status](https://img.shields.io/badge/build-passing-success.svg)](#)  
-[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)
+# HeraRecord — Crime Record Management System 🎯
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)  [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)  [![Build Status](https://img.shields.io/badge/build-passing-success.svg)](#)  [![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)
+
+</div>
 
 ---
 
@@ -23,7 +24,7 @@
 ---
 
 ## Overview
-CRMS is a **polished police investigation dashboard** built for the Bengaluru Police Department. It combines a Flask‑powered backend, a MySQL database, and a single‑page React frontend served via CDN. The system streamlines case management, citizen complaint intake, automated case assignment, and secure dossier delivery.
+HeraRecord is a **polished police investigation dashboard** built for the Bengaluru Police Department. It combines a Flask‑powered backend, a MySQL database, and a single‑page React frontend served via CDN. The system streamlines case management, citizen complaint intake, automated case assignment, and secure dossier delivery.
 
 ---
 
@@ -171,6 +172,3 @@ This project is licensed under the MIT License – see the [LICENSE](LICENSE) fi
 - **Thanks** to the Bengaluru Police Department for providing the domain context.
 - **Special thanks** to the open‑source community for the libraries used.
 
----
-
-*Generated on $(date)*

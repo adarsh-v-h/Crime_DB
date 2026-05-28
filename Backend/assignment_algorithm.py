@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# CRMS Automated Case Assignment Algorithm
+# HeraRecord Automated Case Assignment Algorithm
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # PURPOSE

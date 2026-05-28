@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRMS — Bengaluru Police Intelligence Command</title>
+    <title>HeraRecord — Bengaluru Police Intelligence Command</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -553,9 +553,9 @@
             }),
         };
 
-        const CRMS_INPUT = "crms-input w-full rounded-xl border-2 border-black bg-white/80 px-4 py-3 text-sm font-medium text-black placeholder-black/35 transition-all";
-        const CRMS_LABEL = "mb-2 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black";
-        const CRMS_CARD = "rounded-2xl border-2 border-black bg-white/88 p-6 shadow-lg backdrop-blur-md sm:p-8";
+        const HeraRecord_INPUT = "crms-input w-full rounded-xl border-2 border-black bg-white/80 px-4 py-3 text-sm font-medium text-black placeholder-black/35 transition-all";
+        const HeraRecord_LABEL = "mb-2 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black";
+        const HeraRecord_CARD = "rounded-2xl border-2 border-black bg-white/88 p-6 shadow-lg backdrop-blur-md sm:p-8";
 
         const HeroVideoBackground = ({ scrim = "bg-white/30" }) => (
             <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
@@ -661,7 +661,7 @@
                                 <Icon name="Shield" size={20} className="text-black" />
                             </div>
                             <div className="hidden sm:block">
-                                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-black">CRMS</div>
+                                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-black">HeraRecord</div>
                                 <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-black/70">Bengaluru Police</div>
                             </div>
                         </motion.div>
@@ -1007,7 +1007,7 @@
                     setAccessSubmitted(true);
                     setAccessForm({ case_id: "", requester_name: "", requester_email: "", requester_number: "", reason: "" });
                 } catch (err) {
-                    console.warn("[CRMS] Access request POST failed:", err.message);
+                    console.warn("[HeraRecord] Access request POST failed:", err.message);
                     setError(err.message || "Failed to submit access request.");
                 } finally {
                     setSubmitting(false);
@@ -1034,7 +1034,7 @@
                     const res = await apiFetch(`/public/cases?${params.toString()}`, { method: "GET" });
                     setBrowsingCases(res.data || []);
                 } catch (err) {
-                    console.warn("[CRMS] Failed to load cases:", err.message);
+                    console.warn("[HeraRecord] Failed to load cases:", err.message);
                     setBrowsingCases([]);
                 } finally {
                     setBrowseCaseLoading(false);
@@ -1068,7 +1068,7 @@
 
             return (
                 <CrmsPageShell
-                    title="CRMS Public Portal"
+                    title="HeraRecord Public Portal"
                     subtitle="Bengaluru Police Department"
                     onBack={() => onNavigate("landing")}
                     scrim="bg-white/40"
@@ -1122,7 +1122,7 @@
 
                         {/* Complaint Form */}
                         {activeTab === "complaint" && (
-                            <motion.div variants={fadeUp} custom={2} className={CRMS_CARD}>
+                            <motion.div variants={fadeUp} custom={2} className={HeraRecord_CARD}>
                                 <div className="mb-8 flex items-center gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white">
                                         <Icon name="FileText" size={18} className="text-black" />
@@ -1169,13 +1169,13 @@
                                         
                                         <div className="mx-auto max-w-sm space-y-4">
                                             <div>
-                                                <label className={CRMS_LABEL}>Enter 6-Digit OTP</label>
+                                                <label className={HeraRecord_LABEL}>Enter 6-Digit OTP</label>
                                                 <input
                                                     type="text"
                                                     maxLength={6}
                                                     value={otpValue}
                                                     onChange={e => setOtpValue(e.target.value.replace(/\D/g, ''))}
-                                                    className={`${CRMS_INPUT} text-center text-lg font-bold tracking-widest`}
+                                                    className={`${HeraRecord_INPUT} text-center text-lg font-bold tracking-widest`}
                                                     placeholder="XXXXXX"
                                                 />
                                             </div>
@@ -1227,40 +1227,40 @@
                                         )}
                                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className={CRMS_LABEL}>Complainant Name *</label>
+                                                <label className={HeraRecord_LABEL}>Complainant Name *</label>
                                                 <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-                                                    className={CRMS_INPUT} placeholder="Full name" />
+                                                    className={HeraRecord_INPUT} placeholder="Full name" />
                                             </div>
                                             <div>
-                                                <label className={CRMS_LABEL}>Contact Number *</label>
+                                                <label className={HeraRecord_LABEL}>Contact Number *</label>
                                                 <input type="tel" required value={formData.contact} onChange={e => setFormData({...formData, contact: e.target.value})}
-                                                    className={CRMS_INPUT} placeholder="+91-XXXXXXXXXX" />
+                                                    className={HeraRecord_INPUT} placeholder="+91-XXXXXXXXXX" />
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className={CRMS_LABEL}>Email Address</label>
+                                                <label className={HeraRecord_LABEL}>Email Address</label>
                                                 <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}
-                                                    className={CRMS_INPUT} placeholder="email@example.com" />
+                                                    className={HeraRecord_INPUT} placeholder="email@example.com" />
                                             </div>
                                             <div>
-                                                <label className={CRMS_LABEL}>
+                                                <label className={HeraRecord_LABEL}>
                                                     Aadhaar Number *
                                                     <span className="ml-1 font-normal normal-case tracking-normal text-black/50">(12 digits)</span>
                                                 </label>
                                                 <input type="text" required maxLength={12} inputMode="numeric" pattern="[0-9]{12}"
                                                     value={formData.aadhaar}
                                                     onChange={e => { setFormData({...formData, aadhaar: e.target.value.replace(/\D/g,"")}); setAadhaarError(""); }}
-                                                    className={`${CRMS_INPUT} font-mono tracking-widest ${aadhaarError ? "border-red-600" : ""}`}
+                                                    className={`${HeraRecord_INPUT} font-mono tracking-widest ${aadhaarError ? "border-red-600" : ""}`}
                                                     placeholder="123412341234" />
                                                 {aadhaarError && <p className="mt-1 text-xs font-semibold text-red-600">{aadhaarError}</p>}
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className={CRMS_LABEL}>Crime Type</label>
+                                                <label className={HeraRecord_LABEL}>Crime Type</label>
                                                 <select value={formData.crime_type} onChange={e => setFormData({...formData, crime_type: e.target.value})}
-                                                    className={`${CRMS_INPUT} appearance-none`}>
+                                                    className={`${HeraRecord_INPUT} appearance-none`}>
                                                     <option value="">Select type</option>
                                                     <option value="Cyber Fraud">Cyber Fraud</option>
                                                     <option value="Theft">Theft</option>
@@ -1270,17 +1270,17 @@
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className={CRMS_LABEL}>Location</label>
+                                                <label className={HeraRecord_LABEL}>Location</label>
                                                 <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}
-                                                    className={CRMS_INPUT} placeholder="Bengaluru area" />
+                                                    className={HeraRecord_INPUT} placeholder="Bengaluru area" />
                                             </div>
                                         </div>
                                         <input type="hidden" value="Online" name="complaint_mode" />
                                         <div>
-                                            <label className={CRMS_LABEL}>Incident Description</label>
+                                            <label className={HeraRecord_LABEL}>Incident Description</label>
                                             <textarea value={formData.incident_desc} onChange={e => setFormData({...formData, incident_desc: e.target.value})}
                                                 rows={4}
-                                                className={`${CRMS_INPUT} resize-none`}
+                                                className={`${HeraRecord_INPUT} resize-none`}
                                                 placeholder="Describe the incident in detail..." />
                                         </div>
                                         <button type="submit" disabled={submitting} className={`flex w-full items-center justify-center gap-2 rounded-full border-2 border-black bg-black py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-80 ${submitting ? "cursor-not-allowed opacity-60" : ""}`}>
@@ -1295,7 +1295,7 @@
 
                         {/* Browse Cases */}
                         {activeTab === "browse" && (
-                            <motion.div variants={fadeUp} custom={2} className={CRMS_CARD}>
+                            <motion.div variants={fadeUp} custom={2} className={HeraRecord_CARD}>
                                 <div className="mb-8 flex items-center gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white">
                                         <Icon name="Search" size={18} className="text-black" />
@@ -1309,9 +1309,9 @@
                                 <div className="mb-6 space-y-4">
                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                         <div>
-                                            <label className={CRMS_LABEL}>Status Filter</label>
+                                            <label className={HeraRecord_LABEL}>Status Filter</label>
                                             <select value={browseCaseFilters.status} onChange={e => handleBrowseCaseFilterChange("status", e.target.value)}
-                                                className={CRMS_INPUT}>
+                                                className={HeraRecord_INPUT}>
                                                 <option value="Active">Active Cases</option>
                                                 <option value="Solved">Solved Cases</option>
                                                 <option value="Closed">Closed Cases</option>
@@ -1319,9 +1319,9 @@
                                             </select>
                                         </div>
                                         <div>
-                                            <label className={CRMS_LABEL}>Crime Type Filter</label>
+                                            <label className={HeraRecord_LABEL}>Crime Type Filter</label>
                                             <select value={browseCaseFilters.crime_type} onChange={e => handleBrowseCaseFilterChange("crime_type", e.target.value)}
-                                                className={CRMS_INPUT}>
+                                                className={HeraRecord_INPUT}>
                                                 <option value="">All Crime Types</option>
                                                 <option value="Cyber Fraud">Cyber Fraud</option>
                                                 <option value="Theft">Theft</option>
@@ -1332,14 +1332,14 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label className={CRMS_LABEL}>Location Filter</label>
+                                        <label className={HeraRecord_LABEL}>Location Filter</label>
                                         <input type="text" value={browseCaseFilters.location} onChange={e => handleBrowseCaseFilterChange("location", e.target.value)}
-                                            className={CRMS_INPUT} placeholder="Search by location..." />
+                                            className={HeraRecord_INPUT} placeholder="Search by location..." />
                                     </div>
                                     <div>
-                                        <label className={CRMS_LABEL}>Search by Case Title</label>
+                                        <label className={HeraRecord_LABEL}>Search by Case Title</label>
                                         <input type="text" value={browseCaseFilters.search} onChange={e => handleBrowseCaseFilterChange("search", e.target.value)}
-                                            className={CRMS_INPUT} placeholder="Search case details..." />
+                                            className={HeraRecord_INPUT} placeholder="Search case details..." />
                                     </div>
                                 </div>
 
@@ -1402,7 +1402,7 @@
 
                         {/* Access Request Form */}
                         {activeTab === "access" && (
-                            <motion.div variants={fadeUp} custom={2} className={CRMS_CARD}>
+                            <motion.div variants={fadeUp} custom={2} className={HeraRecord_CARD}>
                                 <div className="mb-8 flex items-center gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white">
                                         <Icon name="Eye" size={18} className="text-accent" />
@@ -1425,33 +1425,33 @@
                                     <form onSubmit={handleAccessSubmit} className="space-y-5">
                                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className={CRMS_LABEL}>Case ID *</label>
+                                                <label className={HeraRecord_LABEL}>Case ID *</label>
                                                 <input type="text" required value={accessForm.case_id} onChange={e => setAccessForm({...accessForm, case_id: e.target.value})}
-                                                    className={`${CRMS_INPUT} font-mono`} placeholder="e.g. BLR-001" />
+                                                    className={`${HeraRecord_INPUT} font-mono`} placeholder="e.g. BLR-001" />
                                             </div>
                                             <div>
-                                                <label className={CRMS_LABEL}>Contact Number *</label>
+                                                <label className={HeraRecord_LABEL}>Contact Number *</label>
                                                 <input type="tel" required value={accessForm.requester_number} onChange={e => setAccessForm({...accessForm, requester_number: e.target.value})}
-                                                    className={CRMS_INPUT} placeholder="+91-XXXXXXXXXX" />
+                                                    className={HeraRecord_INPUT} placeholder="+91-XXXXXXXXXX" />
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
-                                                <label className={CRMS_LABEL}>Your Name *</label>
+                                                <label className={HeraRecord_LABEL}>Your Name *</label>
                                                 <input type="text" required value={accessForm.requester_name} onChange={e => setAccessForm({...accessForm, requester_name: e.target.value})}
-                                                    className={CRMS_INPUT} placeholder="Full name" />
+                                                    className={HeraRecord_INPUT} placeholder="Full name" />
                                             </div>
                                             <div>
-                                                <label className={CRMS_LABEL}>Email *</label>
+                                                <label className={HeraRecord_LABEL}>Email *</label>
                                                 <input type="email" required value={accessForm.requester_email} onChange={e => setAccessForm({...accessForm, requester_email: e.target.value})}
-                                                    className={CRMS_INPUT} placeholder="email@example.com" />
+                                                    className={HeraRecord_INPUT} placeholder="email@example.com" />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className={CRMS_LABEL}>Reason for Access *</label>
+                                            <label className={HeraRecord_LABEL}>Reason for Access *</label>
                                             <textarea required value={accessForm.reason} onChange={e => setAccessForm({...accessForm, reason: e.target.value})}
                                                 rows={3}
-                                                className={`${CRMS_INPUT} resize-none`}
+                                                className={`${HeraRecord_INPUT} resize-none`}
                                                 placeholder="Explain why you need access to this case..." />
                                         </div>
                                         {error && (
@@ -1474,7 +1474,7 @@
                         {showDisclaimer && (
                             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
                                 <motion.div
-                                    className={`max-w-md w-full ${CRMS_CARD}`}
+                                    className={`max-w-md w-full ${HeraRecord_CARD}`}
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.95 }}
@@ -1652,7 +1652,7 @@
                         setRequestsError(response.error || "Failed to load access requests.");
                     }
                 } catch (err) {
-                    console.error("[CRMS Engine] Requests load error:", err);
+                    console.error("[HeraRecord Engine] Requests load error:", err);
                     setRequestsError(err.message || "Failed to contact authorization server.");
                 } finally {
                     setRequestsLoading(false);
@@ -1734,7 +1734,7 @@
                             setError(response.error || "Failed to sync system records.");
                         }
                     } catch (err) {
-                        console.error("[CRMS Engine] Sync error:", err);
+                        console.error("[HeraRecord Engine] Sync error:", err);
                         setError(err.message || "Network isolation protocol failure.");
                     } finally {
                         setLoading(false);
@@ -2008,14 +2008,14 @@
                             <>
                             {/* CONTROL CONSOLE */}
 
-                        <motion.div variants={fadeUp} custom={1} className={`${CRMS_CARD} flex flex-col items-center justify-between gap-4 p-4 md:flex-row`}>
+                        <motion.div variants={fadeUp} custom={1} className={`${HeraRecord_CARD} flex flex-col items-center justify-between gap-4 p-4 md:flex-row`}>
                             <div className="relative w-full md:w-96">
                                 <input 
                                     type="text" 
                                     placeholder="Search dossier records..." 
                                     value={searchQuery}
                                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                                    className={`${CRMS_INPUT} pl-10 py-2.5 text-xs`}
+                                    className={`${HeraRecord_INPUT} pl-10 py-2.5 text-xs`}
                                 />
                                 <span className="absolute left-3 top-3 text-accent text-sm">+</span>
                             </div>
@@ -2024,7 +2024,7 @@
                                 <select 
                                     value={statusFilter} 
                                     onChange={(e) => handleFilterChange("status", e.target.value)}
-                                    className={`${CRMS_INPUT} w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
+                                    className={`${HeraRecord_INPUT} w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
                                 >
                                     <option value="All">Status: All</option>
                                     <option value="Pending Review">Pending Review</option>
@@ -2039,7 +2039,7 @@
                                 <select 
                                     value={typeFilter} 
                                     onChange={(e) => handleFilterChange("type", e.target.value)}
-                                    className={`${CRMS_INPUT} w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
+                                    className={`${HeraRecord_INPUT} w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
                                 >
                                     <option value="All">Classification: All</option>
                                     <option value="Cyber Fraud">Cyber Fraud</option>
@@ -2060,12 +2060,12 @@
 
                         {/* CASE DOSSIER GRID */}
                         {loading ? (
-                            <div className={`${CRMS_CARD} flex h-96 w-full flex-col items-center justify-center space-y-3`}>
+                            <div className={`${HeraRecord_CARD} flex h-96 w-full flex-col items-center justify-center space-y-3`}>
                                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/60">Querying central database...</p>
                             </div>
                         ) : cases.length === 0 ? (
-                            <div className={`${CRMS_CARD} flex h-96 w-full flex-col items-center justify-center space-y-2 border-dashed`}>
+                            <div className={`${HeraRecord_CARD} flex h-96 w-full flex-col items-center justify-center space-y-2 border-dashed`}>
                                 <p className="text-sm font-semibold uppercase tracking-[0.12em] text-black">No dossiers found</p>
                                 <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/55">No entries match your current filters.</p>
                             </div>
@@ -2086,7 +2086,7 @@
                                             <div 
                                                 key={c.case_id} 
                                                 onClick={() => setSelectedCase(c)}
-                                                className={`${CRMS_CARD} group relative flex cursor-pointer flex-col justify-between p-5 transition-all hover:shadow-xl`}
+                                                className={`${HeraRecord_CARD} group relative flex cursor-pointer flex-col justify-between p-5 transition-all hover:shadow-xl`}
                                             >
                                                 <div>
                                                     <div className="mb-3 flex items-center justify-between">
@@ -2118,7 +2118,7 @@
                                 </div>
 
                                 {/* INDUSTRIAL PAGINATION BAR */}
-                                <div className={`${CRMS_CARD} flex flex-wrap items-center justify-between gap-3 px-6 py-4 text-xs`}>
+                                <div className={`${HeraRecord_CARD} flex flex-wrap items-center justify-between gap-3 px-6 py-4 text-xs`}>
                                     <div className="font-semibold uppercase tracking-[0.1em] text-black/65">
                                         Showing <span className="text-black">{cases.length}</span> of <span className="text-black">{totalRecords}</span> entries
                                     </div>
@@ -2166,19 +2166,19 @@
                                     </div>
                                 )}
                                 {requestsLoading ? (
-                                    <div className={`${CRMS_CARD} flex h-96 w-full flex-col items-center justify-center space-y-3`}>
+                                    <div className={`${HeraRecord_CARD} flex h-96 w-full flex-col items-center justify-center space-y-3`}>
                                         <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-black/60">Syncing access requests...</p>
                                     </div>
                                 ) : requests.length === 0 ? (
-                                    <div className={`${CRMS_CARD} flex h-64 w-full flex-col items-center justify-center space-y-2 border-dashed`}>
+                                    <div className={`${HeraRecord_CARD} flex h-64 w-full flex-col items-center justify-center space-y-2 border-dashed`}>
                                         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-black">No access requests</p>
                                         <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/55">Citizen requests for your cases will appear here.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
                                         {requests.map((req) => (
-                                            <div key={req.request_id} className={CRMS_CARD}>
+                                            <div key={req.request_id} className={HeraRecord_CARD}>
                                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                                     <div className="flex-1 space-y-2">
                                                         <div className="flex flex-wrap items-center gap-3">
@@ -2234,7 +2234,7 @@
                     {selectedCase && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
                             <motion.div
-                                className={`max-h-[90vh] w-full max-w-2xl overflow-y-auto ${CRMS_CARD}`}
+                                className={`max-h-[90vh] w-full max-w-2xl overflow-y-auto ${HeraRecord_CARD}`}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.35 }}
@@ -2277,42 +2277,42 @@
                                 {modalTab === "details" && (
                                     <div className="space-y-4 text-xs">
                                         <div>
-                                            <div className={CRMS_LABEL}>Incident Heading</div>
+                                            <div className={HeraRecord_LABEL}>Incident Heading</div>
                                             <div className="mt-0.5 text-sm font-semibold text-black">{selectedCase.title}</div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-4 border-y-2 border-black/10 py-3">
                                             <div>
-                                                <div className={CRMS_LABEL}>Classification</div>
+                                                <div className={HeraRecord_LABEL}>Classification</div>
                                                 <div className="mt-0.5 font-medium text-black">{selectedCase.crime_type}</div>
                                             </div>
                                             <div>
-                                                <div className={CRMS_LABEL}>Status</div>
+                                                <div className={HeraRecord_LABEL}>Status</div>
                                                 <div className="mt-0.5 font-medium text-black">{selectedCase.status}</div>
                                             </div>
                                             <div>
-                                                <div className={CRMS_LABEL}>Location</div>
+                                                <div className={HeraRecord_LABEL}>Location</div>
                                                 <div className="mt-0.5 font-medium text-black">{selectedCase.location || "Not Registered"}</div>
                                             </div>
                                             <div>
-                                                <div className={CRMS_LABEL}>Record Date</div>
+                                                <div className={HeraRecord_LABEL}>Record Date</div>
                                                 <div className="mt-0.5 font-medium text-black">{selectedCase.date_added || "N/A"}</div>
                                             </div>
                                         </div>
                                         <div>
-                                            <div className={CRMS_LABEL}>Case Narrative</div>
+                                            <div className={HeraRecord_LABEL}>Case Narrative</div>
                                             <div className="mt-1 whitespace-pre-wrap rounded-xl border-2 border-black/10 bg-white/70 p-3 text-sm leading-relaxed text-black/85">
                                                 {selectedCase.description || "No documentation detailed."}
                                             </div>
                                         </div>
                                         <div className="rounded-xl border-2 border-black/10 bg-white/70 p-3">
-                                            <div className={`${CRMS_LABEL} mb-1`}>Complainant</div>
+                                            <div className={`${HeraRecord_LABEL} mb-1`}>Complainant</div>
                                             <div className="text-black/70">Name: <span className="font-semibold text-black">{selectedCase.complainant_name || "Anonymous / Guarded"}</span></div>
                                             <div className="text-black/70">Contact: <span className="font-semibold text-black">{selectedCase.complainant_contact || "N/A"}</span></div>
                                             <div className="text-black/70">Aadhaar (Last 4): <span className="font-semibold text-black">{selectedCase.complainant_aadhaar || "XXXX"}</span></div>
                                         </div>
 
                                         <div className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4">
-                                            <div className={`${CRMS_LABEL} mb-2`}>Update Case Status</div>
+                                            <div className={`${HeraRecord_LABEL} mb-2`}>Update Case Status</div>
                                             {(isAdmin() || (selectedCase?.officer_ids?.includes(officer?.officer_id) && userRole === "P1")) ? (
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     {["Pending Review", "Recommended", "Assigned", "Active", "Solved", "Closed", "Rejected"].map(statusOption => (
@@ -2350,7 +2350,7 @@
 
                                         {/* REQUEST DOSSIER EMAIL */}
                                         <div className="rounded-xl border-2 border-emerald-600/30 bg-emerald-50/5 p-4 flex flex-col gap-2">
-                                            <div className={`${CRMS_LABEL}`}>Request Secure Dossier</div>
+                                            <div className={`${HeraRecord_LABEL}`}>Request Secure Dossier</div>
                                             <div className="text-[10px] text-black/60 leading-normal">
                                                 Request the latest case details, full teammate lists, and a high-resolution secure PDF dossier to be compiled and dispatched asynchronously to your official email.
                                             </div>
@@ -2384,7 +2384,7 @@
                                 {modalTab === "timeline" && (
                                     <div className="space-y-4 text-xs">
                                         <div className="rounded-xl border-2 border-accent/20 bg-accent/5 p-4">
-                                            <div className={`${CRMS_LABEL} mb-3`}>Investigation Updates (Timeline)</div>
+                                            <div className={`${HeraRecord_LABEL} mb-3`}>Investigation Updates (Timeline)</div>
                                             {timelineUpdates.length > 0 ? (
                                                 <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                                                     {timelineUpdates.map((update, idx) => (
@@ -2406,11 +2406,11 @@
                                         
                                         {/* APPEND TIMELINE FORM */}
                                         <div className="rounded-xl border-2 border-black/10 bg-white/70 p-4">
-                                            <div className={`${CRMS_LABEL} mb-2`}>Append Timeline Update</div>
+                                            <div className={`${HeraRecord_LABEL} mb-2`}>Append Timeline Update</div>
                                             <textarea
                                                 value={newUpdateText}
                                                 onChange={e => setNewUpdateText(e.target.value)}
-                                                className={`${CRMS_INPUT} w-full text-xs resize-none p-2`}
+                                                className={`${HeraRecord_INPUT} w-full text-xs resize-none p-2`}
                                                 rows={3}
                                                 placeholder="Enter details of the investigation update to record in the timeline..."
                                             />
@@ -2437,7 +2437,7 @@
                                 {modalTab === "evidence" && (
                                     <div className="space-y-4 text-xs">
                                         <div className="rounded-xl border-2 border-accent/20 bg-accent/5 p-4">
-                                            <div className={`${CRMS_LABEL} mb-3`}>Case Evidence Log</div>
+                                            <div className={`${HeraRecord_LABEL} mb-3`}>Case Evidence Log</div>
                                             {evidenceItems.length > 0 ? (
                                                 <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                                                     {evidenceItems.map(item => {
@@ -2520,7 +2520,7 @@
                                         
                                         {/* UPLOAD EVIDENCE FORM */}
                                         <div className="rounded-xl border-2 border-black/10 bg-white/70 p-4 space-y-3">
-                                            <div className={`${CRMS_LABEL}`}>Upload New Evidence</div>
+                                            <div className={`${HeraRecord_LABEL}`}>Upload New Evidence</div>
                                             
                                             <div>
                                                 <input
@@ -2547,7 +2547,7 @@
                                                     value={evidenceDesc}
                                                     onChange={e => setEvidenceDesc(e.target.value)}
                                                     placeholder="Add brief description or notes for this evidence..."
-                                                    className={`${CRMS_INPUT} w-full text-[10px] py-1.5 px-2`}
+                                                    className={`${HeraRecord_INPUT} w-full text-[10px] py-1.5 px-2`}
                                                     disabled={dossierLoading}
                                                 />
                                             </div>
@@ -2943,7 +2943,7 @@
                         {activeTab === "overview" && (
                             <>
                                 {loading ? (
-                                    <motion.div variants={fadeUp} className={`${CRMS_CARD} p-8 text-center text-black/60`}>
+                                    <motion.div variants={fadeUp} className={`${HeraRecord_CARD} p-8 text-center text-black/60`}>
                                         Loading dashboard...
                                     </motion.div>
                                 ) : error ? (
@@ -2955,26 +2955,26 @@
                                     <>
                                         {/* STATISTICS CARDS */}
                                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                                            <motion.div variants={fadeUp} custom={1} className={`${CRMS_CARD} p-4`}>
+                                            <motion.div variants={fadeUp} custom={1} className={`${HeraRecord_CARD} p-4`}>
                                                 <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Total Cases</div>
                                                 <div className="mt-2 text-3xl font-bold text-accent">{dashboardStats.cases?.total || 0}</div>
                                             </motion.div>
-                                            <motion.div variants={fadeUp} custom={2} className={`${CRMS_CARD} p-4`}>
+                                            <motion.div variants={fadeUp} custom={2} className={`${HeraRecord_CARD} p-4`}>
                                                 <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Active Cases</div>
                                                 <div className="mt-2 text-3xl font-bold text-amber-600">{dashboardStats.cases?.active || 0}</div>
                                             </motion.div>
-                                            <motion.div variants={fadeUp} custom={3} className={`${CRMS_CARD} p-4`}>
+                                            <motion.div variants={fadeUp} custom={3} className={`${HeraRecord_CARD} p-4`}>
                                                 <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Solved Cases</div>
                                                 <div className="mt-2 text-3xl font-bold text-emerald-600">{dashboardStats.cases?.solved || 0}</div>
                                             </motion.div>
-                                            <motion.div variants={fadeUp} custom={4} className={`${CRMS_CARD} p-4`}>
+                                            <motion.div variants={fadeUp} custom={4} className={`${HeraRecord_CARD} p-4`}>
                                                 <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Total Officers</div>
                                                 <div className="mt-2 text-3xl font-bold text-blue-600">{dashboardStats.officers?.total || 0}</div>
                                             </motion.div>
                                         </div>
 
                                         {/* OFFICER WORKLOAD */}
-                                        <motion.div variants={fadeUp} custom={5} className={`${CRMS_CARD} p-6`}>
+                                        <motion.div variants={fadeUp} custom={5} className={`${HeraRecord_CARD} p-6`}>
                                             <div className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-black">Officer Workload</div>
                                             <div className="space-y-3">
                                                 {(dashboardStats.officer_workload || []).slice(0, 5).map((off, idx) => (
@@ -2999,14 +2999,14 @@
                         {/* CASES TAB */}
                         {activeTab === "cases" && (
                             <>
-                                <motion.div variants={fadeUp} custom={1} className={`${CRMS_CARD} flex flex-col gap-4 p-4 md:flex-row`}>
+                                <motion.div variants={fadeUp} custom={1} className={`${HeraRecord_CARD} flex flex-col gap-4 p-4 md:flex-row`}>
                                     <select
                                         value={statusFilter}
                                         onChange={(e) => {
                                             setStatusFilter(e.target.value);
                                             setCurrentPage(1);
                                         }}
-                                        className={`${CRMS_INPUT} w-full md:w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
+                                        className={`${HeraRecord_INPUT} w-full md:w-auto py-2.5 text-[10px] uppercase tracking-[0.1em]`}
                                     >
                                         <option value="All">Status: All</option>
                                         <option value="Pending Review">Pending Review</option>
@@ -3027,7 +3027,7 @@
                                 )}
 
                                 {loading ? (
-                                    <motion.div variants={fadeUp} className={`${CRMS_CARD} p-8 text-center text-black/60`}>
+                                    <motion.div variants={fadeUp} className={`${HeraRecord_CARD} p-8 text-center text-black/60`}>
                                         Loading cases...
                                     </motion.div>
                                 ) : (
@@ -3037,7 +3037,7 @@
                                                 paginatedCases.map((c) => (
                                                     <motion.div
                                                         key={c.case_id}
-                                                        className={`${CRMS_CARD} cursor-pointer p-4 transition-all hover:shadow-lg`}
+                                                        className={`${HeraRecord_CARD} cursor-pointer p-4 transition-all hover:shadow-lg`}
                                                         onClick={() => setSelectedCase(c)}
                                                         whileHover={{ scale: 1.01 }}
                                                     >
@@ -3062,7 +3062,7 @@
                                                     </motion.div>
                                                 ))
                                             ) : (
-                                                <motion.div variants={fadeUp} className={`${CRMS_CARD} p-8 text-center text-black/60`}>
+                                                <motion.div variants={fadeUp} className={`${HeraRecord_CARD} p-8 text-center text-black/60`}>
                                                     No cases found.
                                                 </motion.div>
                                             )}
@@ -3105,7 +3105,7 @@
                                 onClick={() => setSelectedCase(null)}
                             >
                                 <motion.div
-                                    className={`${CRMS_CARD} w-full max-w-3xl my-8 overflow-y-auto max-h-[85vh] p-6`}
+                                    className={`${HeraRecord_CARD} w-full max-w-3xl my-8 overflow-y-auto max-h-[85vh] p-6`}
                                     initial={{ scale: 0.9, opacity: 0 }}
                                     animate={{ scale: 1, opacity: 1 }}
                                     exit={{ scale: 0.9, opacity: 0 }}
@@ -3205,7 +3205,7 @@
                                                         <select
                                                             value={selectedOfficerToAdd || ""}
                                                             onChange={(e) => setSelectedOfficerToAdd(parseInt(e.target.value) || null)}
-                                                            className={`${CRMS_INPUT} w-full py-2 text-sm`}
+                                                            className={`${HeraRecord_INPUT} w-full py-2 text-sm`}
                                                             disabled={reassignLoading}
                                                         >
                                                             <option value="">Select an officer...</option>
@@ -3272,7 +3272,7 @@
                                     {modalTab === "timeline" && (
                                         <div className="space-y-4 text-xs">
                                             <div className="rounded-xl border-2 border-accent/20 bg-accent/5 p-4">
-                                                <div className={`${CRMS_LABEL} mb-3`}>Investigation Updates (Timeline)</div>
+                                                <div className={`${HeraRecord_LABEL} mb-3`}>Investigation Updates (Timeline)</div>
                                                 {timelineUpdates.length > 0 ? (
                                                     <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                                                         {timelineUpdates.map((update, idx) => (
@@ -3294,11 +3294,11 @@
                                             
                                             {/* APPEND TIMELINE FORM */}
                                             <div className="rounded-xl border-2 border-black/10 bg-white/70 p-4">
-                                                <div className={`${CRMS_LABEL} mb-2`}>Append Timeline Update</div>
+                                                <div className={`${HeraRecord_LABEL} mb-2`}>Append Timeline Update</div>
                                                 <textarea
                                                     value={newUpdateText}
                                                     onChange={e => setNewUpdateText(e.target.value)}
-                                                    className={`${CRMS_INPUT} w-full text-xs resize-none p-2`}
+                                                    className={`${HeraRecord_INPUT} w-full text-xs resize-none p-2`}
                                                     rows={3}
                                                     placeholder="Enter details of the investigation update to record in the timeline..."
                                                 />
@@ -3325,7 +3325,7 @@
                                     {modalTab === "evidence" && (
                                         <div className="space-y-4 text-xs">
                                             <div className="rounded-xl border-2 border-accent/20 bg-accent/5 p-4">
-                                                <div className={`${CRMS_LABEL} mb-3`}>Case Evidence Log</div>
+                                                <div className={`${HeraRecord_LABEL} mb-3`}>Case Evidence Log</div>
                                                 {evidenceItems.length > 0 ? (
                                                     <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                                                         {evidenceItems.map(item => {
@@ -3408,7 +3408,7 @@
                                             
                                             {/* UPLOAD EVIDENCE FORM */}
                                             <div className="rounded-xl border-2 border-black/10 bg-white/70 p-4 space-y-3">
-                                                <div className={`${CRMS_LABEL}`}>Upload New Evidence</div>
+                                                <div className={`${HeraRecord_LABEL}`}>Upload New Evidence</div>
                                                 
                                                 <div>
                                                     <input
@@ -3435,7 +3435,7 @@
                                                         value={evidenceDesc}
                                                         onChange={e => setEvidenceDesc(e.target.value)}
                                                         placeholder="Add brief description or notes for this evidence..."
-                                                        className={`${CRMS_INPUT} w-full text-[10px] py-1.5 px-2`}
+                                                        className={`${HeraRecord_INPUT} w-full text-[10px] py-1.5 px-2`}
                                                         disabled={dossierLoading}
                                                     />
                                                 </div>
@@ -3499,14 +3499,14 @@
             return (
                 <CrmsPageShell
                     title="Staff Login"
-                    subtitle="Bengaluru Police Department · CRMS"
+                    subtitle="Bengaluru Police Department · HeraRecord"
                     onBack={onBack}
                     scrim="bg-white/45"
                     className="flex flex-col"
                 >
                     <div className="flex flex-1 items-center justify-center px-5 py-12">
                         <motion.div
-                            className={`w-full max-w-md ${CRMS_CARD}`}
+                            className={`w-full max-w-md ${HeraRecord_CARD}`}
                             initial={{ opacity: 0, y: 24 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
@@ -3521,17 +3521,17 @@
 
                             <form onSubmit={handleLogin} className="space-y-5">
                                 <div>
-                                    <label className={CRMS_LABEL}>Officer Badge ID</label>
+                                    <label className={HeraRecord_LABEL}>Officer Badge ID</label>
                                     <input autoFocus type="text" required value={badgeId}
                                         onChange={e => setBadgeId(e.target.value)}
-                                        className={`${CRMS_INPUT} font-mono`}
+                                        className={`${HeraRecord_INPUT} font-mono`}
                                         placeholder="e.g., BPD-7821" />
                                 </div>
                                 <div>
-                                    <label className={CRMS_LABEL}>Password</label>
+                                    <label className={HeraRecord_LABEL}>Password</label>
                                     <input type="password" required value={password}
                                         onChange={e => setPassword(e.target.value)}
-                                        className={CRMS_INPUT}
+                                        className={HeraRecord_INPUT}
                                         placeholder="••••••••" />
                                 </div>
                                 {error && (
