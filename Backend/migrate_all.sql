@@ -24,6 +24,7 @@ DROP TABLE IF EXISTS case_access_requests;
 DROP TABLE IF EXISTS public_complaints;
 DROP TABLE IF EXISTS case_officer;
 DROP TABLE IF EXISTS cases;
+DROP TABLE IF EXISTS officer_sessions;
 DROP TABLE IF EXISTS officers;
 
 CREATE TABLE officers (
@@ -38,6 +39,29 @@ CREATE TABLE officers (
     password_hash VARCHAR(255) DEFAULT NULL,
     `role`      ENUM('admin','inspector','viewer') NOT NULL DEFAULT 'viewer',
     PRIMARY KEY (officer_id)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- TABLE: officer_sessions (single-device login enforcement)
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS officer_sessions (
+    session_id INT NOT NULL AUTO_INCREMENT,
+    officer_id INT NOT NULL,
+    session_token CHAR(64) NOT NULL,
+    user_agent VARCHAR(255) DEFAULT NULL,
+    ip_address VARCHAR(64) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (session_id),
+    UNIQUE KEY uk_session_token (session_token),
+    INDEX idx_officer_active (officer_id, revoked_at, expires_at),
+    CONSTRAINT fk_session_officer
+        FOREIGN KEY (officer_id) REFERENCES officers(officer_id)
+        ON DELETE CASCADE
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;

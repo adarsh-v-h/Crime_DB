@@ -136,6 +136,7 @@ def startup_services():
     Gunicorn imports `Backend.app:app`, so this cannot live only in __main__.
     """
     init_pool()
+    queries.ensure_auth_schema()
     if os.getenv("ENABLE_ASSIGNMENT_SCHEDULER", "true").lower() == "true":
         start_assignment_scheduler()
 
@@ -185,9 +186,13 @@ def _parse_officer_id_header():
     if not officer_id_str:
         return None, _err("Unauthorized: Missing X-Officer-Id header", 401)
     try:
-        return int(officer_id_str), None
+        officer_id = int(officer_id_str)
     except ValueError:
         return None, _err("Invalid X-Officer-Id header", 400)
+    session_token = request.headers.get("X-Session-Token")
+    if not queries.validate_officer_session(officer_id, session_token):
+        return None, _err("Unauthorized: Invalid or expired officer session", 401)
+    return officer_id, None
 
 
 def _parse_officer_id_for_file_request():
@@ -200,9 +205,37 @@ def _parse_officer_id_for_file_request():
     if not officer_id_str:
         return None, _err("Unauthorized: Missing X-Officer-Id header or query parameter", 401)
     try:
-        return int(officer_id_str), None
+        officer_id = int(officer_id_str)
     except ValueError:
         return None, _err("Invalid X-Officer-Id value", 400)
+    session_token = request.headers.get("X-Session-Token") or request.args.get("X-Session-Token")
+    if not queries.validate_officer_session(officer_id, session_token):
+        return None, _err("Unauthorized: Invalid or expired officer session", 401)
+    return officer_id, None
+
+
+@app.before_request
+def _require_valid_officer_session():
+    """
+    Any request that identifies an officer must also carry that officer's active
+    session token. This covers routes that still parse X-Officer-Id inline.
+    """
+    if request.endpoint in {"officer_login", "officer_logout", "serve_frontend", "health"}:
+        return None
+
+    officer_id_str = request.headers.get("X-Officer-Id") or request.args.get("X-Officer-Id")
+    if not officer_id_str:
+        return None
+
+    try:
+        officer_id = int(officer_id_str)
+    except ValueError:
+        return _err("Invalid X-Officer-Id value", 400)
+
+    session_token = request.headers.get("X-Session-Token") or request.args.get("X-Session-Token")
+    if not queries.validate_officer_session(officer_id, session_token):
+        return _err("Unauthorized: Invalid or expired officer session", 401)
+    return None
 
 
 def _row_to_dict(cursor, row):
@@ -1994,13 +2027,52 @@ def officer_login():
         if not bcrypt.checkpw(password.encode(), stored_hash.encode()):
             return _err("Invalid credentials", 401)
 
+        officer_id = officer["officer_id"]
+        if queries.officer_has_active_session(officer_id):
+            return _err("This officer is already logged in on another device. Please log out there first.", 409)
+
+        ttl_hours = int(os.getenv("AUTH_SESSION_TTL_HOURS", "12"))
+        session_token, session_expires_at = queries.create_officer_session(
+            officer_id,
+            ttl_hours,
+            user_agent=request.headers.get("User-Agent"),
+            ip_address=request.headers.get("X-Forwarded-For", request.remote_addr),
+        )
+
         # Remove password_hash for security before sending to the client
         officer.pop("password_hash", None)
 
         # Enrich officer dict with case metrics and defaults
         queries.enrich_officer_details(officer)
+        officer["session_token"] = session_token
+        officer["session_expires_at"] = session_expires_at
 
         return _ok(officer=officer)
+    except mysql.connector.Error as e:
+        return _err(f"Database error: {str(e)}", 500)
+
+
+@app.route("/auth/logout", methods=["POST"])
+def officer_logout():
+    """
+    POST /auth/logout
+    Body: { officer_id*, session_token* }
+    Revokes the active session so the same officer can log in elsewhere.
+    """
+    body = request.get_json(silent=True) or {}
+    officer_id = body.get("officer_id") or request.headers.get("X-Officer-Id")
+    session_token = (body.get("session_token") or request.headers.get("X-Session-Token") or "").strip()
+
+    if not officer_id:
+        return _err("officer_id is required", 400)
+    if not session_token:
+        return _err("session_token is required", 400)
+
+    try:
+        rows = queries.revoke_officer_session(int(officer_id), session_token)
+        return _ok(message="Logged out successfully", revoked=rows > 0)
+    except ValueError:
+        return _err("Invalid officer_id", 400)
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
 

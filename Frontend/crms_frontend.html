@@ -235,6 +235,23 @@
                 ? window.location.origin
                 : "http://localhost:5000")
         ).replace(/\/$/, "");
+        const OFFICER_STORAGE_KEY = "CRMS_OFFICER_SESSION";
+
+        const getStoredOfficer = () => {
+            try {
+                return JSON.parse(localStorage.getItem(OFFICER_STORAGE_KEY) || "null");
+            } catch {
+                return null;
+            }
+        };
+
+        const getStoredSessionToken = () => getStoredOfficer()?.session_token || "";
+        const storeOfficerSession = (officerData) => localStorage.setItem(OFFICER_STORAGE_KEY, JSON.stringify(officerData));
+        const clearOfficerSession = () => localStorage.removeItem(OFFICER_STORAGE_KEY);
+        const authHeaders = (officer) => ({
+            "X-Officer-Id": officer?.officer_id?.toString(),
+            "X-Session-Token": officer?.session_token || getStoredSessionToken()
+        });
         
         // reCAPTCHA v2 (Invisible) Configuration
         const RECAPTCHA_PUBLIC_KEY = window._recaptcha_site_key || "6LfLCfIsAAAAAK4ZwH_RMmvAPAi3vtkGKPLAYkuk";
@@ -242,14 +259,19 @@
         // Generic fetch helper — returns parsed JSON or throws with a readable message.
         const apiFetch = async (path, options = {}) => {
             const { headers, ...rest } = options;
+            const sessionToken = getStoredSessionToken();
             const res = await fetch(`${API_BASE}${path}`, {
                 headers: { 
                     "Content-Type": "application/json",
+                    ...(sessionToken ? { "X-Session-Token": sessionToken } : {}),
                     ...(headers || {})
                 },
                 ...rest,
             });
             const json = await res.json();
+            if (!res.ok && res.status === 401 && String(json.error || "").toLowerCase().includes("session")) {
+                clearOfficerSession();
+            }
             if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
             return json;
         };
@@ -1531,6 +1553,7 @@
             const [currentPage, setCurrentPage] = useState(1);
             const [totalPages, setTotalPages] = useState(1);
             const [totalRecords, setTotalRecords] = useState(0);
+            const [caseRefreshTick, setCaseRefreshTick] = useState(0);
             
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
@@ -1708,7 +1731,23 @@
                 };
 
                 loadCases();
-            }, [statusFilter, typeFilter, searchQuery, currentPage]);
+            }, [statusFilter, typeFilter, searchQuery, currentPage, caseRefreshTick]);
+
+            useEffect(() => {
+                if (!officer) return;
+                const refreshCases = () => setCaseRefreshTick(tick => tick + 1);
+                const refreshVisibleCases = () => {
+                    if (!document.hidden) refreshCases();
+                };
+                const intervalId = setInterval(refreshCases, 15000);
+                window.addEventListener("focus", refreshCases);
+                document.addEventListener("visibilitychange", refreshVisibleCases);
+                return () => {
+                    clearInterval(intervalId);
+                    window.removeEventListener("focus", refreshCases);
+                    document.removeEventListener("visibilitychange", refreshVisibleCases);
+                };
+            }, [officer]);
 
             // Reset back to page 1 if search or status filters change
             const handleFilterChange = (type, val) => {
@@ -1851,11 +1890,14 @@
                     const response = await fetch(`${API_BASE}/cases/${caseId}/evidence`, {
                         method: "POST",
                         headers: {
-                            "X-Officer-Id": officer?.officer_id?.toString()
+                            ...authHeaders(officer)
                         },
                         body: formData
                     });
                     const res = await response.json();
+                    if (!response.ok && response.status === 401 && String(res.error || "").toLowerCase().includes("session")) {
+                        clearOfficerSession();
+                    }
                     if (response.ok && res.success) {
                         setEvidenceFile(null);
                         setEvidenceDesc("");
@@ -2410,8 +2452,9 @@
                                                         const isVideo = item.mime_type.startsWith("video/");
                                                         
                                                         const kb = (item.file_size / 1024).toFixed(1);
-                                                        const secureUrl = `${API_BASE}/cases/evidence/file/${item.case_id}/${item.file_name}?X-Officer-Id=${officer?.officer_id}`;
-                                                        const downloadUrl = `${API_BASE}/cases/${item.case_id}/evidence/${item.file_name}/download?X-Officer-Id=${officer?.officer_id}`;
+                                                        const sessionParam = encodeURIComponent(officer?.session_token || getStoredSessionToken());
+                                                        const secureUrl = `${API_BASE}/cases/evidence/file/${item.case_id}/${item.file_name}?X-Officer-Id=${officer?.officer_id}&X-Session-Token=${sessionParam}`;
+                                                        const downloadUrl = `${API_BASE}/cases/${item.case_id}/evidence/${item.file_name}/download?X-Officer-Id=${officer?.officer_id}&X-Session-Token=${sessionParam}`;
                                                         
                                                         return (
                                                             <div key={item.evidence_id} className="flex flex-col gap-2 rounded-lg border-2 border-black/10 bg-white p-3">
@@ -2786,11 +2829,14 @@
                     const response = await fetch(`${API_BASE}/cases/${caseId}/evidence`, {
                         method: "POST",
                         headers: {
-                            "X-Officer-Id": officer?.officer_id?.toString()
+                            ...authHeaders(officer)
                         },
                         body: formData
                     });
                     const res = await response.json();
+                    if (!response.ok && response.status === 401 && String(res.error || "").toLowerCase().includes("session")) {
+                        clearOfficerSession();
+                    }
                     if (response.ok && res.success) {
                         setEvidenceFile(null);
                         setEvidenceDesc("");
@@ -3307,8 +3353,9 @@
                                                             const isVideo = item.mime_type.startsWith("video/");
                                                             
                                                             const kb = (item.file_size / 1024).toFixed(1);
-                                                            const secureUrl = `${API_BASE}/cases/evidence/file/${item.case_id}/${item.file_name}?X-Officer-Id=${officer?.officer_id}`;
-                                                            const downloadUrl = `${API_BASE}/cases/${item.case_id}/evidence/${item.file_name}/download?X-Officer-Id=${officer?.officer_id}`;
+                                                            const sessionParam = encodeURIComponent(officer?.session_token || getStoredSessionToken());
+                                                            const secureUrl = `${API_BASE}/cases/evidence/file/${item.case_id}/${item.file_name}?X-Officer-Id=${officer?.officer_id}&X-Session-Token=${sessionParam}`;
+                                                            const downloadUrl = `${API_BASE}/cases/${item.case_id}/evidence/${item.file_name}/download?X-Officer-Id=${officer?.officer_id}&X-Session-Token=${sessionParam}`;
                                                             
                                                             return (
                                                                 <div key={item.evidence_id} className="flex flex-col gap-2 rounded-lg border-2 border-black/10 bg-white p-3">
@@ -3541,20 +3588,40 @@
 
         // ─── APP ──────────────────────────────────────────────────────────────
         const App = () => {
-            const [currentView, setCurrentView] = useState("landing");
-            const [officer, setOfficer]         = useState(null);
+            const storedOfficer = getStoredOfficer();
+            const [currentView, setCurrentView] = useState(() => {
+                if (!storedOfficer) return "landing";
+                return (storedOfficer.role || "").toLowerCase() === "admin" ? "admin" : "staff";
+            });
+            const [officer, setOfficer]         = useState(() => storedOfficer);
 
             // Map DB role to legacy P1/P2 gate the dashboard already uses
             const userRole = officer?.role === "inspector" ? "P1" : "P2";
 
             const handleLogin = (officerData) => {
+                storeOfficerSession(officerData);
                 setOfficer(officerData);
                 // Route to admin dashboard if role is admin, otherwise to staff dashboard
                 const targetView = (officerData.role || "").toLowerCase() === "admin" ? "admin" : "staff";
                 setCurrentView(targetView);
             };
 
-            const handleLogout = () => {
+            const handleLogout = async () => {
+                const activeOfficer = officer || getStoredOfficer();
+                if (activeOfficer?.officer_id && activeOfficer?.session_token) {
+                    try {
+                        await apiFetch("/auth/logout", {
+                            method: "POST",
+                            body: JSON.stringify({
+                                officer_id: activeOfficer.officer_id,
+                                session_token: activeOfficer.session_token
+                            })
+                        });
+                    } catch (err) {
+                        console.warn("Logout request failed:", err.message);
+                    }
+                }
+                clearOfficerSession();
                 setOfficer(null);
                 setCurrentView("landing");
             };

@@ -7,6 +7,7 @@ try:
 except ImportError:
     from db_connection import get_db
 import bcrypt
+import secrets
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HELPERS
@@ -20,6 +21,35 @@ def _row_to_dict(cursor, row):
 
 def _rows_to_list(cursor, rows):
     return [_row_to_dict(cursor, r) for r in rows]
+
+
+def ensure_auth_schema():
+    """Creates the officer session table used for single-device login enforcement."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS officer_sessions (
+                session_id INT NOT NULL AUTO_INCREMENT,
+                officer_id INT NOT NULL,
+                session_token CHAR(64) NOT NULL,
+                user_agent VARCHAR(255) DEFAULT NULL,
+                ip_address VARCHAR(64) DEFAULT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME NOT NULL,
+                revoked_at DATETIME DEFAULT NULL,
+                PRIMARY KEY (session_id),
+                UNIQUE KEY uk_session_token (session_token),
+                INDEX idx_officer_active (officer_id, revoked_at, expires_at),
+                CONSTRAINT fk_session_officer
+                    FOREIGN KEY (officer_id) REFERENCES officers(officer_id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"""
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -610,6 +640,101 @@ def enrich_officer_details(o: dict):
         o.setdefault("role",       "viewer")
 
         return o
+    finally:
+        cur.close()
+        conn.close()
+
+
+def officer_has_active_session(officer_id: int) -> bool:
+    """Returns True when the officer already has a non-expired, non-revoked session."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """UPDATE officer_sessions
+               SET revoked_at = NOW()
+               WHERE officer_id = %s
+                 AND revoked_at IS NULL
+                 AND expires_at <= NOW()""",
+            (officer_id,)
+        )
+        conn.commit()
+        cur.execute(
+            """SELECT 1 FROM officer_sessions
+               WHERE officer_id = %s
+                 AND revoked_at IS NULL
+                 AND expires_at > NOW()
+               LIMIT 1""",
+            (officer_id,)
+        )
+        return cur.fetchone() is not None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def create_officer_session(officer_id: int, ttl_hours: int, user_agent=None, ip_address=None):
+    """Creates an active login session token for an officer."""
+    token = secrets.token_hex(32)
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO officer_sessions
+               (officer_id, session_token, user_agent, ip_address, expires_at)
+               VALUES (%s, %s, %s, %s, DATE_ADD(NOW(), INTERVAL %s HOUR))""",
+            (officer_id, token, (user_agent or "")[:255], (ip_address or "")[:64], ttl_hours)
+        )
+        conn.commit()
+        cur.execute(
+            "SELECT expires_at FROM officer_sessions WHERE session_token = %s",
+            (token,)
+        )
+        row = cur.fetchone()
+        expires_at = row[0].isoformat() if row and hasattr(row[0], "isoformat") else str(row[0])
+        return token, expires_at
+    finally:
+        cur.close()
+        conn.close()
+
+
+def validate_officer_session(officer_id: int, session_token: str) -> bool:
+    """Checks whether the token belongs to the officer and is still active."""
+    if not session_token:
+        return False
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """SELECT 1 FROM officer_sessions
+               WHERE officer_id = %s
+                 AND session_token = %s
+                 AND revoked_at IS NULL
+                 AND expires_at > NOW()
+               LIMIT 1""",
+            (officer_id, session_token)
+        )
+        return cur.fetchone() is not None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def revoke_officer_session(officer_id: int, session_token: str) -> int:
+    """Revokes a specific active officer session."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """UPDATE officer_sessions
+               SET revoked_at = NOW()
+               WHERE officer_id = %s
+                 AND session_token = %s
+                 AND revoked_at IS NULL""",
+            (officer_id, session_token)
+        )
+        conn.commit()
+        return cur.rowcount
     finally:
         cur.close()
         conn.close()

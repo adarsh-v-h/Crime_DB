@@ -36,7 +36,7 @@ class TestEvidenceFeatures(unittest.TestCase):
         
         response = self.app.post(
             "/cases/1/evidence",
-            headers={"X-Officer-Id": "1"},
+            headers={"X-Officer-Id": "1", "X-Session-Token": "test-session"},
             data={"file": file_data, "description": "Important evidence doc"},
             content_type="multipart/form-data"
         )
@@ -60,7 +60,7 @@ class TestEvidenceFeatures(unittest.TestCase):
         
         response = self.app.post(
             "/cases/1/evidence",
-            headers={"X-Officer-Id": "1"},
+            headers={"X-Officer-Id": "1", "X-Session-Token": "test-session"},
             data={"file": file_data},
             content_type="multipart/form-data"
         )
@@ -83,7 +83,7 @@ class TestEvidenceFeatures(unittest.TestCase):
         
         response = self.app.post(
             "/cases/1/evidence",
-            headers={"X-Officer-Id": "1"},
+            headers={"X-Officer-Id": "1", "X-Session-Token": "test-session"},
             data={"file": file_data},
             content_type="multipart/form-data"
         )
@@ -101,7 +101,7 @@ class TestEvidenceFeatures(unittest.TestCase):
         
         response = self.app.get(
             "/cases/1/evidence/some_file.pdf/download",
-            headers={"X-Officer-Id": "2"}
+            headers={"X-Officer-Id": "2", "X-Session-Token": "test-session"}
         )
         
         self.assertEqual(response.status_code, 403)
@@ -125,7 +125,7 @@ class TestEvidenceFeatures(unittest.TestCase):
 
             try:
                 response = self.app.get(
-                    "/cases/1/evidence/secure_doc.pdf/download?X-Officer-Id=1",
+                    "/cases/1/evidence/secure_doc.pdf/download?X-Officer-Id=1&X-Session-Token=test-session",
                     buffered=True
                 )
             finally:
@@ -152,7 +152,7 @@ class TestEvidenceFeatures(unittest.TestCase):
 
             try:
                 response = self.app.get(
-                    "/cases/evidence/file/1/image.png?X-Officer-Id=1",
+                    "/cases/evidence/file/1/image.png?X-Officer-Id=1&X-Session-Token=test-session",
                     buffered=True
                 )
             finally:
@@ -169,7 +169,7 @@ class TestEvidenceFeatures(unittest.TestCase):
 
         response = self.app.patch(
             "/cases/1",
-            headers={"X-Officer-Id": "2"},
+            headers={"X-Officer-Id": "2", "X-Session-Token": "test-session"},
             json={"status": "Solved"}
         )
 
@@ -187,7 +187,7 @@ class TestEvidenceFeatures(unittest.TestCase):
 
         response = self.app.patch(
             "/cases/1",
-            headers={"X-Officer-Id": "1"},
+            headers={"X-Officer-Id": "1", "X-Session-Token": "test-session"},
             json={"status": "Solved"}
         )
 
