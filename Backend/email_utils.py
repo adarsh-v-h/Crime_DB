@@ -9,6 +9,7 @@ import json
 import logging
 import smtplib
 import threading
+import requests
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -66,6 +67,8 @@ def send_verification_email(recipient_email, otp):
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
     smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
     smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
+    resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
+    resend_from_email = os.getenv("RESEND_FROM_EMAIL", smtp_from_email).strip()
 
     subject = "Themis's Domain verification code"
     body = (
@@ -74,6 +77,41 @@ def send_verification_email(recipient_email, otp):
         f"This code is valid for 2 minutes. Do not share it with anyone.\n\n"
         f"Bengaluru Police Department Themis's Domain Team"
     )
+    html_body = (
+        "<p>Dear Citizen,</p>"
+        f"<p>Your Themis's Domain verification code is: <strong>{otp}</strong></p>"
+        "<p>This code is valid for 2 minutes. Do not share it with anyone.</p>"
+        "<p>Bengaluru Police Department Themis's Domain Team</p>"
+    )
+
+    if resend_api_key:
+        try:
+            response = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {resend_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": f"{smtp_from_name} <{resend_from_email}>",
+                    "to": [recipient_email],
+                    "subject": subject,
+                    "html": html_body,
+                    "text": body,
+                },
+                timeout=15,
+            )
+            if response.ok:
+                logger.info(f"[EMAIL OTP] Sent verification email to {recipient_email} via Resend")
+                return True, "OTP sent successfully to email."
+
+            logger.error(
+                f"[EMAIL OTP] Resend send failed: {response.status_code} {response.text}"
+            )
+            return False, "Resend email send failed. Please check the backend logs and Resend settings."
+        except Exception as e:
+            logger.error(f"[EMAIL OTP] Resend send failed: {e}")
+            return False, "Resend email send failed. Please check the backend logs and Resend settings."
 
     smtp_configured = bool(smtp_user and smtp_password)
 
