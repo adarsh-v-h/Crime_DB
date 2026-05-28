@@ -222,7 +222,9 @@
 
         // ─── API CONFIG ───────────────────────────────────────────────────────
         // Change this to match where your Flask server is running.
-        const API_BASE = "http://localhost:5000";
+        const API_BASE = window.location.origin && window.location.origin !== "null" && !window.location.origin.startsWith("file:")
+            ? window.location.origin
+            : "http://localhost:5000";
         
         // reCAPTCHA v2 (Invisible) Configuration
         const RECAPTCHA_PUBLIC_KEY = window._recaptcha_site_key || "6LfLCfIsAAAAAK4ZwH_RMmvAPAi3vtkGKPLAYkuk";
@@ -580,15 +582,15 @@
                 animate="visible"
                 variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
             >
-                <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
-                    <motion.div variants={fadeDown} custom={0} className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-black bg-white/80 sm:h-11 sm:w-11">
-                            <Icon name="Shield" size={18} className="text-black" />
+                <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-8">
+                    <motion.div variants={fadeDown} custom={0} className="flex items-center gap-2 sm:gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-black bg-white/80 sm:h-11 sm:w-11">
+                            <Icon name="Shield" size={16} className="text-black" />
                         </div>
                         <div>
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black">{title}</div>
+                            <div className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.15em] sm:tracking-[0.18em] text-black line-clamp-1">{title}</div>
                             {subtitle && (
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-black/65">{subtitle}</div>
+                                <div className="text-[8px] sm:text-[10px] font-semibold uppercase tracking-[0.18em] sm:tracking-[0.22em] text-black/65 line-clamp-1">{subtitle}</div>
                             )}
                         </div>
                     </motion.div>
@@ -598,9 +600,9 @@
                             variants={fadeDown}
                             custom={1}
                             onClick={onBack}
-                            className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black transition-opacity hover:opacity-60 sm:text-xs"
+                            className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.12em] sm:tracking-[0.16em] text-black transition-opacity hover:opacity-60 shrink-0"
                         >
-                            <Icon name="ArrowLeft" size={14} />
+                            <Icon name="ArrowLeft" size={12} />
                             Back to Home
                         </motion.button>
                     )}
@@ -1075,14 +1077,14 @@
                         </motion.div>
 
                         {/* Tabs */}
-                        <motion.div variants={fadeUp} custom={1} className="mb-10 flex justify-center">
-                            <div className="flex gap-1 rounded-full border-2 border-black bg-white/80 p-1 backdrop-blur-sm">
+                        <motion.div variants={fadeUp} custom={1} className="mb-10 flex justify-center px-4">
+                            <div className="flex flex-col sm:flex-row gap-1 rounded-2xl sm:rounded-full border-2 border-black bg-white/80 p-1 backdrop-blur-sm w-full sm:w-auto">
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab("complaint")}
-                                    className={`rounded-full px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "complaint" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
+                                    className={`rounded-xl sm:rounded-full w-full sm:w-auto px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "complaint" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
                                 >
-                                    <span className="flex items-center gap-2">
+                                    <span className="flex items-center justify-center gap-2">
                                         <Icon name="FilePlus" size={14} />
                                         File Complaint
                                     </span>
@@ -1090,9 +1092,9 @@
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab("browse")}
-                                    className={`rounded-full px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "browse" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
+                                    className={`rounded-xl sm:rounded-full w-full sm:w-auto px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "browse" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
                                 >
-                                    <span className="flex items-center gap-2">
+                                    <span className="flex items-center justify-center gap-2">
                                         <Icon name="Search" size={14} />
                                         Browse Cases
                                     </span>
@@ -1100,9 +1102,9 @@
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab("access")}
-                                    className={`rounded-full px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "access" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
+                                    className={`rounded-xl sm:rounded-full w-full sm:w-auto px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "access" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
                                 >
-                                    <span className="flex items-center gap-2">
+                                    <span className="flex items-center justify-center gap-2">
                                         <Icon name="Eye" size={14} />
                                         Request Case Access
                                     </span>
@@ -1928,7 +1930,7 @@
                         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.06 } } }}
                     >
                         {/* SUB TAB NAVIGATION BAR */}
-                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex gap-4 border-b-2 border-black/15 sm:gap-6">
+                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex flex-wrap gap-4 border-b-2 border-black/15 sm:gap-6">
                             <button
                                 type="button"
                                 onClick={() => setActiveSubTab("dossiers")}
@@ -2203,7 +2205,7 @@
                                 </div>
 
                                 {/* MODAL TAB NAVIGATION */}
-                                <div className="flex border-b-2 border-black/10 mb-4 text-[10px] font-semibold uppercase tracking-[0.1em]">
+                                <div className="flex flex-wrap border-b-2 border-black/10 mb-4 text-[10px] font-semibold uppercase tracking-[0.1em]">
                                     <button 
                                         type="button" 
                                         onClick={() => setModalTab("details")} 
@@ -2875,7 +2877,7 @@
                         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.06 } } }}
                     >
                         {/* TAB NAVIGATION */}
-                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex gap-4 border-b-2 border-black/15 sm:gap-6">
+                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex flex-wrap gap-4 border-b-2 border-black/15 sm:gap-6">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("overview")}
@@ -3081,7 +3083,7 @@
                                     </div>
                                     
                                     {/* MODAL TAB NAVIGATION */}
-                                    <div className="flex border-b-2 border-black/10 mb-4 text-[10px] font-semibold uppercase tracking-[0.1em]">
+                                    <div className="flex flex-wrap border-b-2 border-black/10 mb-4 text-[10px] font-semibold uppercase tracking-[0.1em]">
                                         <button 
                                             type="button" 
                                             onClick={() => setModalTab("details")} 
