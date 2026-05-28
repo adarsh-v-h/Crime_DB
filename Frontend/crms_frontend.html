@@ -14,7 +14,11 @@
             const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
             const devSiteKey = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"; // Google test site key (v2 Invisible)
             const prodSiteKey = "6LfLCfIsAAAAAK4ZwH_RMmvAPAi3vtkGKPLAYkuk"; // Your site key (v2 Invisible)
-            const siteKey = isLocalhost ? devSiteKey : prodSiteKey;
+            const params = new URLSearchParams(location.search);
+            const querySiteKey = params.get("recaptcha_site_key");
+            if (querySiteKey) localStorage.setItem("CRMS_RECAPTCHA_SITE_KEY", querySiteKey);
+            const configuredSiteKey = window.CRMS_RECAPTCHA_SITE_KEY || localStorage.getItem("CRMS_RECAPTCHA_SITE_KEY");
+            const siteKey = configuredSiteKey || (isLocalhost ? devSiteKey : prodSiteKey);
             console.log("[reCAPTCHA] Loading reCAPTCHA v2 (Invisible) with site key:", siteKey.substring(0, 10) + "...");
             window._recaptcha_site_key = siteKey;
             const s = document.createElement('script');
