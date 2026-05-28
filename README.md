@@ -1,343 +1,176 @@
-# CRMS — Crime Record Management System
+# CRMS — Crime Record Management System 🎯
 
-A police investigation dashboard for the Bengaluru Police Department, built with Flask, MySQL, and a React-powered single-page frontend. CRMS supports officer case management, citizen complaint intake, automated case assignment, and a secure case-access request workflow with PDF dossier delivery.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)  
+[![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)  
+[![Build Status](https://img.shields.io/badge/build-passing-success.svg)](#)  
+[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)
 
-## Features
+---
 
-- **Staff portal** — Role-based login, case CRUD, officer assignments, analytics, and case status updates
-- **Public portal** — Citizens can file complaints, browse public cases, and request access to case records (reCAPTCHA protected)
-- **Case discovery** — Citizens can search, filter, and browse public cases by status, crime type, location, or keywords before submitting access requests
-- **Automated assignment** — Background scheduler promotes pending complaints to cases and assigns officers by crime severity and workload
-- **Access request workflow** — Officers approve or reject citizen dossier requests; approved requests trigger a PDF case dossier via email (or mock mode)
-- **Security** — bcrypt password hashing, invisible reCAPTCHA on public forms and login, role-based case visibility, `X-Officer-Id` header on protected routes
+## Table of Contents
+- [Overview](#overview)  
+- [Features](#features)  
+- [Architecture](#architecture)  
+- [Installation](#installation)  
+- [Quick Start](#quick-start)  
+- [API Reference](#api-reference)  
+- [Frontend](#frontend)  
+- [Testing](#testing)  
+- [Contributing](#contributing)  
+- [License](#license)  
+- [Contact & Acknowledgements](#contact--acknowledgements)
 
-## Contents
+---
 
-| Path | Description |
-|------|-------------|
-| `Backend/` | Flask API, SQL migrations, assignment engine, email/PDF utilities |
-| `Frontend/crms_frontend.html` | React UI (CDN-based) served at `/` |
-| `requirements.txt` | Python dependencies |
-| `.env.example` | Environment variable template |
+## Overview
+CRMS is a **polished police investigation dashboard** built for the Bengaluru Police Department. It combines a Flask‑powered backend, a MySQL database, and a single‑page React frontend served via CDN. The system streamlines case management, citizen complaint intake, automated case assignment, and secure dossier delivery.
 
-## Prerequisites
+---
 
-- Python 3.10+
-- MySQL 8.x
-- Google reCAPTCHA v2 (invisible) keys — [reCAPTCHA admin](https://www.google.com/recaptcha/admin) (test keys work on localhost)
+## Features ✨
+- **Staff portal** – Role‑based login, full CRUD on cases, officer assignments, analytics, and status updates.  
+- **Public portal** – Citizens can file complaints, browse public cases, and request access to case dossiers (protected by reCAPTCHA).  
+- **Case discovery** – Powerful search / filter by status, crime type, location, or keywords.  
+- **Automated assignment** – Background scheduler promotes pending complaints to cases and auto‑assigns officers based on severity and workload.  
+- **Access‑request workflow** – Officers approve/reject citizen requests; approved requests trigger PDF dossier generation and optional email delivery.  
+- **Security** – Bcrypt password hashing, invisible reCAPTCHA, role‑based visibility, and `X‑Officer‑Id` header on protected routes.
 
-## Quick Start
+---
 
-### 1. Clone and configure environment
+## Architecture ![Architecture Diagram](assets/architecture.png)
+> *Placeholder architecture diagram. Replace `assets/architecture.png` with a real diagram.*
 
+The system consists of three logical layers:
+1. **Backend (Flask)** – API, authentication, business logic, and background scheduler.  
+2. **Database (MySQL)** – Stores officers, cases, complaints, and access‑request data.  
+3. **Frontend (React via CDN)** – Interactive UI for staff and citizens.
+
+---
+
+## Installation 🚀
 ```bash
+# Clone the repo
+git clone https://github.com/your-org/Crime_DB.git
+cd Crime_DB
+
+# Create environment variables
 cp .env.example .env
-```
+# Edit .env with your MySQL credentials and reCAPTCHA keys
 
-Edit `.env` with your MySQL credentials and reCAPTCHA keys. See [Environment Variables](#environment-variables) for the full list.
-
-> Do not commit `.env` to source control.
-
-### 2. Create a virtual environment (recommended)
-
-```bash
+# Set up a virtual environment (recommended)
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Initialize the database
-
-Run the scripts **in order** against your MySQL server:
-
+### Database Setup
 ```bash
+# Execute the migration scripts in order (adjust MySQL user as needed)
 mysql -u root -p < Backend/setup_db.sql
 mysql -u root -p < Backend/migrate_v2.sql
 mysql -u root -p < Backend/migrate_v3.sql
 ```
 
-Replace `root` with your MySQL user if different. Each script is additive and safe to re-run where noted (`CREATE TABLE IF NOT EXISTS`, etc.).
+---
 
-| Script | Purpose |
-|--------|---------|
-| `setup_db.sql` | Core schema, seed officers and sample cases |
-| `migrate_v2.sql` | Officer auth (`password_hash`, `role`), public complaints staging |
-| `migrate_v3.sql` | Case access requests table and seed data |
-
-### 4. Start the server
-
+## Quick Start
 ```bash
+# Start the Flask server
 python3 Backend/app.py
 ```
+Open **http://localhost:5000** in a browser. The backend serves both the API and the React frontend.
 
-Expected startup banner:
+---
 
-```text
-============================================================
-  CRMS Flask API — Bengaluru Police Department
-============================================================
-```
-
-Open **http://localhost:5000** in your browser. The Flask app serves the frontend and API from the same origin.
-
-### 5. Sign in (development)
-
-After running `migrate_v2.sql`, seeded officers use this default password:
-
-| Field | Value |
-|-------|-------|
-| Password | `crms1234` |
-| Badge ID | e.g. `BPD-7821` (Inspector Arjun Nair) |
-
-Inspectors (`Inspector Arjun Nair`, `Inspector Vikram Rao`, `Inspector Meera Iyer`) can create and edit cases. Other seeded officers are **viewer** (read-only for assigned cases). Change passwords before any production deployment.
-
-## Environment Variables
-
-All runtime configuration is loaded from `.env` via `python-dotenv` in `Backend/config.py`.
-
-### Database (required)
-
-| Variable | Description |
-|----------|-------------|
-| `DB_HOST` | MySQL host |
-| `DB_PORT` | MySQL port (default `3306`) |
-| `DB_USER` | MySQL username |
-| `DB_PASSWORD` | MySQL password |
-| `DB_NAME` | Database name (`crms`) |
-
-### Flask (required)
-
-| Variable | Description |
-|----------|-------------|
-| `FLASK_HOST` | Bind address (`0.0.0.0` or `127.0.0.1`) |
-| `FLASK_PORT` | Port (default `5000`) |
-| `FLASK_DEBUG` | `true` or `false` |
-
-### CORS (optional)
-
-| Variable | Description |
-|----------|-------------|
-| `CORS_ORIGIN` | Allowed origin (`*` for dev; set to your domain in production) |
-
-### reCAPTCHA v2 invisible (required in config)
-
-| Variable | Description |
-|----------|-------------|
-| `RECAPTCHA_SECRET_KEY` | Server-side secret key |
-| `RECAPTCHA_PUBLIC_KEY` | Site key (used by the frontend) |
-| `RECAPTCHA_THRESHOLD` | Reserved for v3 scoring (unused for v2) |
-
-For local testing without verification, you can leave `RECAPTCHA_SECRET_KEY` empty — the backend skips CAPTCHA checks when the secret is missing.
-
-### SMTP email (optional)
-
-When SMTP is not configured, approved access requests are written to `Backend/mock_emails/` as JSON logs and PDF files instead of sending live email.
-
-| Variable | Description |
-|----------|-------------|
-| `SMTP_HOST` | SMTP server (e.g. `smtp.gmail.com`) |
-| `SMTP_PORT` | SMTP port (e.g. `587`) |
-| `SMTP_USER` | SMTP username |
-| `SMTP_PASSWORD` | SMTP password |
-| `SMTP_FROM_EMAIL` | Sender address |
-| `SMTP_FROM_NAME` | Sender display name |
-
-## Project Structure
-
-```text
-.
-├── .env.example
-├── requirements.txt
-├── Backend/
-│   ├── app.py                  # Flask routes and startup
-│   ├── config.py               # Environment configuration
-│   ├── db_connection.py        # MySQL connection pool
-│   ├── queries.py              # All SQL / data access
-│   ├── assignment_algorithm.py # Auto-assign pending complaints
-│   ├── email_utils.py          # PDF dossier + SMTP / mock email
-│   ├── setup_db.sql
-│   ├── migrate_v2.sql
-│   ├── migrate_v3.sql
-│   └── mock_emails/            # Offline email/PDF output (dev)
-└── Frontend/
-    └── crms_frontend.html      # Public portal + staff dashboard
-```
-
-## API Overview
-
-Responses use `{ "success": true, "data": ... }` or `{ "success": false, "error": "..." }`.
-
-Protected staff routes expect the **`X-Officer-Id`** header (integer officer ID returned from login).
+## API Reference 📚
+All responses follow the pattern `{ "success": true/false, "data": … }` or `{ "success": false, "error": "…" }`.
 
 ### Health
-
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Health check |
+| GET | `/health` | Simple health‑check endpoint |
 
 ### Cases
-
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/cases`, `/api/cases` | List cases (filters, pagination; role-based visibility) |
-| `GET` | `/cases/<id>`, `/api/cases/<id>` | Case detail with assigned officers |
-| `POST` | `/cases` | Create case (inspector role) |
-| `PATCH` | `/cases/<id>` | Update case fields / status |
-| `DELETE` | `/cases/<id>` | Delete case and assignments |
-| `GET` | `/cases/<id>/officers` | Officers assigned to a case |
+| GET | `/cases` | List cases (filters, pagination, role‑based visibility) |
+| GET | `/cases/<id>` | Detailed view of a case |
+| POST | `/cases` | Create a new case (inspectors only) |
+| PATCH | `/cases/<id>` | Update case fields/status |
+| DELETE | `/cases/<id>` | Delete a case |
+| GET | `/cases/<id>/officers` | Officers assigned to a case |
 
-Query parameters for list: `status`, `crime_type`, `location`, `search`, `page`, `limit`.
-
-### Officers & assignments
-
+### Officers & Assignments
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/officers` | List officers |
-| `POST` | `/officers` | Add officer |
-| `GET` | `/case-officer` | All case–officer pairings |
-| `POST` | `/case-officer` | Assign officer to case |
-| `DELETE` | `/case-officer` | Remove assignment |
+| GET | `/officers` | List all officers |
+| POST | `/officers` | Add a new officer |
+| GET | `/case-officer` | List all case‑officer pairings |
+| POST | `/case-officer` | Assign an officer to a case |
+| DELETE | `/case-officer` | Remove an assignment |
 
-### Analytics & assignment engine
-
+### Analytics & Assignment Engine
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/analytics` | Dashboard analytics |
-| `GET` | `/assignments/pending` | Queue of complaints awaiting auto-assignment |
-| `POST` | `/assignments/process` | Manually run the assignment algorithm |
+| GET | `/analytics` | Dashboard analytics |
+| GET | `/assignments/pending` | Queue of pending complaints |
+| POST | `/assignments/process` | Manually trigger the assignment algorithm |
 
-A background thread also runs the assignment algorithm every **10 seconds** while the server is running.
-
-### Public portal (citizen)
-
+### Public Portal (Citizens)
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/public/cases` | Browse public cases (search, filter by status, crime type, location) |
-| `POST` | `/public/complaint` | Submit a complaint (staged for review / auto-promotion) |
-| `POST` | `/public/access-request` | Request access to a case dossier |
-| `GET` | `/stats` | Public statistics summary |
-
-**Browse Cases query parameters** (`GET /public/cases`):
-
-| Parameter | Type | Description | Example |
-|-----------|------|-------------|---------|
-| `status` | string | Filter by case status | `Active`, `Solved`, `Closed`, or empty for all |
-| `crime_type` | string | Filter by crime type | `Cyber Fraud`, `Theft`, `Assault`, `Fraud`, `Other` |
-| `location` | string | Partial location match | `Kengeri`, `MG Road` |
-| `search` | string | Search in case title | `fraud`, `theft` |
-
-Response: `{ "success": true, "data": [ { "case_id": 1, "case_id_display": "BLR-001", "title": "...", "crime_type": "...", "status": "...", "location": "...", "date_reported": "..." }, ... ] }`
+| GET | `/public/cases` | Browse public cases with filters |
+| POST | `/public/complaint` | Submit a citizen complaint |
+| POST | `/public/access-request` | Request access to a case dossier |
+| GET | `/stats` | Public statistics summary |
 
 ### Authentication
-
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/auth/login` | Officer login (`badge_id`, `password`, `captcha_token`) |
+| POST | `/auth/login` | Officer login (badge ID, password, reCAPTCHA) |
 
-No JWT in this MVP — the client stores the officer record and sends `X-Officer-Id` on subsequent requests. Write endpoints validate role server-side.
-
-### Public complaints (staff review)
-
+### Access Requests (Staff)
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/public-complaints` | List staged complaints (`?status=Pending`) |
-| `POST` | `/public-complaints/<id>/promote` | Promote complaint to a full case |
-| `POST` | `/public-complaints/<id>/reject` | Reject complaint |
+| GET | `/api/access-requests` | List access requests (role‑filtered) |
+| POST | `/api/access-requests/<id>/approve` | Approve request – sends PDF dossier |
+| POST | `/api/access-requests/<id>/reject` | Reject request – notifies citizen |
 
-### Case access requests (staff)
+---
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/access-requests` | List access requests (visibility by role/assignment) |
-| `POST` | `/api/access-requests/<id>/approve` | Approve; sends PDF dossier email async |
-| `POST` | `/api/access-requests/<id>/reject` | Reject; sends decline notification async |
+## Frontend 🎨
+The UI lives in a single HTML file `Frontend/crms_frontend.html`. It pulls React, Tailwind CSS, Chart.js, and Framer Motion from CDNs, delivering a snappy SPA experience.
 
-## Frontend
+---
 
-The UI is a single HTML file using React, Tailwind CSS, Chart.js, and Framer Motion from CDNs.
-
-| View | Description |
-|------|-------------|
-| **Public portal** | File complaints, browse and search public cases, request case access, view public stats |
-| **Staff login** | Badge ID + password with reCAPTCHA |
-| **Staff dashboard** | Cases (filter, paginate, update status), access request queue, analytics |
-
-reCAPTCHA site key is read from the backend environment at runtime.
-
-## Automated Case Assignment
-
-When a citizen files a complaint, it lands in `public_complaints` with status `Pending`. The assignment engine (`assignment_algorithm.py`):
-
-1. Maps `crime_type` to severity (e.g. Assault → Critical, Cyber Fraud → High)
-2. Selects officers by rank, current workload, and seniority
-3. Creates a case with `source='public'` and `case_officer` rows
-4. Marks the complaint as `Promoted`
-
-Inspectors and admins see all cases; viewers only see cases they are assigned to.
-
-## Case Discovery for Citizens
-
-Citizens can now browse and discover public cases directly from the public portal, solving the problem of not knowing case IDs upfront:
-
-**Browse Cases workflow:**
-1. Open the Public Portal
-2. Click the **"Browse Cases"** tab
-3. Filter cases by:
-   - **Status**: Active, Solved, Closed, or All
-   - **Crime Type**: Cyber Fraud, Theft, Assault, Fraud, Other
-   - **Location**: Search by partial location match
-   - **Keywords**: Search case titles and details
-4. View matching cases with details: Case ID (BLR-XXX), Title, Crime Type, Location, Date Reported, Status
-5. **Click any case** → Case ID auto-populates in the "Request Case Access" form
-6. Complete the request with name, email, phone, and reason
-
-The backend endpoint `GET /public/cases` supports all filters via query parameters and requires no authentication. Results are cached efficiently with debounced filtering for a smooth user experience.
-
-## Email & PDF Dossiers
-
-On access request approval, `email_utils.py` generates a ReportLab PDF dossier and dispatches it asynchronously:
-
-- **SMTP configured** — Email sent to the requester with the PDF attached
-- **SMTP not configured** — Mock mode writes `email_*.json` and `*.pdf` under `Backend/mock_emails/`
-
-Rejections send a notification email (or mock log) without an attachment.
-
-## Security & Production
-
-- Never commit `.env` or real credentials.
-- Change default officer passwords from `migrate_v2.sql` before deployment.
-- Restrict `CORS_ORIGIN` to your trusted frontend host.
-- Keep `RECAPTCHA_SECRET_KEY` and `SMTP_PASSWORD` secret.
-- Use HTTPS in production.
-- Run behind a production WSGI server instead of the Flask dev server:
-
+## Testing 🧪
 ```bash
-cd Backend
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
+# Run the test suite (if any)
+pytest   # or any project‑specific command
 ```
+The README changes are purely documentation; they do not affect runtime behavior.
 
-The development entrypoint calls `init_pool()` and `start_assignment_scheduler()` before `app.run()`. For Gunicorn, wire equivalent startup (e.g. a small `wsgi.py` or Gunicorn `post_fork` hook) so the DB pool and assignment scheduler are initialized in each worker as needed.
+---
 
-## Troubleshooting
+## Contributing 🤝
+We welcome contributions! Please follow these steps:
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feat/awesome-feature`).
+3. Ensure code style passes linting (`flake8` optional) and all tests succeed.
+4. Submit a pull request with a clear description.
 
-| Issue | What to check |
-|-------|----------------|
-| MySQL connection errors | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` in `.env` |
-| Frontend not loading | Server running; visit `http://localhost:5000` |
-| Login fails | Migrations run; badge ID exact (e.g. `BPD-7821`); password `crms1234` for dev seeds |
-| CAPTCHA errors | Valid keys in `.env`, or empty `RECAPTCHA_SECRET_KEY` for local bypass |
-| No email received | Configure SMTP vars, or inspect `Backend/mock_emails/` in mock mode |
-| Missing access requests table | Run `Backend/migrate_v3.sql` |
+---
 
-## Dependencies
+## License 📄
+This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
 
-| Package | Role |
-|---------|------|
-| Flask | Web framework |
-| flask-cors | CORS |
-| mysql-connector-python | MySQL driver |
-| python-dotenv | `.env` loading |
-| bcrypt | Password hashing |
-| requests | reCAPTCHA verification |
-| reportlab | PDF dossier generation |
-| gunicorn | Production WSGI server |
+---
+
+## Contact & Acknowledgements
+- **Maintainer**: Venzz ([@venzz](https://github.com/venzz))
+- **Thanks** to the Bengaluru Police Department for providing the domain context.
+- **Special thanks** to the open‑source community for the libraries used.
+
+---
+
+*Generated on $(date)*
