@@ -101,13 +101,17 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB file size limit
 
 def run_assignment_scheduler():
     """
-    Background thread that runs every 10 seconds to automatically assign
+    Background thread that periodically assigns
     pending complaints to officers based on case severity and officer availability.
     """
-    logger.info("[SCHEDULER] Case assignment scheduler started")
+    try:
+        interval_seconds = max(10, int(os.getenv("ASSIGNMENT_SCHEDULER_INTERVAL_SECONDS", "60")))
+    except ValueError:
+        interval_seconds = 60
+    logger.info(f"[SCHEDULER] Case assignment scheduler started; interval={interval_seconds}s")
     while True:
         try:
-            time.sleep(10)
+            time.sleep(interval_seconds)
             logger.debug("[SCHEDULER] Running pending complaint assignment check...")
             results = process_pending_complaints()
             
@@ -385,8 +389,7 @@ def get_cases():
         # Exception Rule: bypass for 'admin' or 'inspector'
         bypass_visibility = (role in ("admin", "inspector"))
 
-        # Fetch filtered cases from the query layer with visibility constraints
-        all_filtered_cases = queries.get_all_cases(
+        total_records = queries.count_cases(
             status=status,
             crime_type=crime_type,
             location=location,
@@ -394,14 +397,18 @@ def get_cases():
             officer_id=officer_id,
             bypass_visibility=bypass_visibility
         )
-        
-        total_records = len(all_filtered_cases)
         total_pages = (total_records + limit - 1) // limit  # Ceiling division
-        
-        # Slice array for current page frame
-        start_idx = (page - 1) * limit
-        end_idx = start_idx + limit
-        paginated_cases = all_filtered_cases[start_idx:end_idx]
+
+        paginated_cases = queries.get_all_cases(
+            status=status,
+            crime_type=crime_type,
+            location=location,
+            search=search,
+            officer_id=officer_id,
+            bypass_visibility=bypass_visibility,
+            limit=limit,
+            offset=(page - 1) * limit,
+        )
 
         return _ok(
             data=paginated_cases,
@@ -1894,29 +1901,29 @@ def admin_dashboard_stats():
         cur = conn.cursor()
         try:
             # Total counts
-            cur.execute("SELECT COUNT(*) FROM cases")
-            total_cases = cur.fetchone()[0]
-            
-            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Active'")
-            active_cases = cur.fetchone()[0]
-            
-            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Solved'")
-            solved_cases = cur.fetchone()[0]
-            
-            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Closed'")
-            closed_cases = cur.fetchone()[0]
-            
-            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Pending Review'")
-            pending_review_cases = cur.fetchone()[0]
-            
-            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Recommended'")
-            recommended_cases = cur.fetchone()[0]
-            
-            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Assigned'")
-            assigned_cases = cur.fetchone()[0]
-            
-            cur.execute("SELECT COUNT(*) FROM cases WHERE `status` = 'Rejected'")
-            rejected_cases = cur.fetchone()[0]
+            cur.execute(
+                """SELECT
+                     COUNT(*) AS total_cases,
+                     COALESCE(SUM(`status` = 'Active'), 0) AS active_cases,
+                     COALESCE(SUM(`status` = 'Solved'), 0) AS solved_cases,
+                     COALESCE(SUM(`status` = 'Closed'), 0) AS closed_cases,
+                     COALESCE(SUM(`status` = 'Pending Review'), 0) AS pending_review_cases,
+                     COALESCE(SUM(`status` = 'Recommended'), 0) AS recommended_cases,
+                     COALESCE(SUM(`status` = 'Assigned'), 0) AS assigned_cases,
+                     COALESCE(SUM(`status` = 'Rejected'), 0) AS rejected_cases
+                   FROM cases"""
+            )
+            counts = cur.fetchone()
+            (
+                total_cases,
+                active_cases,
+                solved_cases,
+                closed_cases,
+                pending_review_cases,
+                recommended_cases,
+                assigned_cases,
+                rejected_cases,
+            ) = [int(value or 0) for value in counts]
             
             cur.execute("SELECT COUNT(*) FROM officers")
             total_officers = cur.fetchone()[0]

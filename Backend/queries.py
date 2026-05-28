@@ -56,7 +56,42 @@ def ensure_auth_schema():
 # CASES
 # ──────────────────────────────────────────────────────────────────────────────
 
-def get_all_cases(status=None, crime_type=None, location=None, search=None, officer_id=None, bypass_visibility=False):
+def count_cases(status=None, crime_type=None, location=None, search=None, officer_id=None, bypass_visibility=False):
+    """Counts cases using the same filters and visibility rules as get_all_cases."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        sql = "SELECT COUNT(*) FROM cases WHERE 1=1"
+        params = []
+
+        if not bypass_visibility and officer_id is not None:
+            sql += " AND case_id IN (SELECT case_id FROM case_officer WHERE officer_id = %s)"
+            params.append(officer_id)
+
+        if status and status != "All":
+            sql += " AND `status` = %s"
+            params.append(status)
+
+        if crime_type and crime_type != "All":
+            sql += " AND crime_type = %s"
+            params.append(crime_type)
+
+        if location:
+            sql += " AND `location` LIKE %s"
+            params.append(f"%{location}%")
+
+        if search:
+            sql += " AND (title LIKE %s OR `location` LIKE %s)"
+            params.extend([f"%{search}%", f"%{search}%"])
+
+        cur.execute(sql, params)
+        return cur.fetchone()[0]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_all_cases(status=None, crime_type=None, location=None, search=None, officer_id=None, bypass_visibility=False, limit=None, offset=0):
     """
     Returns all cases, optionally filtered.
     If bypass_visibility is False and officer_id is provided, returns only cases assigned to that officer.
@@ -90,16 +125,27 @@ def get_all_cases(status=None, crime_type=None, location=None, search=None, offi
 
         sql += " ORDER BY date_reported DESC"
 
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
+
         cur.execute(sql, params)
         cases = _rows_to_list(cur, cur.fetchall())
 
-        # Attach officer_ids list to every case
-        for case in cases:
+        officer_ids_by_case = {case["case_id"]: [] for case in cases}
+        if officer_ids_by_case:
+            placeholders = ", ".join(["%s"] * len(officer_ids_by_case))
             cur.execute(
-                "SELECT officer_id FROM case_officer WHERE case_id = %s",
-                (case["case_id"],)
+                f"""SELECT case_id, officer_id
+                    FROM case_officer
+                    WHERE case_id IN ({placeholders})""",
+                tuple(officer_ids_by_case.keys())
             )
-            case["officer_ids"] = [r[0] for r in cur.fetchall()]
+            for case_id, assigned_officer_id in cur.fetchall():
+                officer_ids_by_case.setdefault(case_id, []).append(assigned_officer_id)
+
+        for case in cases:
+            case["officer_ids"] = officer_ids_by_case.get(case["case_id"], [])
 
             # Serialise date/datetime fields to strings for JSON
             for key in ("date_reported", "last_updated"):
@@ -231,27 +277,27 @@ def get_all_officers():
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute("SELECT * FROM officers ORDER BY officer_id")
+        cur.execute(
+            """SELECT
+                 o.*,
+                 COALESCE(w.active_cases, 0) AS active_cases,
+                 COALESCE(w.solved_cases, 0) AS solved_cases
+               FROM officers o
+               LEFT JOIN (
+                 SELECT
+                   co.officer_id,
+                   SUM(c.`status` = 'Active') AS active_cases,
+                   SUM(c.`status` = 'Solved') AS solved_cases
+                 FROM case_officer co
+                 JOIN cases c ON co.case_id = c.case_id
+                 GROUP BY co.officer_id
+               ) w ON o.officer_id = w.officer_id
+               ORDER BY o.officer_id"""
+        )
         officers = _rows_to_list(cur, cur.fetchall())
 
         for officer in officers:
             oid = officer["officer_id"]
-
-            cur.execute(
-                """SELECT COUNT(*) FROM case_officer co
-                   JOIN cases c ON co.case_id = c.case_id
-                   WHERE co.officer_id = %s AND c.status = 'Active'""",
-                (oid,)
-            )
-            officer["active_cases"] = cur.fetchone()[0]
-
-            cur.execute(
-                """SELECT COUNT(*) FROM case_officer co
-                   JOIN cases c ON co.case_id = c.case_id
-                   WHERE co.officer_id = %s AND c.status = 'Solved'""",
-                (oid,)
-            )
-            officer["solved_cases"] = cur.fetchone()[0]
 
             # Add extras the frontend officer modal shows.
             # These columns may not exist in the minimal schema — supply defaults if absent.

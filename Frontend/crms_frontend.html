@@ -1739,7 +1739,7 @@
                 const refreshVisibleCases = () => {
                     if (!document.hidden) refreshCases();
                 };
-                const intervalId = setInterval(refreshCases, 15000);
+                const intervalId = setInterval(refreshCases, 45000);
                 window.addEventListener("focus", refreshCases);
                 document.addEventListener("visibilitychange", refreshVisibleCases);
                 return () => {
