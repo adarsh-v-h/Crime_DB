@@ -27,9 +27,9 @@ DB_NAME     = _get_required_env("DB_NAME")
 # ============================================================================
 # FLASK SERVER CONFIGURATION (Required)
 # ============================================================================
-FLASK_HOST  = _get_required_env("FLASK_HOST")
-# Allow either PORT or FLASK_PORT to be set
-FLASK_PORT  = int(_get_optional_env("PORT", _get_required_env("FLASK_PORT")))
+FLASK_HOST  = _get_optional_env("FLASK_HOST", "0.0.0.0")
+# Allow either PORT or FLASK_PORT to be set with a safe fallback to 5000
+FLASK_PORT  = int(os.getenv("PORT") or os.getenv("FLASK_PORT") or 5000)
 FLASK_DEBUG = _get_optional_env("FLASK_DEBUG", "false").lower() == "true"
 
 # ============================================================================
