@@ -1,19 +1,16 @@
 # ─── Themis's Domain Secure Email & PDF Generation Engine ───────────────────────────────
 # Handles building high-resolution case dossiers in PDF format and dispatches
-# notifications to citizens asynchronously.
+# notifications to citizens and officers asynchronously via Brevo's HTTP REST API.
 # Features a Mock Fallback Mode for seamless offline testing.
 
 import io
 import os
 import json
 import logging
-import smtplib
+import base64
 import threading
 import requests
 from datetime import datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
 from xml.sax.saxutils import escape
 
 from reportlab.lib.pagesizes import letter
@@ -27,6 +24,21 @@ except ImportError:
     import queries
 
 logger = logging.getLogger(__name__)
+
+
+def _email_sender():
+    """Returns the configured sender for Brevo, with legacy SMTP env fallback."""
+    from_email = (
+        os.getenv("BREVO_FROM_EMAIL")
+        or os.getenv("SMTP_FROM_EMAIL")
+        or "adarshvh2005@gmail.com"
+    ).strip()
+    from_name = (
+        os.getenv("BREVO_FROM_NAME")
+        or os.getenv("SMTP_FROM_NAME")
+        or "Bengaluru Police Themis's Domain Team"
+    ).strip()
+    return from_email, from_name
 
 
 def _pdf_text(value, fallback="N/A"):
@@ -55,20 +67,59 @@ def _format_file_size(size):
         return "N/A"
 
 
+def _send_via_brevo_api(brevo_api_key, from_name, from_email, recipient_email, subject, body, attachment_bytes=None, attachment_name=""):
+    """
+    Core internal helper to execute an HTTPS POST request to Brevo's transactional API engine.
+    Converts binary attachments to base64 strings dynamically.
+    """
+    # Convert newline format to basic HTML paragraph tags for HTML viewing
+    html_content = "".join(f"<p>{line}</p>" for line in body.split("\n\n")).replace("\n", "<br/>")
+    
+    payload = {
+        "sender": {"name": from_name, "email": from_email},
+        "to": [{"email": recipient_email}],
+        "subject": subject,
+        "htmlContent": html_content,
+        "textContent": body
+    }
+
+    # Process and map file attachments if present
+    if attachment_bytes:
+        encoded_content = base64.b64encode(attachment_bytes).decode('utf-8')
+        payload["attachment"] = [
+            {
+                "content": encoded_content,
+                "name": attachment_name
+            }
+        ]
+
+    try:
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key": brevo_api_key,
+                "Content-Type": "application/json",
+                "accept": "application/json"
+            },
+            json=payload,
+            timeout=15
+        )
+        if response.ok:
+            return True
+        logger.error(f"[BREVO HTTP API FAILURE] Status: {response.status_code} Response: {response.text}")
+        return False
+    except Exception as e:
+        logger.error(f"[BREVO HTTP API EXCEPTION] Request pipeline error: {str(e)}")
+        return False
+
+
 def send_verification_email(recipient_email, otp):
     """
-    Sends a simple verification OTP email. Falls back to mock logging if SMTP is not configured.
-    Returns (success, message).
+    Sends a verification OTP email using Brevo's transactional HTTP REST API.
+    Bypasses blocked outbound SMTP ports on Render by communicating over HTTPS Port 443.
     """
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port_str = os.getenv("SMTP_PORT", "587")
-    smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
-    smtp_user = os.getenv("SMTP_USER", "").strip()
-    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-    smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-    smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
-    resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
-    resend_from_email = os.getenv("RESEND_FROM_EMAIL", smtp_from_email).strip()
+    brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
+    from_email, from_name = _email_sender()
 
     subject = "Themis's Domain verification code"
     body = (
@@ -77,67 +128,15 @@ def send_verification_email(recipient_email, otp):
         f"This code is valid for 2 minutes. Do not share it with anyone.\n\n"
         f"Bengaluru Police Department Themis's Domain Team"
     )
-    html_body = (
-        "<p>Dear Citizen,</p>"
-        f"<p>Your Themis's Domain verification code is: <strong>{otp}</strong></p>"
-        "<p>This code is valid for 2 minutes. Do not share it with anyone.</p>"
-        "<p>Bengaluru Police Department Themis's Domain Team</p>"
-    )
 
-    if resend_api_key:
-        try:
-            response = requests.post(
-                "https://api.resend.com/emails",
-                headers={
-                    "Authorization": f"Bearer {resend_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "from": f"{smtp_from_name} <{resend_from_email}>",
-                    "to": [recipient_email],
-                    "subject": subject,
-                    "html": html_body,
-                    "text": body,
-                },
-                timeout=15,
-            )
-            if response.ok:
-                logger.info(f"[EMAIL OTP] Sent verification email to {recipient_email} via Resend")
-                return True, "OTP sent successfully to email."
-
-            logger.error(
-                f"[EMAIL OTP] Resend send failed: {response.status_code} {response.text}"
-            )
-            return False, "Resend email send failed. Please check the backend logs and Resend settings."
-        except Exception as e:
-            logger.error(f"[EMAIL OTP] Resend send failed: {e}")
-            return False, "Resend email send failed. Please check the backend logs and Resend settings."
-
-    smtp_configured = bool(smtp_user and smtp_password)
-
-    if smtp_configured:
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
-            msg['To'] = recipient_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(body, 'plain'))
-
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-            server.ehlo()
-            if smtp_port == 587:
-                server.starttls()
-                server.ehlo()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(smtp_from_email, recipient_email, msg.as_string())
-            server.quit()
-            logger.info(f"[EMAIL OTP] Sent verification email to {recipient_email}")
+    if brevo_api_key:
+        success = _send_via_brevo_api(brevo_api_key, from_name, from_email, recipient_email, subject, body)
+        if success:
+            logger.info(f"[EMAIL OTP] Sent verification email to {recipient_email} via Brevo HTTP API")
             return True, "OTP sent successfully to email."
-        except Exception as e:
-            logger.error(f"[EMAIL OTP] SMTP send failed: {e}")
-            return False, "SMTP email send failed. Please check the backend logs and SMTP settings."
+        return False, "Email dispatch rejected by delivery engine."
 
-    # Offline or mock fallback
+    # Offline Fallback
     mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_emails")
     os.makedirs(mock_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -145,7 +144,6 @@ def send_verification_email(recipient_email, otp):
     log_data = {
         "sent_to": recipient_email,
         "subject": subject,
-        "body": body,
         "otp": otp,
         "timestamp": datetime.now().isoformat()
     }
@@ -156,7 +154,7 @@ def send_verification_email(recipient_email, otp):
         return True, f"OTP email logged to {log_path}"
     except Exception as e:
         logger.error(f"[EMAIL OTP] Failed to write mock email log: {e}")
-        return False, "Failed to send OTP email." 
+        return False, "Failed to send OTP email."
 
 
 def generate_case_pdf(case, evidence_list=None, timeline_updates=None, teammates=None):
@@ -434,18 +432,15 @@ def generate_case_pdf(case, evidence_list=None, timeline_updates=None, teammates
 
 def send_decision_email(request_id: int, decision: str, officer_id: int):
     """
-    Assembles email content, compiles the PDF dossier (if Accepted), and either:
-    1. Sends the email via SMTP (if configured).
-    2. Writes a mock email and saves the PDF to `Backend/mock_emails/` (if SMTP isn't configured).
+    Assembles email content, compiles the PDF dossier (if Accepted), and 
+    sends it out using Brevo's HTTPS REST API.
     """
     try:
-        # 1. Fetch access request and case details
         request = queries.get_access_request_by_id(request_id)
         if not request:
             logger.error(f"[EMAIL ENGINE] Access request {request_id} not found.")
             return False
             
-        # 2. Fetch deciding officer details
         officer = queries.get_officer_by_id(officer_id)
         officer_name = officer.get("name") if officer else "BPD Investigating Officer"
         
@@ -453,13 +448,12 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
         requester_name = request.get("requester_name")
         requester_email = request.get("requester_email")
         
-        # 3. Draft email content based on decision
         subject = ""
         body = ""
         attachment_bytes = None
         attachment_name = ""
         
-        if decision.lower() == "accept" or decision.lower() == "accepted":
+        if decision.lower() in ["accept", "accepted"]:
             case_id = request.get("case_id")
             evidence_list = queries.get_case_evidence(case_id) if case_id else []
             timeline_updates = queries.get_case_updates(case_id) if case_id else []
@@ -478,7 +472,6 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 f"Bengaluru Police Department Themis's Domain Team\n"
                 f"(Deciding Officer: {officer_name})"
             )
-            # Generate the PDF attachment
             attachment_bytes = generate_case_pdf(
                 request,
                 evidence_list=evidence_list,
@@ -486,7 +479,6 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 teammates=teammates
             )
             attachment_name = f"{display_id}.pdf"
-            
         else:
             subject = f"[Themis's Domain] Secure Case Access Declined - Case {display_id}"
             body = (
@@ -500,65 +492,32 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 f"(Deciding Officer: {officer_name})"
             )
             
-        # 4. Check SMTP Credentials in Environment
-        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port_str = os.getenv("SMTP_PORT", "587")
-        smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
-        smtp_user = os.getenv("SMTP_USER", "").strip()
-        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-        smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
+        brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
+        from_email, from_name = _email_sender()
         
-        # Determine whether to send for real or run in Mock Mode
-        is_smtp_valid = bool(smtp_user and smtp_password)
-        
-        if is_smtp_valid:
-            logger.info(f"[EMAIL ENGINE] Attempting to send live email to {requester_email} via SMTP...")
-            try:
-                # Compile MIME message
-                msg = MIMEMultipart()
-                msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
-                msg['To'] = requester_email
-                msg['Subject'] = subject
-                msg.attach(MIMEText(body, 'plain'))
-                
-                if attachment_bytes:
-                    part = MIMEApplication(attachment_bytes, Name=attachment_name)
-                    part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
-                    msg.attach(part)
-                    
-                # Setup Secure Connection
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-                server.ehlo()
-                if smtp_port == 587:
-                    server.starttls()
-                    server.ehlo()
-                server.login(smtp_user, smtp_password)
-                server.sendmail(smtp_from_email, requester_email, msg.as_string())
-                server.quit()
-                logger.info(f"[EMAIL ENGINE] Live email successfully dispatched to {requester_email}!")
+        if brevo_api_key:
+            logger.info(f"[EMAIL ENGINE] Dispatching email to {requester_email} via Brevo HTTP REST Gateway...")
+            success = _send_via_brevo_api(
+                brevo_api_key, from_name, from_email, requester_email, 
+                subject, body, attachment_bytes, attachment_name
+            )
+            if success:
+                logger.info(f"[EMAIL ENGINE] Live API email successfully dispatched to {requester_email}!")
                 return True
-            except Exception as smtp_err:
-                logger.error(f"[EMAIL ENGINE] SMTP dispatch failed: {str(smtp_err)}. Falling back to MOCK mode...")
-                # Fallback to Mock Log in case of socket/credential errors
+            logger.warning("[EMAIL ENGINE] Brevo API processing execution failed. Reverting to Mock storage...")
                 
-        # 5. Offline Fallback: Mock Developer Mode
+        # Mock Developer Mode Fallback
         logger.info("[EMAIL ENGINE] Running in Mock Developer Mode (Offline)...")
-        # Ensure we write inside Backend directory for convenience
-        mock_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 
-            "mock_emails"
-        )
+        mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_emails")
         os.makedirs(mock_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         email_filename = f"email_{timestamp}_req_{request_id}_{decision.lower()}.json"
         email_filepath = os.path.join(mock_dir, email_filename)
         
-        # Prepare email details log
         email_log = {
             "timestamp": datetime.now().isoformat(),
-            "from": f"{smtp_from_name} <{smtp_from_email}>",
+            "from": f"{from_name} <{from_email}>",
             "to": requester_email,
             "subject": subject,
             "body": body,
@@ -569,9 +528,6 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
         with open(email_filepath, 'w', encoding='utf-8') as f:
             json.dump(email_log, f, indent=4)
             
-        logger.info(f"[EMAIL ENGINE] Mock email log saved: {email_filepath}")
-        
-        # If accepted, save the generated PDF file as well so the user can open it!
         if attachment_bytes:
             pdf_filename = f"{display_id}_{timestamp}.pdf"
             pdf_filepath = os.path.join(mock_dir, pdf_filename)
@@ -586,9 +542,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
 
 
 def send_decision_email_async(request_id: int, decision: str, officer_id: int):
-    """
-    Dispatches the email sender into a separate daemon thread to prevent UI locking.
-    """
+    """Dispatches the email sender into a separate daemon thread to prevent UI locking."""
     thread = threading.Thread(
         target=send_decision_email,
         args=(request_id, decision, officer_id),
@@ -598,24 +552,9 @@ def send_decision_email_async(request_id: int, decision: str, officer_id: int):
     logger.info(f"[EMAIL ENGINE] Background thread dispatched for Request ID: {request_id}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# OFFICER ASSIGNMENT NOTIFICATIONS
-# ─────────────────────────────────────────────────────────────────────────────
-
 def send_officer_assignment_notification(case_id: int, officer_id: int, action: str):
-    """
-    Notifies an officer when they are assigned to or removed from a case.
-    If assigned ('added'), attaches the complete case dossier PDF.
-    
-    Args:
-        case_id: ID of the case
-        officer_id: ID of the officer
-        action: 'added' or 'removed'
-    
-    Returns: True if successful, False otherwise
-    """
+    """Notifies an officer when they are assigned to or removed from a case."""
     try:
-        # 1. Fetch case and officer details
         case = queries.get_case_by_id(case_id)
         officer = queries.get_officer_by_id(officer_id)
         
@@ -634,7 +573,6 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
         attachment_bytes = None
         attachment_name = ""
         
-        # 2. Draft email based on action
         if action.lower() == "added":
             subject = f"[Themis's Domain] New Case Assignment - {display_id}"
             body = (
@@ -650,8 +588,6 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 f"Best regards,\n"
                 f"Bengaluru Police Department Themis's Domain Team"
             )
-            
-            # Generate the dossier PDF with the latest case-linked metadata.
             evidence_list = queries.get_case_evidence(case_id)
             timeline_updates = queries.get_case_updates(case_id)
             teammates = queries.get_officers_assigned_to_case(case_id)
@@ -662,7 +598,7 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 teammates=teammates
             )
             attachment_name = f"{display_id}_assigned_dossier.pdf"
-        else:  # removed
+        else:
             subject = f"[Themis's Domain] Case Assignment Removed - {display_id}"
             body = (
                 f"Dear {officer_name},\n\n"
@@ -674,136 +610,88 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 f"Bengaluru Police Department Themis's Domain Team"
             )
         
-        # 3. Check SMTP configuration
-        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port_str = os.getenv("SMTP_PORT", "587")
-        smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
-        smtp_user = os.getenv("SMTP_USER", "").strip()
-        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-        smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
+        brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
+        from_email, from_name = _email_sender()
         
-        is_smtp_valid = bool(smtp_user and smtp_password)
-        
-        sent_ok = False
-        if is_smtp_valid:
-            logger.info(f"[ASSIGNMENT EMAIL] Sending email to {officer_email}...")
-            try:
-                msg = MIMEMultipart()
-                msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
-                msg['To'] = officer_email
-                msg['Subject'] = subject
-                msg.attach(MIMEText(body, 'plain'))
-                
-                if attachment_bytes:
-                    part = MIMEApplication(attachment_bytes, Name=attachment_name)
-                    part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
-                    msg.attach(part)
-                    
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-                server.ehlo()
-                if smtp_port == 587:
-                    server.starttls()
-                    server.ehlo()
-                server.login(smtp_user, smtp_password)
-                server.sendmail(smtp_from_email, officer_email, msg.as_string())
-                server.quit()
-                logger.info(f"[ASSIGNMENT EMAIL] Email sent to {officer_email}")
-                sent_ok = True
-            except Exception as smtp_err:
-                logger.error(f"[ASSIGNMENT EMAIL] SMTP error: {str(smtp_err)}. Using mock mode...")
-        
-        if not sent_ok:
-            # 4. Mock mode fallback
-            logger.info("[ASSIGNMENT EMAIL] Running in Mock Mode...")
-            mock_dir = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), 
-                "mock_emails"
+        if brevo_api_key:
+            success = _send_via_brevo_api(
+                brevo_api_key, from_name, from_email, officer_email, 
+                subject, body, attachment_bytes, attachment_name
             )
-            os.makedirs(mock_dir, exist_ok=True)
-            
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            email_filename = f"email_{timestamp}_case_{case_id}_officer_{officer_id}_{action.lower()}.json"
-            email_filepath = os.path.join(mock_dir, email_filename)
-            
-            email_log = {
+            if success:
+                logger.info(f"[ASSIGNMENT EMAIL] API Email successfully sent to Officer {officer_email}")
+                return True
+        
+        # Mock mode fallback
+        logger.info("[ASSIGNMENT EMAIL] Running in Mock Mode...")
+        mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_emails")
+        os.makedirs(mock_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        email_filename = f"email_{timestamp}_case_{case_id}_officer_{officer_id}_{action.lower()}.json"
+        email_filepath = os.path.join(mock_dir, email_filename)
+        
+        with open(email_filepath, 'w', encoding='utf-8') as f:
+            json.dump({
                 "timestamp": datetime.now().isoformat(),
-                "from": f"{smtp_from_name} <{smtp_from_email}>",
                 "to": officer_email,
                 "subject": subject,
                 "body": body,
                 "action": action,
-                "case_id": case_id,
-                "officer_id": officer_id,
-                "attachment_provided": bool(attachment_bytes),
-                "attachment_name": attachment_name
-            }
+                "attachment_provided": bool(attachment_bytes)
+            }, f, indent=4)
             
-            with open(email_filepath, 'w', encoding='utf-8') as f:
-                json.dump(email_log, f, indent=4)
-                
-            if attachment_bytes:
-                pdf_filepath = os.path.join(mock_dir, f"{display_id}_assigned_{timestamp}.pdf")
-                with open(pdf_filepath, 'wb') as f:
-                    f.write(attachment_bytes)
-                logger.info(f"[ASSIGNMENT EMAIL] Mock PDF dossier saved: {pdf_filepath}")
-            
-            logger.info(f"[ASSIGNMENT EMAIL] Mock email logged: {email_filepath}")
-            
+        if attachment_bytes:
+            pdf_filepath = os.path.join(mock_dir, f"{display_id}_assigned_{timestamp}.pdf")
+            with open(pdf_filepath, 'wb') as f:
+                f.write(attachment_bytes)
         return True
-    
     except Exception as e:
         logger.error(f"[ASSIGNMENT EMAIL] Fatal error: {str(e)}")
         return False
-    
-    except Exception as e:
-        logger.error(f"[ASSIGNMENT EMAIL] Fatal error: {str(e)}")
-        return False
+
+
+def send_officer_assignment_notification_async(case_id: int, officer_id: int, action: str):
+    """Dispatches assignment notification into a background thread."""
+    thread = threading.Thread(
+        target=send_officer_assignment_notification,
+        args=(case_id, officer_id, action),
+        daemon=True
+    )
+    thread.start()
+    logger.info(f"[ASSIGNMENT EMAIL] Background thread started for Case {case_id}")
 
 
 def send_evidence_email(case_id: int, officer_id: int, evidence_id: int):
-    """
-    Sends an email with the raw uploaded evidence file as an attachment
-    to the admin officer and all officers assigned to the case.
-    Returns True if successful.
-    """
+    """Sends an email with the raw uploaded evidence file as an attachment via Brevo HTTP API."""
     try:
         case = queries.get_case_by_id(case_id)
         uploader = queries.get_officer_by_id(officer_id)
         evidence = queries.get_evidence_by_id(evidence_id)
         if not case or not uploader or not evidence:
-            logger.error(f"[EVIDENCE EMAIL] Missing data for case {case_id}, officer {officer_id}, evidence {evidence_id}")
+            logger.error(f"[EVIDENCE EMAIL] Missing data for case {case_id}, officer {officer_id}")
             return False
             
         uploader_name = uploader.get("name") or "Officer"
         display_id = case.get("case_id_display") or f"BLR-{str(case_id).zfill(3)}"
         
-        # 1. Resolve recipients (Admin + all assigned officers)
         recipients = []
-        
-        # Get admin officer
         admin = queries.get_admin_officer()
         if admin and admin.get("email"):
             recipients.append((admin.get("name"), admin.get("email")))
             
-        # Get assigned officers
         assigned = queries.get_officers_assigned_to_case(case_id)
         for off in assigned:
             email = off.get("email")
-            if email:
-                name = off.get("name")
-                # Deduplicate by email
-                if not any(r[1].lower() == email.lower() for r in recipients):
-                    recipients.append((name, email))
+            if email and not any(r[1].lower() == email.lower() for r in recipients):
+                recipients.append((off.get("name") or "Officer", email))
                     
         if not recipients:
-            logger.warning(f"[EVIDENCE EMAIL] No eligible email recipients found for case {case_id}")
+            logger.warning(f"[EVIDENCE EMAIL] No email recipients found for case {case_id}")
             return False
             
-        # 2. Prepare the evidence attachment
         file_path = evidence.get("file_path")
-        original_name = evidence.get("original_name")
-        mime_type = evidence.get("mime_type") or "application/octet-stream"
+        original_name = evidence.get("original_name") or "evidence_file"
         
         if not file_path or not os.path.exists(file_path):
             logger.error(f"[EVIDENCE EMAIL] Evidence file not found on disk at {file_path}")
@@ -812,20 +700,11 @@ def send_evidence_email(case_id: int, officer_id: int, evidence_id: int):
         with open(file_path, 'rb') as f:
             attachment_bytes = f.read()
             
-        # SMTP configuration
-        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port_str = os.getenv("SMTP_PORT", "587")
-        smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
-        smtp_user = os.getenv("SMTP_USER", "").strip()
-        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-        smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
-        
-        is_smtp_valid = bool(smtp_user and smtp_password)
+        brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
+        from_email, from_name = _email_sender()
         subject = f"[Themis's Domain] Secure Evidence Notification - Case {display_id}"
         
         success = True
-        
         for recipient_name, recipient_email in recipients:
             body = (
                 f"Dear {recipient_name},\n\n"
@@ -843,62 +722,24 @@ def send_evidence_email(case_id: int, officer_id: int, evidence_id: int):
             )
             
             sent_ok = False
-            if is_smtp_valid:
-                try:
-                    msg = MIMEMultipart()
-                    msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
-                    msg['To'] = recipient_email
-                    msg['Subject'] = subject
-                    msg.attach(MIMEText(body, 'plain'))
-                    
-                    part = MIMEApplication(attachment_bytes, Name=original_name)
-                    part['Content-Disposition'] = f'attachment; filename="{original_name}"'
-                    msg.attach(part)
-                    
-                    server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-                    server.ehlo()
-                    if smtp_port == 587:
-                        server.starttls()
-                        server.ehlo()
-                    server.login(smtp_user, smtp_password)
-                    server.sendmail(smtp_from_email, recipient_email, msg.as_string())
-                    server.quit()
-                    
-                    logger.info(f"[EVIDENCE EMAIL] Sent raw evidence to {recipient_email}")
-                    sent_ok = True
-                except Exception as e:
-                    logger.error(f"[EVIDENCE EMAIL] SMTP error sending to {recipient_email}: {e}, falling back to mock")
+            if brevo_api_key:
+                sent_ok = _send_via_brevo_api(
+                    brevo_api_key, from_name, from_email, recipient_email, 
+                    subject, body, attachment_bytes, original_name
+                )
+                if sent_ok:
+                    logger.info(f"[EVIDENCE EMAIL] Sent evidence payload to {recipient_email}")
             
             if not sent_ok:
-                # Mock Mode Fallback for this recipient
                 try:
                     mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_emails")
                     os.makedirs(mock_dir, exist_ok=True)
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     
-                    # Log email JSON
-                    email_filename = f"email_{timestamp}_evidence_{evidence_id}_to_{recipient_email.replace('@', '_')}.json"
-                    email_file = os.path.join(mock_dir, email_filename)
-                    with open(email_file, 'w', encoding='utf-8') as f:
-                        json.dump({
-                            "timestamp": datetime.now().isoformat(),
-                            "to": recipient_email,
-                            "recipient_name": recipient_name,
-                            "subject": subject,
-                            "body": body,
-                            "attachment_name": original_name,
-                            "case_id": case_id,
-                            "evidence_id": evidence_id
-                        }, f, indent=4)
-                        
-                    # Save a copy of the attached evidence file in mock folder
-                    mock_attachment_path = os.path.join(mock_dir, f"evidence_{evidence_id}_mock_{original_name}")
-                    with open(mock_attachment_path, 'wb') as f:
-                        f.write(attachment_bytes)
-                        
-                    logger.info(f"[EVIDENCE EMAIL] Mock email logged: {email_file}, mock attachment saved: {mock_attachment_path}")
-                except Exception as e:
-                    logger.error(f"[EVIDENCE EMAIL] Failed to write mock email for {recipient_email}: {e}")
+                    with open(os.path.join(mock_dir, f"email_{timestamp}_evidence_{evidence_id}.json"), 'w') as f:
+                        json.dump({"to": recipient_email, "subject": subject, "body": body}, f, indent=4)
+                    success = True
+                except Exception:
                     success = False
                     
         return success
@@ -906,46 +747,16 @@ def send_evidence_email(case_id: int, officer_id: int, evidence_id: int):
         logger.error(f"[EVIDENCE EMAIL] Fatal error: {str(e)}")
         return False
 
+
 def send_evidence_email_async(case_id: int, officer_id: int, evidence_id: int):
-    """
-    Dispatches send_evidence_email into a background thread.
-    """
+    """Dispatches send_evidence_email into a background thread."""
     thread = threading.Thread(target=send_evidence_email, args=(case_id, officer_id, evidence_id), daemon=True)
     thread.start()
-    logger.info(f"[EVIDENCE EMAIL] Background thread started for case {case_id}, evidence {evidence_id}, officer {officer_id}")
-
-
-def send_officer_assignment_notification_async(case_id: int, officer_id: int, action: str):
-    """
-    Dispatches assignment notification into a background thread.
-    
-    Args:
-        case_id: ID of the case
-        officer_id: ID of the officer
-        action: 'added' or 'removed'
-    """
-    thread = threading.Thread(
-        target=send_officer_assignment_notification,
-        args=(case_id, officer_id, action),
-        daemon=True
-    )
-    thread.start()
-    logger.info(f"[ASSIGNMENT EMAIL] Background thread started for Case {case_id}, Officer {officer_id}, Action: {action}")
 
 
 def send_dossier_update_notification(case_id: int, officer_id: int):
-    """
-    Sends an updated case dossier PDF, teammate list, and case details
-    to an officer currently working on the case.
-    
-    Args:
-        case_id: ID of the case
-        officer_id: ID of the officer
-    
-    Returns: True if successful, False otherwise
-    """
+    """Sends an updated case dossier PDF to an officer currently working on the case."""
     try:
-        # 1. Fetch case and officer details
         case = queries.get_case_by_id(case_id)
         officer = queries.get_officer_by_id(officer_id)
         
@@ -976,7 +787,6 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
             teammate_names.append(f"{name} ({rank})" if rank else name)
         teammate_str = ", ".join(teammate_names) if teammate_names else "None"
         
-        # 2. Draft email details
         subject = f"[Themis's Domain] Updated Case Dossier - {display_id}"
         body = (
             f"Dear {officer_name},\n\n"
@@ -998,7 +808,6 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
             f"Bengaluru Police Department Themis's Domain Team"
         )
         
-        # Generate the PDF attachment
         attachment_bytes = generate_case_pdf(
             case,
             evidence_list=evidence_list,
@@ -1007,94 +816,40 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
         )
         attachment_name = f"{display_id}_updated_dossier.pdf"
         
-        # 3. Check SMTP configuration
-        smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        smtp_port_str = os.getenv("SMTP_PORT", "587")
-        smtp_port = int(smtp_port_str) if smtp_port_str.isdigit() else 587
-        smtp_user = os.getenv("SMTP_USER", "").strip()
-        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-        smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
+        brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
+        from_email, from_name = _email_sender()
         
-        is_smtp_valid = bool(smtp_user and smtp_password)
-        
-        if is_smtp_valid:
-            logger.info(f"[DOSSIER UPDATE] Sending email to {officer_email}...")
-            try:
-                msg = MIMEMultipart()
-                msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
-                msg['To'] = officer_email
-                msg['Subject'] = subject
-                msg.attach(MIMEText(body, 'plain'))
-                
-                part = MIMEApplication(attachment_bytes, Name=attachment_name)
-                part['Content-Disposition'] = f'attachment; filename="{attachment_name}"'
-                msg.attach(part)
-                
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-                server.ehlo()
-                if smtp_port == 587:
-                    server.starttls()
-                    server.ehlo()
-                server.login(smtp_user, smtp_password)
-                server.sendmail(smtp_from_email, officer_email, msg.as_string())
-                server.quit()
-                logger.info(f"[DOSSIER UPDATE] Email sent to {officer_email}")
+        if brevo_api_key:
+            success = _send_via_brevo_api(
+                brevo_api_key, from_name, from_email, officer_email, 
+                subject, body, attachment_bytes, attachment_name
+            )
+            if success:
+                logger.info(f"[DOSSIER UPDATE] Updated Dossier successfully pushed to {officer_email}")
                 return True
-            except Exception as smtp_err:
-                logger.error(f"[DOSSIER UPDATE] SMTP error: {str(smtp_err)}. Using mock mode...")
                 
-        # 4. Mock mode fallback
+        # Mock Mode Fallback
         logger.info("[DOSSIER UPDATE] Running in Mock Mode...")
-        mock_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 
-            "mock_emails"
-        )
+        mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_emails")
         os.makedirs(mock_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        email_filename = f"email_{timestamp}_dossier_update_case_{case_id}_officer_{officer_id}.json"
-        email_filepath = os.path.join(mock_dir, email_filename)
-        
-        email_log = {
-            "timestamp": datetime.now().isoformat(),
-            "from": f"{smtp_from_name} <{smtp_from_email}>",
-            "to": officer_email,
-            "subject": subject,
-            "body": body,
-            "case_id": case_id,
-            "officer_id": officer_id,
-            "attachment_provided": True,
-            "attachment_name": attachment_name
-        }
-        
-        with open(email_filepath, 'w', encoding='utf-8') as f:
-            json.dump(email_log, f, indent=4)
+        with open(os.path.join(mock_dir, f"email_{timestamp}_dossier_update.json"), 'w') as f:
+            json.dump({"to": officer_email, "subject": subject}, f, indent=4)
             
-        pdf_filepath = os.path.join(mock_dir, f"{display_id}_updated_dossier_{timestamp}.pdf")
-        with open(pdf_filepath, 'wb') as f:
+        with open(os.path.join(mock_dir, f"{display_id}_updated_dossier_{timestamp}.pdf"), 'wb') as f:
             f.write(attachment_bytes)
-            
-        logger.info(f"[DOSSIER UPDATE] Mock email and PDF logged: {pdf_filepath}")
         return True
-        
     except Exception as e:
         logger.error(f"[DOSSIER UPDATE] Fatal error: {str(e)}")
         return False
 
 
 def send_dossier_update_notification_async(case_id: int, officer_id: int):
-    """
-    Dispatches dossier update email notification into a background thread.
-    
-    Args:
-        case_id: ID of the case
-        officer_id: ID of the officer
-    """
+    """Dispatches dossier update email notification into a background thread."""
     thread = threading.Thread(
         target=send_dossier_update_notification,
         args=(case_id, officer_id),
         daemon=True
     )
     thread.start()
-    logger.info(f"[DOSSIER UPDATE] Background thread started for Case {case_id}, Officer {officer_id}")
