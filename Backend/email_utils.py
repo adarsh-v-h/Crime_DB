@@ -1,4 +1,4 @@
-# ─── Themis Nomos Secure Email & PDF Generation Engine ───────────────────────────────
+# ─── Themis's Domain Secure Email & PDF Generation Engine ───────────────────────────────
 # Handles building high-resolution case dossiers in PDF format and dispatches
 # notifications to citizens asynchronously.
 # Features a Mock Fallback Mode for seamless offline testing.
@@ -13,6 +13,7 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
+from xml.sax.saxutils import escape
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -22,6 +23,32 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import queries
 
 logger = logging.getLogger(__name__)
+
+
+def _pdf_text(value, fallback="N/A"):
+    """Escapes user/DB text for ReportLab Paragraph rendering."""
+    if value is None or value == "":
+        value = fallback
+    return escape(str(value)).replace("\n", "<br/>")
+
+
+def _format_datetime(value):
+    if not value:
+        return "N/A"
+    if hasattr(value, "isoformat"):
+        value = value.isoformat()
+    value = str(value)
+    try:
+        return datetime.fromisoformat(value).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return value
+
+
+def _format_file_size(size):
+    try:
+        return f"{round(float(size or 0) / 1024, 1)} KB"
+    except Exception:
+        return "N/A"
 
 
 def send_verification_email(recipient_email, otp):
@@ -35,14 +62,14 @@ def send_verification_email(recipient_email, otp):
     smtp_user = os.getenv("SMTP_USER", "").strip()
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
     smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-    smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis Nomos Team")
+    smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
 
-    subject = "Themis Nomos verification code"
+    subject = "Themis's Domain verification code"
     body = (
         f"Dear Citizen,\n\n"
-        f"Your Themis Nomos verification code is: {otp}\n"
+        f"Your Themis's Domain verification code is: {otp}\n"
         f"This code is valid for 2 minutes. Do not share it with anyone.\n\n"
-        f"Bengaluru Police Department Themis Nomos Team"
+        f"Bengaluru Police Department Themis's Domain Team"
     )
 
     if smtp_user and smtp_password:
@@ -88,15 +115,12 @@ def send_verification_email(recipient_email, otp):
         return False, "Failed to send OTP email." 
 
 
-def generate_case_pdf(case, evidence_list=None):
+def generate_case_pdf(case, evidence_list=None, timeline_updates=None, teammates=None):
     """
-    Generates a beautifully styled, professional PDF dossier for a case.
-    If evidence_list is provided, includes a full evidence table.
-    Returns: bytes (the PDF document data)
+    Generates a secure PDF dossier for a case.
+    Optional evidence, timeline, and teammate lists are rendered when supplied.
     """
     buffer = io.BytesIO()
-    
-    # 1. Initialize Document Template with elegant margins
     doc = SimpleDocTemplate(
         buffer,
         pagesize=letter,
@@ -105,376 +129,260 @@ def generate_case_pdf(case, evidence_list=None):
         topMargin=54,
         bottomMargin=54
     )
-    
+
     styles = getSampleStyleSheet()
-    
-    # 2. Define High-End Theme Styles (unchanged)
     title_style = ParagraphStyle(
         'DocTitle',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
         fontSize=18,
         leading=22,
-        textColor=colors.HexColor('#0F172A'), # Slate 900
-        alignment=1, # Center
+        textColor=colors.HexColor('#0F172A'),
+        alignment=1,
         spaceAfter=4
     )
-    
     subtitle_style = ParagraphStyle(
         'DocSubtitle',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
         fontSize=9,
         leading=11,
-        textColor=colors.HexColor('#64748B'), # Slate 500
+        textColor=colors.HexColor('#64748B'),
         alignment=1,
         spaceAfter=15
     )
-    
     h2_style = ParagraphStyle(
         'SectionHeader',
         parent=styles['Heading2'],
         fontName='Helvetica-Bold',
         fontSize=12,
         leading=15,
-        textColor=colors.HexColor('#1E3A8A'), # Navy Blue
+        textColor=colors.HexColor('#1E3A8A'),
         spaceBefore=12,
         spaceAfter=6,
         keepWithNext=True
     )
-    
     body_style = ParagraphStyle(
         'NarrativeBody',
         parent=styles['Normal'],
         fontName='Helvetica',
         fontSize=10,
         leading=14,
-        textColor=colors.HexColor('#334155'), # Slate 700
+        textColor=colors.HexColor('#334155'),
         spaceAfter=8
     )
-    
+    small_body_style = ParagraphStyle(
+        'SmallNarrativeBody',
+        parent=body_style,
+        fontSize=8,
+        leading=10,
+        spaceAfter=4
+    )
     meta_label_style = ParagraphStyle(
         'MetaLabel',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor('#475569') # Slate 600
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor('#475569')
     )
-    
     meta_value_style = ParagraphStyle(
         'MetaValue',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=9,
-        leading=11,
+        fontSize=8,
+        leading=10,
         textColor=colors.HexColor('#0F172A')
     )
-    
+
+    def paragraph(value, style=meta_value_style, fallback="N/A"):
+        return Paragraph(_pdf_text(value, fallback), style)
+
+    def add_table(data, col_widths):
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E2E8F0')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 12))
+
     story = []
-    
-    # 3. Add Letterhead Elements
     story.append(Paragraph("BENGALURU POLICE DEPARTMENT", title_style))
     story.append(Paragraph("CYBERCRIME DIVISION &bull; CORE RECORD ARCHIVE", subtitle_style))
     story.append(Spacer(1, 10))
-    
-    # Decorative line separating header
+
     line_table = Table([[""]], colWidths=[504])
     line_table.setStyle(TableStyle([
-        ('LINEBELOW', (0,0), (-1,-1), 2, colors.HexColor('#059669')), # Emerald Accent
-        ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ('TOPPADDING', (0,0), (-1,-1), 0),
+        ('LINEBELOW', (0, 0), (-1, -1), 2, colors.HexColor('#059669')),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
     ]))
     story.append(line_table)
     story.append(Spacer(1, 15))
-    
-    # 4. Meta Information Grid
+
     display_id = case.get("case_id_display") or f"BLR-{str(case.get('case_id', 0)).zfill(3)}"
-    reported_date_str = case.get("case_date_reported") or case.get("date_reported") or "N/A"
-    try:
-        dt = datetime.fromisoformat(reported_date_str)
-        reported_date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        pass
-    
+    reported_date_str = _format_datetime(case.get("case_date_reported") or case.get("date_reported"))
+
     meta_data = [
         [
-            Paragraph("Dossier Reference ID:", meta_label_style),
-            Paragraph(display_id, meta_value_style),
-            Paragraph("Jurisdiction Venue:", meta_label_style),
-            Paragraph(case.get("case_location") or case.get("location") or "N/A", meta_value_style),
+            paragraph("Dossier Reference ID:", meta_label_style),
+            paragraph(display_id),
+            paragraph("Jurisdiction Venue:", meta_label_style),
+            paragraph(case.get("case_location") or case.get("location")),
         ],
         [
-            Paragraph("Crime Classification:", meta_label_style),
-            Paragraph(case.get("case_crime_type") or case.get("crime_type") or "Other", meta_value_style),
-            Paragraph("Record Date:", meta_label_style),
-            Paragraph(reported_date_str, meta_value_style),
+            paragraph("Crime Classification:", meta_label_style),
+            paragraph(case.get("case_crime_type") or case.get("crime_type") or "Other"),
+            paragraph("Record Date:", meta_label_style),
+            paragraph(reported_date_str),
         ],
         [
-            Paragraph("Operational Status:", meta_label_style),
-            Paragraph(case.get("case_status") or case.get("status") or "Active", meta_value_style),
-            Paragraph("Complainant Name:", meta_label_style),
-            Paragraph(case.get("complainant_name") or "Anonymous / Guarded", meta_value_style),
-        ]
+            paragraph("Operational Status:", meta_label_style),
+            paragraph(case.get("case_status") or case.get("status") or "Active"),
+            paragraph("Complainant Name:", meta_label_style),
+            paragraph(case.get("complainant_name") or "Anonymous / Guarded"),
+        ],
+        [
+            paragraph("Last Updated:", meta_label_style),
+            paragraph(_format_datetime(case.get("last_updated"))),
+            paragraph("Complaint Mode:", meta_label_style),
+            paragraph(case.get("complaint_mode")),
+        ],
     ]
-    
+
     meta_table = Table(meta_data, colWidths=[120, 132, 110, 142])
     meta_table.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), # Slate 50 background
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
-        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#F1F5F9')),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('LEFTPADDING', (0,0), (-1,-1), 10),
-        ('RIGHTPADDING', (0,0), (-1,-1), 10),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFC')),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#F1F5F9')),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
     ]))
     story.append(meta_table)
     story.append(Spacer(1, 15))
-    
-    # 5. Incident Narrative Section
-    story.append(Paragraph("I. INCIDENT NARRATIVE", h2_style))
+
+    section_num = 1
+
+    story.append(Paragraph(f"{section_num}. INCIDENT NARRATIVE", h2_style))
     desc = case.get("case_description") or case.get("description") or "No further narrative logs are compiled for this case file."
-    story.append(Paragraph(desc.replace("\n", "<br/>"), body_style))
+    story.append(paragraph(desc, body_style, "No further narrative logs are compiled for this case file."))
     story.append(Spacer(1, 10))
-    
-    # 6. Evidence Table (optional)
-    if evidence_list is not None and len(evidence_list) > 0:
-        story.append(Paragraph("II. EVIDENCE LIST", h2_style))
-        # Table headers
-        evidence_data = [[
-            Paragraph("ID", meta_label_style),
-            Paragraph("Filename", meta_label_style),
-            Paragraph("Uploader", meta_label_style),
-            Paragraph("Uploaded At", meta_label_style),
-            Paragraph("Size (KB)", meta_label_style)
-        ]]
-        for ev in evidence_list:
-            evidence_data.append([
-                Paragraph(str(ev.get('evidence_id', '')) , meta_value_style),
-                Paragraph(ev.get('original_name', ''), meta_value_style),
-                Paragraph(ev.get('uploader_name', ''), meta_value_style),
-                Paragraph(ev.get('uploaded_at', ''), meta_value_style),
-                Paragraph(str(round(ev.get('file_size', 0)/1024, 1)), meta_value_style)
-            ])
-        ev_table = Table(evidence_data, colWidths=[50, 150, 80, 100, 60])
-        ev_table.setStyle(TableStyle([
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#E2E8F0')),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('ALIGN', (0,0), (-1,0), 'CENTER'),
-        ]))
-        story.append(ev_table)
-        story.append(Spacer(1, 12))
-    
-    # 7. Disclaimer and Signature Footer
-    story.append(Paragraph("II. SYSTEM INTEGRITY & SECURITY DISCLOSURE", h2_style))
+    section_num += 1
+
+    if teammates is not None:
+        story.append(Paragraph(f"{section_num}. ASSIGNED OFFICERS", h2_style))
+        if teammates:
+            teammate_data = [[
+                paragraph("Name", meta_label_style),
+                paragraph("Rank", meta_label_style),
+                paragraph("Badge", meta_label_style),
+                paragraph("Station", meta_label_style),
+            ]]
+            for teammate in teammates:
+                teammate_data.append([
+                    paragraph(teammate.get("name")),
+                    paragraph(teammate.get("rank")),
+                    paragraph(teammate.get("badge")),
+                    paragraph(teammate.get("station")),
+                ])
+            add_table(teammate_data, [150, 95, 90, 169])
+        else:
+            story.append(paragraph("No assigned officers are currently recorded.", body_style))
+            story.append(Spacer(1, 10))
+        section_num += 1
+
+    if timeline_updates is not None:
+        story.append(Paragraph(f"{section_num}. INVESTIGATION TIMELINE", h2_style))
+        if timeline_updates:
+            timeline_data = [[
+                paragraph("Time", meta_label_style),
+                paragraph("Officer", meta_label_style),
+                paragraph("Update", meta_label_style),
+            ]]
+            for update in timeline_updates:
+                officer_display = " ".join(filter(None, [
+                    update.get("officer_name"),
+                    f"({update.get('officer_rank')})" if update.get("officer_rank") else ""
+                ]))
+                timeline_data.append([
+                    paragraph(_format_datetime(update.get("created_at"))),
+                    paragraph(officer_display),
+                    paragraph(update.get("update_text"), small_body_style),
+                ])
+            add_table(timeline_data, [95, 115, 294])
+        else:
+            story.append(paragraph("No investigation timeline updates are currently recorded.", body_style))
+            story.append(Spacer(1, 10))
+        section_num += 1
+
+    if evidence_list is not None:
+        story.append(Paragraph(f"{section_num}. EVIDENCE INVENTORY", h2_style))
+        if evidence_list:
+            evidence_data = [[
+                paragraph("ID", meta_label_style),
+                paragraph("Filename", meta_label_style),
+                paragraph("Uploaded By", meta_label_style),
+                paragraph("Uploaded At", meta_label_style),
+                paragraph("Size", meta_label_style),
+                paragraph("Description", meta_label_style),
+            ]]
+            for ev in evidence_list:
+                uploader = ev.get("uploader_name") or ev.get("officer_name")
+                uploaded_at = ev.get("uploaded_at") or ev.get("created_at")
+                evidence_data.append([
+                    paragraph(ev.get("evidence_id")),
+                    paragraph(ev.get("original_name") or ev.get("file_name")),
+                    paragraph(uploader),
+                    paragraph(_format_datetime(uploaded_at)),
+                    paragraph(_format_file_size(ev.get("file_size"))),
+                    paragraph(ev.get("description") or ev.get("mime_type") or "No description provided."),
+                ])
+            add_table(evidence_data, [34, 116, 82, 88, 50, 134])
+        else:
+            story.append(paragraph("No evidence items are currently recorded for this case.", body_style))
+            story.append(Spacer(1, 10))
+        section_num += 1
+
+    story.append(Paragraph(f"{section_num}. SYSTEM INTEGRITY & SECURITY DISCLOSURE", h2_style))
     disclaimer_text = (
         "This dossier record is compiled automatically from the Bengaluru Police Department's "
-        "Crime Record Management System (Themis Nomos). Access is granted strictly to the approved applicant "
+        "Crime Record Management System (Themis's Domain). Access is granted strictly to the approved applicant "
         "and is subject to privacy and judicial security laws. Unauthorized replication, modification, "
         "or sharing of this document is a punishable offense under digital secrecy protocols."
     )
-    story.append(Paragraph(disclaimer_text, ParagraphStyle('Disclaimer', parent=body_style, fontSize=8, leading=11, textColor=colors.HexColor('#64748B'))))
+    story.append(Paragraph(disclaimer_text, ParagraphStyle(
+        'Disclaimer',
+        parent=body_style,
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor('#64748B')
+    )))
     story.append(Spacer(1, 20))
-    
+
     sig_data = [[
-        Paragraph("Generated on: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"), meta_value_style),
-        Paragraph("<b>Themis Nomos DIGITAL SIGNATURE</b>", ParagraphStyle('Sig', parent=meta_value_style, alignment=2))
+        paragraph("Generated on: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        Paragraph("<b>Themis's Domain DIGITAL SIGNATURE</b>", ParagraphStyle('Sig', parent=meta_value_style, alignment=2))
     ]]
     sig_table = Table(sig_data, colWidths=[250, 254])
     sig_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
-        ('TOPPADDING', (0,0), (-1,-1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LINEABOVE', (0, 0), (-1, -1), 0.5, colors.HexColor('#E2E8F0')),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
     ]))
     story.append(sig_table)
-    
-    # 8. Build Document
+
     doc.build(story)
-    
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
-    """
-    Generates a beautifully styled, professional PDF dossier for a case.
-    Returns: bytes (the PDF document data)
-    """
-    buffer = io.BytesIO()
-    
-    # 1. Initialize Document Template with elegant margins
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        leftMargin=54,
-        rightMargin=54,
-        topMargin=54,
-        bottomMargin=54
-    )
-    
-    styles = getSampleStyleSheet()
-    
-    # 2. Define High-End Theme Styles
-    title_style = ParagraphStyle(
-        'DocTitle',
-        parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
-        fontSize=18,
-        leading=22,
-        textColor=colors.HexColor('#0F172A'), # Slate 900
-        alignment=1, # Center
-        spaceAfter=4
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'DocSubtitle',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor('#64748B'), # Slate 500
-        alignment=1,
-        spaceAfter=15
-    )
-    
-    h2_style = ParagraphStyle(
-        'SectionHeader',
-        parent=styles['Heading2'],
-        fontName='Helvetica-Bold',
-        fontSize=12,
-        leading=15,
-        textColor=colors.HexColor('#1E3A8A'), # Navy Blue
-        spaceBefore=12,
-        spaceAfter=6,
-        keepWithNext=True
-    )
-    
-    body_style = ParagraphStyle(
-        'NarrativeBody',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor('#334155'), # Slate 700
-        spaceAfter=8
-    )
-    
-    meta_label_style = ParagraphStyle(
-        'MetaLabel',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor('#475569') # Slate 600
-    )
-    
-    meta_value_style = ParagraphStyle(
-        'MetaValue',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=9,
-        leading=11,
-        textColor=colors.HexColor('#0F172A')
-    )
-    
-    story = []
-    
-    # 3. Add Letterhead Elements
-    story.append(Paragraph("BENGALURU POLICE DEPARTMENT", title_style))
-    story.append(Paragraph("CYBERCRIME DIVISION &bull; CORE RECORD ARCHIVE", subtitle_style))
-    story.append(Spacer(1, 10))
-    
-    # Decorative line separating header
-    line_table = Table([[""]], colWidths=[504])
-    line_table.setStyle(TableStyle([
-        ('LINEBELOW', (0,0), (-1,-1), 2, colors.HexColor('#059669')), # Emerald Accent Accent
-        ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ('TOPPADDING', (0,0), (-1,-1), 0),
-    ]))
-    story.append(line_table)
-    story.append(Spacer(1, 15))
-    
-    # 4. Meta Information Grid
-    display_id = case.get("case_id_display") or f"BLR-{str(case.get('case_id', 0)).zfill(3)}"
-    reported_date_str = case.get("case_date_reported") or case.get("date_reported") or "N/A"
-    try:
-        dt = datetime.fromisoformat(reported_date_str)
-        reported_date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        pass
-        
-    meta_data = [
-        [
-            Paragraph("Dossier Reference ID:", meta_label_style),
-            Paragraph(display_id, meta_value_style),
-            Paragraph("Jurisdiction Venue:", meta_label_style),
-            Paragraph(case.get("case_location") or case.get("location") or "N/A", meta_value_style),
-        ],
-        [
-            Paragraph("Crime Classification:", meta_label_style),
-            Paragraph(case.get("case_crime_type") or case.get("crime_type") or "Other", meta_value_style),
-            Paragraph("Record Date:", meta_label_style),
-            Paragraph(reported_date_str, meta_value_style),
-        ],
-        [
-            Paragraph("Operational Status:", meta_label_style),
-            Paragraph(case.get("case_status") or case.get("status") or "Active", meta_value_style),
-            Paragraph("Complainant Name:", meta_label_style),
-            Paragraph(case.get("complainant_name") or "Anonymous / Guarded", meta_value_style),
-        ]
-    ]
-    
-    meta_table = Table(meta_data, colWidths=[120, 132, 110, 142])
-    meta_table.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), # Slate 50 background
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
-        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#F1F5F9')),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('LEFTPADDING', (0,0), (-1,-1), 10),
-        ('RIGHTPADDING', (0,0), (-1,-1), 10),
-    ]))
-    story.append(meta_table)
-    story.append(Spacer(1, 15))
-    
-    # 5. Incident Narrative Section
-    story.append(Paragraph("I. INCIDENT NARRATIVE", h2_style))
-    desc = case.get("case_description") or case.get("description") or "No further narrative logs are compiled for this case file."
-    story.append(Paragraph(desc.replace("\n", "<br/>"), body_style))
-    story.append(Spacer(1, 10))
-    
-    # 6. Official Disclaimer and Security Disclosure
-    story.append(Paragraph("II. SYSTEM INTEGRITY & SECURITY DISCLOSURE", h2_style))
-    disclaimer_text = (
-        "This dossier record is compiled automatically from the Bengaluru Police Department's "
-        "Crime Record Management System (Themis Nomos). Access is granted strictly to the approved applicant "
-        "and is subject to privacy and judicial security laws. Unauthorized replication, modification, "
-        "or sharing of this document is a punishable offense under digital secrecy protocols."
-    )
-    story.append(Paragraph(disclaimer_text, ParagraphStyle('Disclaimer', parent=body_style, fontSize=8, leading=11, textColor=colors.HexColor('#64748B'))))
-    story.append(Spacer(1, 20))
-    
-    # Signature Footer Table
-    sig_data = [
-        [
-            Paragraph("Generated on: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"), meta_value_style),
-            Paragraph("<b>Themis Nomos DIGITAL SIGNATURE</b>", ParagraphStyle('Sig', parent=meta_value_style, alignment=2))
-        ]
-    ]
-    sig_table = Table(sig_data, colWidths=[250, 254])
-    sig_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
-        ('TOPPADDING', (0,0), (-1,-1), 10),
-    ]))
-    story.append(sig_table)
-    
-    # 7. Build Document
-    doc.build(story)
-    
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
@@ -508,23 +416,35 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
         attachment_name = ""
         
         if decision.lower() == "accept" or decision.lower() == "accepted":
-            subject = f"[Themis Nomos] Secure Case Access Approved - Case {display_id}"
+            case_id = request.get("case_id")
+            evidence_list = queries.get_case_evidence(case_id) if case_id else []
+            timeline_updates = queries.get_case_updates(case_id) if case_id else []
+            teammates = queries.get_officers_assigned_to_case(case_id) if case_id else []
+
+            subject = f"[Themis's Domain] Secure Case Access Approved - Case {display_id}"
             body = (
                 f"Dear {requester_name},\n\n"
                 f"We are pleased to inform you that your request for access to Case {display_id} "
                 f"has been approved by the investigating team.\n\n"
                 f"Please find the officially generated and digitally signed case dossier details attached in the "
-                f"document: {display_id}.pdf.\n\n"
+                f"document: {display_id}.pdf. The dossier includes the latest approved case narrative, "
+                f"investigation timeline, assigned officer list, and evidence inventory metadata available at "
+                f"the time of generation.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department Themis Nomos Team\n"
+                f"Bengaluru Police Department Themis's Domain Team\n"
                 f"(Deciding Officer: {officer_name})"
             )
             # Generate the PDF attachment
-            attachment_bytes = generate_case_pdf(request)
+            attachment_bytes = generate_case_pdf(
+                request,
+                evidence_list=evidence_list,
+                timeline_updates=timeline_updates,
+                teammates=teammates
+            )
             attachment_name = f"{display_id}.pdf"
             
         else:
-            subject = f"[Themis Nomos] Secure Case Access Declined - Case {display_id}"
+            subject = f"[Themis's Domain] Secure Case Access Declined - Case {display_id}"
             body = (
                 f"Dear {requester_name},\n\n"
                 f"We regret to inform you that your request for access to Case {display_id} "
@@ -532,7 +452,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 f"Bengaluru Police Department Cybercrime Division is unable to grant public clearance for this dossier "
                 f"due to sensitive investigation protocols.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department Themis Nomos Team\n"
+                f"Bengaluru Police Department Themis's Domain Team\n"
                 f"(Deciding Officer: {officer_name})"
             )
             
@@ -543,7 +463,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
         smtp_user = os.getenv("SMTP_USER", "").strip()
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis Nomos Team")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
         
         # Determine whether to send for real or run in Mock Mode
         is_smtp_valid = bool(smtp_user and smtp_password)
@@ -672,7 +592,7 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
         
         # 2. Draft email based on action
         if action.lower() == "added":
-            subject = f"[Themis Nomos] New Case Assignment - {display_id}"
+            subject = f"[Themis's Domain] New Case Assignment - {display_id}"
             body = (
                 f"Dear {officer_name},\n\n"
                 f"You have been assigned to Case {display_id}.\n\n"
@@ -684,15 +604,22 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 f"  Date Reported: {case.get('date_reported', 'N/A')}\n\n"
                 f"Please find the latest secure case dossier PDF attached to this email.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department Themis Nomos Team"
+                f"Bengaluru Police Department Themis's Domain Team"
             )
             
-            # Generate the dossier PDF
+            # Generate the dossier PDF with the latest case-linked metadata.
             evidence_list = queries.get_case_evidence(case_id)
-            attachment_bytes = generate_case_pdf(case, evidence_list)
+            timeline_updates = queries.get_case_updates(case_id)
+            teammates = queries.get_officers_assigned_to_case(case_id)
+            attachment_bytes = generate_case_pdf(
+                case,
+                evidence_list=evidence_list,
+                timeline_updates=timeline_updates,
+                teammates=teammates
+            )
             attachment_name = f"{display_id}_assigned_dossier.pdf"
         else:  # removed
-            subject = f"[Themis Nomos] Case Assignment Removed - {display_id}"
+            subject = f"[Themis's Domain] Case Assignment Removed - {display_id}"
             body = (
                 f"Dear {officer_name},\n\n"
                 f"You have been removed from Case {display_id}.\n\n"
@@ -700,7 +627,7 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
                 f"Crime Type: {case.get('crime_type', 'N/A')}\n\n"
                 f"If you have any questions, please contact your supervisor or the admin team.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department Themis Nomos Team"
+                f"Bengaluru Police Department Themis's Domain Team"
             )
         
         # 3. Check SMTP configuration
@@ -710,7 +637,7 @@ def send_officer_assignment_notification(case_id: int, officer_id: int, action: 
         smtp_user = os.getenv("SMTP_USER", "").strip()
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis Nomos Team")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
         
         is_smtp_valid = bool(smtp_user and smtp_password)
         
@@ -848,10 +775,10 @@ def send_evidence_email(case_id: int, officer_id: int, evidence_id: int):
         smtp_user = os.getenv("SMTP_USER", "").strip()
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis Nomos Team")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
         
         is_smtp_valid = bool(smtp_user and smtp_password)
-        subject = f"[Themis Nomos] Secure Evidence Notification - Case {display_id}"
+        subject = f"[Themis's Domain] Secure Evidence Notification - Case {display_id}"
         
         success = True
         
@@ -866,9 +793,9 @@ def send_evidence_email(case_id: int, officer_id: int, evidence_id: int):
                 f"  Upload Time: {evidence.get('created_at') or datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"  Size: {round(evidence.get('file_size', 0) / 1024, 1)} KB\n"
                 f"  Description: {evidence.get('description') or 'No description provided.'}\n\n"
-                f"Please log into the Themis Nomos Portal to view the updated case dossier.\n\n"
+                f"Please log into the Themis's Domain Portal to view the updated case dossier.\n\n"
                 f"Best regards,\n"
-                f"Bengaluru Police Department Themis Nomos Team"
+                f"Bengaluru Police Department Themis's Domain Team"
             )
             
             sent_ok = False
@@ -992,17 +919,21 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
             logger.warning(f"[DOSSIER UPDATE] Officer {officer_id} has no email on file")
             return False
             
-        # Get teammate list
-        teammates = []
-        for oid in case.get("officer_ids", []):
-            if oid != officer_id:
-                t_off = queries.get_officer_by_id(oid)
-                if t_off:
-                    teammates.append(f"{t_off.get('name')} ({t_off.get('rank')})")
-        teammate_str = ", ".join(teammates) if teammates else "None"
+        teammates = queries.get_officers_assigned_to_case(case_id)
+        evidence_list = queries.get_case_evidence(case_id)
+        timeline_updates = queries.get_case_updates(case_id)
+
+        teammate_names = []
+        for teammate in teammates:
+            if teammate.get("officer_id") == officer_id:
+                continue
+            name = teammate.get("name") or "Officer"
+            rank = teammate.get("rank")
+            teammate_names.append(f"{name} ({rank})" if rank else name)
+        teammate_str = ", ".join(teammate_names) if teammate_names else "None"
         
         # 2. Draft email details
-        subject = f"[Themis Nomos] Updated Case Dossier - {display_id}"
+        subject = f"[Themis's Domain] Updated Case Dossier - {display_id}"
         body = (
             f"Dear {officer_name},\n\n"
             f"As requested, here is the updated case dossier for Case {display_id} under active investigation.\n\n"
@@ -1014,13 +945,22 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
             f"  Date Reported: {case.get('date_reported', 'N/A')}\n\n"
             f"Assigned Teammates on Case:\n"
             f"  {teammate_str}\n\n"
+            f"Dossier Sections Included:\n"
+            f"  Timeline Updates: {len(timeline_updates)}\n"
+            f"  Evidence Items: {len(evidence_list)}\n"
+            f"  Assigned Officers: {len(teammates)}\n\n"
             f"Please find the latest secure case dossier PDF attached for your reference.\n\n"
             f"Best regards,\n"
-            f"Bengaluru Police Department Themis Nomos Team"
+            f"Bengaluru Police Department Themis's Domain Team"
         )
         
         # Generate the PDF attachment
-        attachment_bytes = generate_case_pdf(case)
+        attachment_bytes = generate_case_pdf(
+            case,
+            evidence_list=evidence_list,
+            timeline_updates=timeline_updates,
+            teammates=teammates
+        )
         attachment_name = f"{display_id}_updated_dossier.pdf"
         
         # 3. Check SMTP configuration
@@ -1030,7 +970,7 @@ def send_dossier_update_notification(case_id: int, officer_id: int):
         smtp_user = os.getenv("SMTP_USER", "").strip()
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from_email = os.getenv("SMTP_FROM_EMAIL", smtp_user or "adarshvh2005@gmail.com")
-        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis Nomos Team")
+        smtp_from_name = os.getenv("SMTP_FROM_NAME", "Bengaluru Police Themis's Domain Team")
         
         is_smtp_valid = bool(smtp_user and smtp_password)
         

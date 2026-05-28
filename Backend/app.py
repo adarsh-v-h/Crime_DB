@@ -1,4 +1,4 @@
-# ─── Themis Nomos Flask API ────────────────────────────────────────────────────────────
+# ─── Themis's Domain Flask API ────────────────────────────────────────────────────────────
 # Entry point. Defines every route, validates inputs, and returns JSON.
 # All SQL lives in queries.py. All credentials live in config.py.
 #
@@ -170,6 +170,21 @@ def _parse_officer_id_header():
         return None, _err("Invalid X-Officer-Id header", 400)
 
 
+def _parse_officer_id_for_file_request():
+    """
+    Reads officer identity for evidence file links.
+    Browser <a>, <img>, <video>, and <audio> requests cannot send custom headers,
+    so these GET-only file routes also accept X-Officer-Id as a query parameter.
+    """
+    officer_id_str = request.headers.get("X-Officer-Id") or request.args.get("X-Officer-Id")
+    if not officer_id_str:
+        return None, _err("Unauthorized: Missing X-Officer-Id header or query parameter", 401)
+    try:
+        return int(officer_id_str), None
+    except ValueError:
+        return None, _err("Invalid X-Officer-Id value", 400)
+
+
 def _row_to_dict(cursor, row):
     """Converts a DB row tuple into a dict keyed by column names."""
     cols = [d[0] for d in cursor.description]
@@ -209,23 +224,10 @@ def _officer_may_decide_access_request(officer: dict, case_id: int) -> bool:
 
 def _officer_may_update_case_status(officer: dict, case_id: int) -> bool:
     """
-    Admin may always update case status.
-    Only the highest-ranked officer assigned to a case may update status.
+    Only admins may update case status.
     Returns True if authorized, False otherwise.
     """
-    if _is_admin(officer):
-        return True
-    
-    # Check if officer is assigned to the case
-    if not queries.officer_is_assigned_to_case(officer["officer_id"], case_id):
-        return False
-    
-    # Check if officer is the highest-ranked on this case
-    highest_officer = queries.get_highest_ranked_officer_on_case(case_id)
-    if highest_officer and highest_officer["officer_id"] == officer["officer_id"]:
-        return True
-    
-    return False
+    return _is_admin(officer)
 
 
 def _verify_captcha(token):
@@ -282,7 +284,7 @@ def _verify_captcha(token):
 @app.route("/health", methods=["GET"])
 def health():
     """Quick ping to confirm the server is alive."""
-    return _ok(message="Themis Nomos API is operational")
+    return _ok(message="Themis's Domain API is operational")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -460,7 +462,7 @@ def update_case(case_id):
     Body (JSON): any subset of { title, description, crime_type, status, location, complaint_mode }
 
     The frontend uses this to update case status from the detail modal.
-    Status changes require admin role or highest-ranked officer on the case.
+    Status changes require admin role.
 
     Example body: { "status": "Solved" }
     """
@@ -486,7 +488,7 @@ def update_case(case_id):
                 return _err("Unauthorized: Officer record not found", 401)
             
             if not _officer_may_update_case_status(officer, case_id):
-                return _err("Unauthorized: Only the highest-ranked officer on this case may update status", 403)
+                return _err("Unauthorized: Only admins may update case status", 403)
         except mysql.connector.Error as e:
             return _err(f"Database error: {str(e)}", 500)
 
@@ -1188,9 +1190,9 @@ def serve_evidence_file_route(case_id, filename):
     """
     GET /cases/evidence/file/<case_id>/<filename>
     Secure static serving endpoint. Checks officer authorization before sending file.
-    Requires X-Officer-Id auth header and Visibility clearance.
+    Requires X-Officer-Id auth header or query parameter and Visibility clearance.
     """
-    officer_id, err = _parse_officer_id_header()
+    officer_id, err = _parse_officer_id_for_file_request()
     if err:
         return err
         
@@ -1237,7 +1239,7 @@ def download_evidence_file_route(case_id, filename):
     Secure downloading endpoint for evidence. Enforces authentication and case visibility.
     Forces download via as_attachment=True.
     """
-    officer_id, err = _parse_officer_id_header()
+    officer_id, err = _parse_officer_id_for_file_request()
     if err:
         return err
         
@@ -1416,56 +1418,39 @@ def verify_email_route():
 def send_otp():
     """
     POST /public/otp/send
-    Generates and sends a 6-digit OTP to the user's email address or phone number.
+    Generates and sends a 6-digit OTP to the user's email address.
     Rate limited to 3 sends per 10 minutes.
     """
     import random
-    from sms_utils import normalize_and_validate_phone, send_otp_sms
     from email_utils import send_verification_email
     from otp_store import otp_store
 
     body = request.get_json(silent=True) or {}
     email = (body.get("email") or "").strip()
-    phone = (body.get("phone") or "").strip()
 
-    if email:
-        is_valid, reason = verify_email_mx(email)
-        if not is_valid:
-            return _err(reason, 400)
-        key = email.lower()
-        if not otp_store.can_send_otp(key):
-            return _err("Too many OTP requests. Please wait before trying again.", 429)
-        otp = f"{random.randint(100000, 999999)}"
-        otp_store.save_otp(key, otp, ttl=120)
-        otp_store.record_send(key)
-        success, msg = send_verification_email(key, otp)
-        if not success:
-            return _err(msg, 500)
-        return jsonify({
-            "success": True,
-            "message": "OTP sent successfully to email.",
-            "expires_in": 120
-        }), 200
+    if not email:
+        return _err("Email address is required to send OTP.", 400)
 
-    if phone:
-        cleaned_phone, err = normalize_and_validate_phone(phone)
-        if err:
-            return _err(err, 400)
-        if not otp_store.can_send_otp(cleaned_phone):
-            return _err("Too many OTP requests. Please wait before trying again.", 429)
-        otp = f"{random.randint(100000, 999999)}"
-        otp_store.save_otp(cleaned_phone, otp, ttl=120)
-        otp_store.record_send(cleaned_phone)
-        success, msg = send_otp_sms(cleaned_phone, otp)
-        if not success:
-            return _err(msg, 500)
-        return jsonify({
-            "success": True,
-            "message": "OTP sent successfully.",
-            "expires_in": 120
-        }), 200
+    is_valid, reason = verify_email_mx(email)
+    if not is_valid:
+        return _err(reason, 400)
 
-    return _err("Email or phone number is required to send OTP.", 400)
+    key = email.lower()
+    if not otp_store.can_send_otp(key):
+        return _err("Too many OTP requests. Please wait before trying again.", 429)
+
+    otp = f"{random.randint(100000, 999999)}"
+    otp_store.save_otp(key, otp, ttl=120)
+    otp_store.record_send(key)
+    success, msg = send_verification_email(key, otp)
+    if not success:
+        return _err(msg, 500)
+
+    return jsonify({
+        "success": True,
+        "message": "OTP sent successfully to email.",
+        "expires_in": 120
+    }), 200
 
 
 @app.route("/public/otp/verify", methods=["POST"])
@@ -1475,27 +1460,19 @@ def verify_otp():
     Verifies the OTP and returns a verification token on success.
     """
     import random
-    from sms_utils import normalize_and_validate_phone
     from otp_store import otp_store
 
     body = request.get_json(silent=True) or {}
     email = (body.get("email") or "").strip()
-    phone = (body.get("phone") or "").strip()
     otp = (body.get("otp") or "").strip()
 
-    if not email and not phone:
-        return _err("Email or phone number is required.", 400)
+    if not email:
+        return _err("Email address is required.", 400)
     if not otp:
         return _err("OTP is required.", 400)
 
-    if email:
-        key = email.lower()
-        success, result_or_err = otp_store.verify_otp(key, otp)
-    else:
-        cleaned_phone, err = normalize_and_validate_phone(phone)
-        if err:
-            return _err(err, 400)
-        success, result_or_err = otp_store.verify_otp(cleaned_phone, otp)
+    key = email.lower()
+    success, result_or_err = otp_store.verify_otp(key, otp)
 
     if not success:
         return _err(result_or_err, 400)
@@ -1519,7 +1496,7 @@ def public_complaint():
     """
     body                     = request.get_json(silent=True) or {}
     captcha_token            = (body.get("captcha_token") or "").strip()
-    verification_token       = (body.get("email_verification_token") or body.get("phone_verification_token") or "").strip()
+    verification_token       = (body.get("email_verification_token") or "").strip()
     
     # Verify CAPTCHA first
     is_valid, score, error_msg = _verify_captcha(captcha_token)
@@ -1539,6 +1516,8 @@ def public_complaint():
         return _err("name is required")
     if not contact:
         return _err("contact is required")
+    if not email:
+        return _err("email is required")
     if not location:
         return _err("location is required")
     if not incident_desc:
@@ -1550,23 +1529,12 @@ def public_complaint():
     if complaint_mode not in VALID_COMPLAINT_MODES:
         complaint_mode = "Online"
 
-    if email and not verification_token:
-        return _err("Email verification is required when email is provided.", 400)
+    if not verification_token:
+        return _err("Email verification is required.", 400)
 
-    # Validate verification token if provided
-    if verification_token:
-        from otp_store import otp_store
-        if email:
-            key = email.lower()
-        else:
-            from sms_utils import normalize_and_validate_phone
-            cleaned_phone, err = normalize_and_validate_phone(contact)
-            if err:
-                return _err(err, 400)
-            key = cleaned_phone
-
-        if not otp_store.verify_token(key, verification_token):
-            return _err("Invalid or expired verification token. Please verify again.", 400)
+    from otp_store import otp_store
+    if not otp_store.verify_token(email.lower(), verification_token):
+        return _err("Invalid or expired verification token. Please verify again.", 400)
 
     try:
         new_id = queries.submit_public_complaint(
@@ -2330,7 +2298,7 @@ def serve_frontend():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  Themis Nomos Flask API — Bengaluru Police Department")
+    print("  Themis's Domain Flask API — Bengaluru Police Department")
     print("=" * 60)
     init_pool()
     start_assignment_scheduler()

@@ -1,6 +1,6 @@
 <div align="center">
 
-# Themis Nomos — Crime Record Management System 🎯
+# Themis's Domain — Crime Record Management System 🎯
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)  [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)  [![Build Status](https://img.shields.io/badge/build-passing-success.svg)](#)  [![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](#)
 
@@ -24,7 +24,7 @@
 ---
 
 ## Overview
-Themis Nomos is a **polished police investigation dashboard** built for the Bengaluru Police Department. It combines a Flask‑powered backend, a MySQL database, and a single‑page React frontend served via CDN. The system streamlines case management, citizen complaint intake, automated case assignment, and secure dossier delivery.
+Themis's Domain is a **polished police investigation dashboard** built for the Bengaluru Police Department. It combines a Flask‑powered backend, a MySQL database, and a single‑page React frontend served via CDN. The system streamlines case management, citizen complaint intake, automated case assignment, and secure dossier delivery.
 
 ---
 

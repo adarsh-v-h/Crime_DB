@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Themis Nomos Automated Case Assignment Algorithm
+# Themis's Domain Automated Case Assignment Algorithm
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # PURPOSE

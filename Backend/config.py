@@ -51,9 +51,3 @@ RECAPTCHA_PUBLIC_KEY = _get_required_env("RECAPTCHA_PUBLIC_KEY")
 # Note: RECAPTCHA_THRESHOLD is only used for reCAPTCHA v3 scoring
 RECAPTCHA_THRESHOLD = float(_get_optional_env("RECAPTCHA_THRESHOLD", "0.5"))
 
-# ============================================================================
-# SMS OTP CONFIGURATION (Optional)
-# ============================================================================
-SMS_PROVIDER     = _get_optional_env("SMS_PROVIDER", "mock")  # "fast2sms" | "mock"
-FAST2SMS_API_KEY = _get_optional_env("FAST2SMS_API_KEY", "")
-
