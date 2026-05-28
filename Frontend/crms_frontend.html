@@ -248,6 +248,17 @@
         const getStoredSessionToken = () => getStoredOfficer()?.session_token || "";
         const storeOfficerSession = (officerData) => localStorage.setItem(OFFICER_STORAGE_KEY, JSON.stringify(officerData));
         const clearOfficerSession = () => localStorage.removeItem(OFFICER_STORAGE_KEY);
+        const PUBLIC_COMPLAINT_DRAFT_KEY = "CRMS_PUBLIC_COMPLAINT_DRAFT";
+
+        const getPublicComplaintDraft = () => {
+            try {
+                return JSON.parse(localStorage.getItem(PUBLIC_COMPLAINT_DRAFT_KEY) || "null");
+            } catch {
+                return null;
+            }
+        };
+
+        const clearPublicComplaintDraft = () => localStorage.removeItem(PUBLIC_COMPLAINT_DRAFT_KEY);
         const authHeaders = (officer) => ({
             "X-Officer-Id": officer?.officer_id?.toString(),
             "X-Session-Token": officer?.session_token || getStoredSessionToken()
@@ -809,11 +820,17 @@
 
         // ─── PUBLIC PORTAL ────────────────────────────────────────────────────
         const PublicPortal = ({ onNavigate }) => {
+            const savedComplaintDraft = getPublicComplaintDraft();
             const [activeTab, setActiveTab] = useState("complaint");
             const [error, setError] = useState("");
             const [formData, setFormData] = useState({
-                name: "", contact: "", email: "", aadhaar: "",
-                incident_desc: "", crime_type: "", location: ""
+                name: savedComplaintDraft?.formData?.name || "",
+                contact: savedComplaintDraft?.formData?.contact || "",
+                email: savedComplaintDraft?.formData?.email || "",
+                aadhaar: savedComplaintDraft?.formData?.aadhaar || "",
+                incident_desc: savedComplaintDraft?.formData?.incident_desc || "",
+                crime_type: savedComplaintDraft?.formData?.crime_type || "",
+                location: savedComplaintDraft?.formData?.location || ""
             });
             const [aadhaarError, setAadhaarError] = useState("");
             const [submitted, setSubmitted] = useState(false);
@@ -833,29 +850,49 @@
             const [showDisclaimer, setShowDisclaimer] = useState(false);
             const [emailValidating, setEmailValidating] = useState(false);
             const [emailValid, setEmailValid] = useState(null); // null | true | false
-            const [otpSent, setOtpSent] = useState(false);
+            const [otpSent, setOtpSent] = useState(savedComplaintDraft?.verifyStep === "otp");
             const [otpValue, setOtpValue] = useState("");
             const [otpVerified, setOtpVerified] = useState(false);
             const [verificationToken, setVerificationToken] = useState(null);
-            const [otpCountdown, setOtpCountdown] = useState(0);
-            const [verifyStep, setVerifyStep] = useState("form"); // "form"|"disclaimer"|"email"|"otp"|"ready"
+            const [otpCountdown, setOtpCountdown] = useState(() => {
+                if (savedComplaintDraft?.verifyStep !== "otp") return 0;
+                return Math.max(0, Math.ceil(((savedComplaintDraft.otpExpiresAt || 0) - Date.now()) / 1000));
+            });
+            const [verifyStep, setVerifyStep] = useState(() => {
+                if (savedComplaintDraft?.verifyStep === "otp" && otpCountdown > 0) return "otp";
+                return "form";
+            }); // "form"|"disclaimer"|"email"|"otp"|"ready"
+            const [otpExpiresAt, setOtpExpiresAt] = useState(savedComplaintDraft?.otpExpiresAt || null);
+
+            useEffect(() => {
+                const hasDraftData = Object.values(formData).some(value => String(value || "").trim());
+                if (!hasDraftData && verifyStep === "form") {
+                    clearPublicComplaintDraft();
+                    return;
+                }
+
+                if (hasDraftData || verifyStep === "otp") {
+                    localStorage.setItem(PUBLIC_COMPLAINT_DRAFT_KEY, JSON.stringify({
+                        formData,
+                        verifyStep: verifyStep === "otp" ? "otp" : "form",
+                        otpExpiresAt: verifyStep === "otp" ? otpExpiresAt : null,
+                        savedAt: Date.now()
+                    }));
+                }
+            }, [formData, verifyStep, otpExpiresAt]);
 
             // OTP Countdown Timer Effect
             useEffect(() => {
-                let timer;
-                if (verifyStep === "otp" && otpCountdown > 0) {
-                    timer = setInterval(() => {
-                        setOtpCountdown(prev => {
-                            if (prev <= 1) {
-                                clearInterval(timer);
-                                return 0;
-                            }
-                            return prev - 1;
-                        });
-                    }, 1000);
-                }
+                if (verifyStep !== "otp" || !otpExpiresAt) return;
+
+                const syncCountdown = () => {
+                    setOtpCountdown(Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000)));
+                };
+
+                syncCountdown();
+                const timer = setInterval(syncCountdown, 1000);
                 return () => clearInterval(timer);
-            }, [verifyStep, otpCountdown]);
+            }, [verifyStep, otpExpiresAt]);
 
             const handleFormSubmitAttempt = (e) => {
                 e.preventDefault();
@@ -911,6 +948,7 @@
                 setOtpValue("");
                 setOtpVerified(false);
                 setOtpCountdown(120);
+                setOtpExpiresAt(Date.now() + 120000);
                 setError("");
                 
                 try {
@@ -933,6 +971,7 @@
             const handleResendOtp = async () => {
                 if (otpCountdown > 90) return; // Wait 30 seconds
                 setOtpCountdown(120);
+                setOtpExpiresAt(Date.now() + 120000);
                 setError("");
                 try {
                     const res = await apiFetch("/public/otp/send", {
@@ -996,6 +1035,7 @@
                     });
                     setCaseRef(res.reference || null);
                     setSubmitted(true);
+                    clearPublicComplaintDraft();
                     setFormData({
                         name: "", contact: "", email: "", aadhaar: "",
                         incident_desc: "", crime_type: "", location: ""
@@ -3589,9 +3629,26 @@
         // ─── APP ──────────────────────────────────────────────────────────────
         const App = () => {
             const storedOfficer = getStoredOfficer();
+            const storedPublicComplaintDraft = getPublicComplaintDraft();
+            // A draft is "live" if:
+            //   (a) it has an active OTP step that hasn't expired yet, OR
+            //   (b) it was saved within the last 2 hours (user was actively filling the form)
+            const isDraftLive = (() => {
+                if (!storedPublicComplaintDraft) return false;
+                const { verifyStep, otpExpiresAt, savedAt } = storedPublicComplaintDraft;
+                if (verifyStep === "otp" && otpExpiresAt && otpExpiresAt > Date.now()) return true;
+                const TWO_HOURS = 2 * 60 * 60 * 1000;
+                if (savedAt && (Date.now() - savedAt) < TWO_HOURS) return true;
+                // Stale draft — clean it up silently
+                clearPublicComplaintDraft();
+                return false;
+            })();
             const [currentView, setCurrentView] = useState(() => {
-                if (!storedOfficer) return "landing";
-                return (storedOfficer.role || "").toLowerCase() === "admin" ? "admin" : "staff";
+                if (storedOfficer) {
+                    return (storedOfficer.role || "").toLowerCase() === "admin" ? "admin" : "staff";
+                }
+                if (isDraftLive) return "public";
+                return "landing";
             });
             const [officer, setOfficer]         = useState(() => storedOfficer);
 
