@@ -221,10 +221,16 @@
         const { motion, AnimatePresence } = window.Motion || window.FramerMotion || window.framerMotion || window['framer-motion'] || {};
 
         // ─── API CONFIG ───────────────────────────────────────────────────────
-        // Change this to match where your Flask server is running.
-        const API_BASE = window.location.origin && window.location.origin !== "null" && !window.location.origin.startsWith("file:")
-            ? window.location.origin
-            : "http://localhost:5000";
+        // For separate frontend/backend deploys, set window.CRMS_API_BASE or visit once with ?api_base=https://your-backend.onrender.com
+        const queryApiBase = new URLSearchParams(window.location.search).get("api_base");
+        if (queryApiBase) localStorage.setItem("CRMS_API_BASE", queryApiBase);
+        const configuredApiBase = window.CRMS_API_BASE || localStorage.getItem("CRMS_API_BASE") || "";
+        const API_BASE = (
+            configuredApiBase ||
+            (window.location.origin && window.location.origin !== "null" && !window.location.origin.startsWith("file:")
+                ? window.location.origin
+                : "http://localhost:5000")
+        ).replace(/\/$/, "");
         
         // reCAPTCHA v2 (Invisible) Configuration
         const RECAPTCHA_PUBLIC_KEY = window._recaptcha_site_key || "6LfLCfIsAAAAAK4ZwH_RMmvAPAi3vtkGKPLAYkuk";

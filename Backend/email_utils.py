@@ -75,7 +75,9 @@ def send_verification_email(recipient_email, otp):
         f"Bengaluru Police Department Themis's Domain Team"
     )
 
-    if smtp_user and smtp_password:
+    smtp_configured = bool(smtp_user and smtp_password)
+
+    if smtp_configured:
         try:
             msg = MIMEMultipart()
             msg['From'] = f"{smtp_from_name} <{smtp_from_email}>"
@@ -95,6 +97,7 @@ def send_verification_email(recipient_email, otp):
             return True, "OTP sent successfully to email."
         except Exception as e:
             logger.error(f"[EMAIL OTP] SMTP send failed: {e}")
+            return False, "SMTP email send failed. Please check the backend logs and SMTP settings."
 
     # Offline or mock fallback
     mock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_emails")
