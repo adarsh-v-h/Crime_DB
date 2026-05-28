@@ -19,12 +19,52 @@ import os
 import mimetypes
 from pathlib import Path
 from werkzeug.utils import secure_filename
+import re
+import dns.resolver
 
 import config
 from db_connection import init_pool, get_db
 import queries
 from assignment_algorithm import process_pending_complaints
 import email_utils
+
+def verify_email_mx(email):
+    """
+    Checks if the email has a valid format and its domain has valid MX records.
+    Returns (is_valid, reason)
+    """
+    if not email:
+        return False, "Email address is required."
+        
+    # Standard email regex pattern
+    pattern = r'^[\w\.\+\-]+\@([\w\-]+\.)+[\w\-]{2,4}$'
+    if not re.match(pattern, email):
+        return False, "Invalid email format."
+        
+    try:
+        domain = email.split('@')[1]
+    except IndexError:
+        return False, "Invalid email format (missing domain)."
+        
+    try:
+        # Perform DNS MX record lookup
+        resolver = dns.resolver.Resolver()
+        resolver.timeout = 5.0
+        resolver.lifetime = 5.0
+        mx_records = resolver.resolve(domain, 'MX')
+        if len(mx_records) > 0:
+            return True, "Email domain has valid MX records."
+    except dns.resolver.NXDOMAIN:
+        return False, f"Domain '{domain}' does not exist."
+    except (dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return False, f"Domain '{domain}' does not have a mail exchange server configured."
+    except dns.exception.Timeout:
+        return False, "DNS lookup timed out."
+    except Exception as e:
+        return False, f"DNS lookup failed: {str(e)}"
+        
+    return False, f"No MX records found for domain '{domain}'."
+
 
 
 # Configure logging
@@ -1291,8 +1331,102 @@ def trigger_assignment_process():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PUBLIC PORTAL  —  /public/complaint  /public/access-request
+# PUBLIC PORTAL  —  /public/complaint  /public/access-request  /public/otp/*  /public/verify-email
 # ──────────────────────────────────────────────────────────────────────────────
+
+@app.route("/public/verify-email", methods=["POST"])
+def verify_email_route():
+    """
+    POST /public/verify-email
+    Validates email format and queries DNS MX records for the domain.
+    """
+    body = request.get_json(silent=True) or {}
+    email = (body.get("email") or "").strip()
+    
+    if not email:
+        return jsonify({
+            "success": True,
+            "valid": False,
+            "reason": "Email address is required."
+        }), 200
+        
+    is_valid, reason = verify_email_mx(email)
+    return jsonify({
+        "success": True,
+        "valid": is_valid,
+        "reason": reason
+    }), 200
+
+
+@app.route("/public/otp/send", methods=["POST"])
+def send_otp():
+    """
+    POST /public/otp/send
+    Generates and sends a 6-digit OTP to the user's phone number.
+    Rate limited to 3 sends per 10 minutes.
+    """
+    import random
+    from sms_utils import normalize_and_validate_phone, send_otp_sms
+    from otp_store import otp_store
+
+    body = request.get_json(silent=True) or {}
+    phone = (body.get("phone") or "").strip()
+    
+    cleaned_phone, err = normalize_and_validate_phone(phone)
+    if err:
+        return _err(err, 400)
+        
+    if not otp_store.can_send_otp(cleaned_phone):
+        return _err("Too many OTP requests. Please wait before trying again.", 429)
+        
+    otp = f"{random.randint(100000, 999999)}"
+    
+    otp_store.save_otp(cleaned_phone, otp, ttl=120)
+    otp_store.record_send(cleaned_phone)
+    
+    success, msg = send_otp_sms(cleaned_phone, otp)
+    if not success:
+        return _err(msg, 500)
+        
+    return jsonify({
+        "success": True,
+        "message": "OTP sent successfully.",
+        "expires_in": 120
+    }), 200
+
+
+@app.route("/public/otp/verify", methods=["POST"])
+def verify_otp():
+    """
+    POST /public/otp/verify
+    Verifies the OTP and returns a phone verification token on success.
+    """
+    from sms_utils import normalize_and_validate_phone
+    from otp_store import otp_store
+
+    body = request.get_json(silent=True) or {}
+    phone = (body.get("phone") or "").strip()
+    otp = (body.get("otp") or "").strip()
+    
+    if not phone:
+        return _err("Phone number is required.", 400)
+    if not otp:
+        return _err("OTP is required.", 400)
+        
+    cleaned_phone, err = normalize_and_validate_phone(phone)
+    if err:
+        return _err(err, 400)
+        
+    success, result_or_err = otp_store.verify_otp(cleaned_phone, otp)
+    if not success:
+        return _err(result_or_err, 400)
+        
+    return jsonify({
+        "success": True,
+        "verified": True,
+        "token": result_or_err
+    }), 200
+
 
 @app.route("/public/complaint", methods=["POST"])
 def public_complaint():
@@ -1301,11 +1435,12 @@ def public_complaint():
     Adds a citizen complaint to public_complaints staging and creates a preliminary cases row
     with status Pending Review for intake tracking.
     Body: { name*, contact*, aadhaar_last4*, email, crime_type*, location*,
-            complaint_mode, incident_desc*, captcha_token* }
+            complaint_mode, incident_desc*, captcha_token*, phone_verification_token }
     Returns: { success, reference }   (reference = PC-XXX format)
     """
-    body           = request.get_json(silent=True) or {}
-    captcha_token  = (body.get("captcha_token") or "").strip()
+    body                     = request.get_json(silent=True) or {}
+    captcha_token            = (body.get("captcha_token") or "").strip()
+    phone_verification_token = (body.get("phone_verification_token") or "").strip()
     
     # Verify CAPTCHA first
     is_valid, score, error_msg = _verify_captcha(captcha_token)
@@ -1336,6 +1471,18 @@ def public_complaint():
     if complaint_mode not in VALID_COMPLAINT_MODES:
         complaint_mode = "Online"
 
+    # Validate phone verification token if provided (optional for backward compatibility)
+    if phone_verification_token:
+        from sms_utils import normalize_and_validate_phone
+        from otp_store import otp_store
+        
+        cleaned_phone, err = normalize_and_validate_phone(contact)
+        if err:
+            return _err(err, 400)
+            
+        if not otp_store.verify_token(cleaned_phone, phone_verification_token):
+            return _err("Invalid or expired phone verification token. Please verify your phone number again.", 400)
+
     try:
         new_id = queries.submit_public_complaint(
             name, contact, email, aadhaar_last4,
@@ -1348,6 +1495,7 @@ def public_complaint():
         }), 201
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
+
 
 
 @app.route("/public/access-request", methods=["POST"])

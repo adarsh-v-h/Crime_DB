@@ -408,7 +408,9 @@
                 LogOut: "<path d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/><polyline points='16 17 21 12 16 7'/><line x1='21' y1='12' x2='9' y2='12'/>",
                 Trash2: "<path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/><line x1='10' y1='11' x2='10' y2='17'/><line x1='14' y1='11' x2='14' y2='17'/>",
                 Edit: "<path d='M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7'/><path d='M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z'/>",
+                AlertTriangle: "<path d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/>",
                 MoreVertical: "<circle cx='12' cy='12' r='1'/><circle cx='12' cy='5' r='1'/><circle cx='12' cy='19' r='1'/>",
+
                 CheckCircle: "<path d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/><polyline points='22 4 12 14.01 9 11.01'/>",
                 XCircle: "<circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/>",
                 Info: "<circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/>",
@@ -786,7 +788,35 @@
             const [browseCaseFilters, setBrowseCaseFilters] = useState({ status: "Active", crime_type: "", location: "", search: "" });
             const [browseCaseLoading, setBrowseCaseLoading] = useState(false);
 
-            const handleComplaintSubmit = async (e) => {
+            // Safety and Verification states
+            const [showDisclaimer, setShowDisclaimer] = useState(false);
+            const [emailValidating, setEmailValidating] = useState(false);
+            const [emailValid, setEmailValid] = useState(null); // null | true | false
+            const [otpSent, setOtpSent] = useState(false);
+            const [otpValue, setOtpValue] = useState("");
+            const [otpVerified, setOtpVerified] = useState(false);
+            const [verificationToken, setVerificationToken] = useState(null);
+            const [otpCountdown, setOtpCountdown] = useState(0);
+            const [verifyStep, setVerifyStep] = useState("form"); // "form"|"disclaimer"|"email"|"otp"|"ready"
+
+            // OTP Countdown Timer Effect
+            useEffect(() => {
+                let timer;
+                if (verifyStep === "otp" && otpCountdown > 0) {
+                    timer = setInterval(() => {
+                        setOtpCountdown(prev => {
+                            if (prev <= 1) {
+                                clearInterval(timer);
+                                return 0;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                }
+                return () => clearInterval(timer);
+            }, [verifyStep, otpCountdown]);
+
+            const handleFormSubmitAttempt = (e) => {
                 e.preventDefault();
                 // Validate Aadhaar last 4 digits
                 const a4 = formData.aadhaar_last4.trim();
@@ -795,28 +825,156 @@
                     return;
                 }
                 setAadhaarError("");
-                setSubmitting(true);
+                setError("");
+                
+                // Show Disclaimer Modal
+                setShowDisclaimer(true);
+                setVerifyStep("disclaimer");
+            };
+
+            const handleDisclaimerReject = () => {
+                setShowDisclaimer(false);
+                setVerifyStep("form");
+            };
+
+            const handleDisclaimerAccept = async () => {
+                setShowDisclaimer(false);
+                
+                // If email is provided, validate it via DNS MX record
+                if (formData.email && formData.email.trim()) {
+                    setVerifyStep("email");
+                    setEmailValidating(true);
+                    try {
+                        const res = await apiFetch("/public/verify-email", {
+                            method: "POST",
+                            body: JSON.stringify({ email: formData.email.trim() })
+                        });
+                        if (res.success && res.valid) {
+                            setEmailValid(true);
+                            await startOtpFlow();
+                        } else {
+                            setEmailValid(false);
+                            setError(res.reason || "Invalid email domain. Please check your email address.");
+                            setVerifyStep("form");
+                        }
+                    } catch (err) {
+                        setEmailValid(false);
+                        setError("Email verification failed: " + err.message);
+                        setVerifyStep("form");
+                    } finally {
+                        setEmailValidating(false);
+                    }
+                } else {
+                    // No email, proceed directly to OTP
+                    await startOtpFlow();
+                }
+            };
+
+            const startOtpFlow = async () => {
+                setVerifyStep("otp");
+                setOtpSent(false);
+                setOtpValue("");
+                setOtpVerified(false);
+                setOtpCountdown(120);
+                setError("");
+                
                 try {
-                    // Get CAPTCHA token
+                    const res = await apiFetch("/public/otp/send", {
+                        method: "POST",
+                        body: JSON.stringify({ phone: formData.contact.trim() })
+                    });
+                    if (res.success) {
+                        setOtpSent(true);
+                    } else {
+                        setError(res.message || "Failed to send OTP.");
+                        setVerifyStep("form");
+                    }
+                } catch (err) {
+                    setError("Failed to send OTP: " + err.message);
+                    setVerifyStep("form");
+                }
+            };
+
+            const handleResendOtp = async () => {
+                if (otpCountdown > 90) return; // Wait 30 seconds
+                setOtpCountdown(120);
+                setError("");
+                try {
+                    const res = await apiFetch("/public/otp/send", {
+                        method: "POST",
+                        body: JSON.stringify({ phone: formData.contact.trim() })
+                    });
+                    if (res.success) {
+                        alert("OTP resent successfully.");
+                    } else {
+                        setError(res.message || "Failed to resend OTP.");
+                    }
+                } catch (err) {
+                    setError("Failed to resend OTP: " + err.message);
+                }
+            };
+
+            const handleVerifyOtp = async () => {
+                if (!otpValue || otpValue.length !== 6) {
+                    alert("Please enter a valid 6-digit OTP.");
+                    return;
+                }
+                setError("");
+                try {
+                    const res = await apiFetch("/public/otp/verify", {
+                        method: "POST",
+                        body: JSON.stringify({ phone: formData.contact.trim(), otp: otpValue })
+                    });
+                    if (res.success && res.verified) {
+                        setOtpVerified(true);
+                        setVerificationToken(res.token);
+                        setVerifyStep("ready");
+                        await finalizeComplaintSubmission(res.token);
+                    } else {
+                        setError(res.message || "OTP verification failed.");
+                    }
+                } catch (err) {
+                    setError("OTP verification failed: " + err.message);
+                }
+            };
+
+            const finalizeComplaintSubmission = async (token) => {
+                setSubmitting(true);
+                setError("");
+                try {
                     const captchaToken = await executeRecaptcha("complaint");
                     if (!captchaToken) {
                         setError("CAPTCHA verification is required");
+                        setVerifyStep("form");
                         return;
                     }
-                    const payload = { ...formData, aadhaar_last4: a4, complaint_mode: "Online", captcha_token: captchaToken };
+                    const payload = { 
+                        ...formData, 
+                        aadhaar_last4: formData.aadhaar_last4.trim(), 
+                        complaint_mode: "Online", 
+                        captcha_token: captchaToken,
+                        phone_verification_token: token 
+                    };
                     const res = await apiFetch("/public/complaint", {
                         method: "POST",
                         body: JSON.stringify(payload),
                     });
                     setCaseRef(res.reference || null);
                     setSubmitted(true);
+                    setFormData({
+                        name: "", contact: "", email: "", aadhaar_last4: "",
+                        incident_desc: "", crime_type: "", location: ""
+                    });
+                    setVerifyStep("form");
                 } catch (err) {
-                    alert("Submission failed: " + err.message);
+                    setError("Submission failed: " + err.message);
+                    setVerifyStep("form");
                 } finally {
                     setSubmitting(false);
                 }
                 setTimeout(() => { setSubmitted(false); setCaseRef(null); }, 8000);
             };
+
 
             const handleAccessSubmit = async (e) => {
                 e.preventDefault();
@@ -978,8 +1136,84 @@
                                         )}
                                         <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/70">Complaint logged for officer review. Save your reference number — you will need it to track your case.</p>
                                     </div>
+                                ) : verifyStep === "email" ? (
+                                    <div className="py-12 text-center">
+                                        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border-2 border-black bg-white">
+                                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-black border-t-transparent" />
+                                        </div>
+                                        <h3 className="mb-2 text-lg font-semibold uppercase tracking-[0.1em] text-black">Verifying Email Domain</h3>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-black/70">Performing DNS MX exchange lookup on {formData.email}...</p>
+                                    </div>
+                                ) : verifyStep === "otp" ? (
+                                    <div className="py-8">
+                                        <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full border-2 border-black bg-white">
+                                            <Icon name="Shield" size={24} className="text-black" />
+                                        </div>
+                                        <div className="text-center mb-6">
+                                            <h3 className="text-lg font-semibold uppercase tracking-[0.1em] text-black">Phone Number Verification</h3>
+                                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/65">
+                                                We have sent a verification code to {formData.contact}
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="mx-auto max-w-sm space-y-4">
+                                            <div>
+                                                <label className={CRMS_LABEL}>Enter 6-Digit OTP</label>
+                                                <input
+                                                    type="text"
+                                                    maxLength={6}
+                                                    value={otpValue}
+                                                    onChange={e => setOtpValue(e.target.value.replace(/\D/g, ''))}
+                                                    className={`${CRMS_INPUT} text-center text-lg font-bold tracking-widest`}
+                                                    placeholder="XXXXXX"
+                                                />
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.1em]">
+                                                <span className="text-black/60">
+                                                    Code expires in: <span className="font-mono text-accent">{Math.floor(otpCountdown / 60)}:{(otpCountdown % 60).toString().padStart(2, '0')}</span>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    disabled={otpCountdown > 90}
+                                                    onClick={handleResendOtp}
+                                                    className={`text-accent hover:underline ${otpCountdown > 90 ? "cursor-not-allowed opacity-40" : ""}`}
+                                                >
+                                                    Resend OTP
+                                                </button>
+                                            </div>
+
+                                            {error && (
+                                                <div className="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-center text-xs font-semibold uppercase tracking-[0.1em] text-red-600">
+                                                    {error}
+                                                </div>
+                                            )}
+
+                                            <div className="flex gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVerifyStep("form")}
+                                                    className="w-1/3 rounded-full border-2 border-black bg-white py-3 text-xs font-semibold uppercase tracking-[0.12em] text-black transition-opacity hover:opacity-80"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleVerifyOtp}
+                                                    className="w-2/3 rounded-full border-2 border-black bg-black py-3 text-xs font-semibold uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-80"
+                                                >
+                                                    Verify & Submit
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 ) : (
-                                    <form onSubmit={handleComplaintSubmit} className="space-y-5">
+                                    <form onSubmit={handleFormSubmitAttempt} className="space-y-5">
+                                        {error && (
+                                            <div className="rounded-xl border-2 border-red-600 bg-red-50 p-3 text-center text-xs font-semibold uppercase tracking-[0.1em] text-red-600">
+                                                {error}
+                                            </div>
+                                        )}
                                         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                                             <div>
                                                 <label className={CRMS_LABEL}>Complainant Name *</label>
@@ -1046,6 +1280,7 @@
                                 )}
                             </motion.div>
                         )}
+
 
                         {/* Browse Cases */}
                         {activeTab === "browse" && (
@@ -1222,7 +1457,52 @@
                             </motion.div>
                         )}
                     </motion.div>
+
+                    {/* LEGAL DISCLAIMER MODAL */}
+                    <AnimatePresence>
+                        {showDisclaimer && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+                                <motion.div
+                                    className={`max-w-md w-full ${CRMS_CARD}`}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.2 }}
+                                >
+                                    <div className="mb-4 flex items-center gap-3 border-b-2 border-black/10 pb-4">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-red-600 bg-red-50 text-red-600">
+                                            <Icon name="AlertTriangle" size={18} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-red-600">Legal Notice</h3>
+                                            <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-black/60">Bengaluru Police Department</p>
+                                        </div>
+                                    </div>
+                                    <p className="mb-6 text-xs leading-relaxed text-black/80 font-medium">
+                                        Filing a false or fabricated police complaint is a criminal offence punishable under Section 182 of the Indian Penal Code (IPC) and Section 211 IPC, which may result in imprisonment of up to 7 years and/or a fine. Please confirm that all information provided is accurate and truthful to the best of your knowledge.
+                                    </p>
+                                    <div className="flex justify-end gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleDisclaimerReject}
+                                            className="rounded-full border-2 border-black bg-white px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-black transition-opacity hover:opacity-80"
+                                        >
+                                            No, Wait
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleDisclaimerAccept}
+                                            className="rounded-full border-2 border-black bg-red-600 px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-80"
+                                        >
+                                            Yes, Proceed
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
                 </CrmsPageShell>
+
             );
         };
 
