@@ -1,6 +1,6 @@
 -- Adds single-device officer login sessions.
 -- Safe to run on an existing database.
-USE crms;
+USE defaultdb;
 
 CREATE TABLE IF NOT EXISTS officer_sessions (
     session_id INT NOT NULL AUTO_INCREMENT,

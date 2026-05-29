@@ -728,6 +728,8 @@ def assign_officer():
             return _err(f"Officer {officer_id} does not exist", 404)
 
         rows = queries.assign_officer(int(case_id), int(officer_id))
+        if rows > 0:
+            email_utils.send_officer_assignment_notification_async(int(case_id), int(officer_id), "added")
         return _ok(assigned=rows > 0)
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)
@@ -753,6 +755,7 @@ def unassign_officer():
         rows = queries.unassign_officer(int(case_id), int(officer_id))
         if rows == 0:
             return _err("Assignment not found", 404)
+        email_utils.send_officer_assignment_notification_async(int(case_id), int(officer_id), "removed")
         return _ok()
     except mysql.connector.Error as e:
         return _err(f"Database error: {str(e)}", 500)

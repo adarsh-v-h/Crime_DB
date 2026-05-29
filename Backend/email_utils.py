@@ -67,10 +67,10 @@ def _format_file_size(size):
         return "N/A"
 
 
-def _send_via_brevo_api(brevo_api_key, from_name, from_email, recipient_email, subject, body, attachment_bytes=None, attachment_name=""):
+def _send_via_brevo_api(brevo_api_key, from_name, from_email, recipient_email, subject, body, attachment_bytes=None, attachment_name="", attachments_list=None):
     """
     Core internal helper to execute an HTTPS POST request to Brevo's transactional API engine.
-    Converts binary attachments to base64 strings dynamically.
+    Converts binary attachments to base64 strings dynamically. Supports single or multiple attachments.
     """
     # Convert newline format to basic HTML paragraph tags for HTML viewing
     html_content = "".join(f"<p>{line}</p>" for line in body.split("\n\n")).replace("\n", "<br/>")
@@ -84,14 +84,24 @@ def _send_via_brevo_api(brevo_api_key, from_name, from_email, recipient_email, s
     }
 
     # Process and map file attachments if present
+    attachments = []
     if attachment_bytes:
         encoded_content = base64.b64encode(attachment_bytes).decode('utf-8')
-        payload["attachment"] = [
-            {
+        attachments.append({
+            "content": encoded_content,
+            "name": attachment_name
+        })
+
+    if attachments_list:
+        for att in attachments_list:
+            encoded_content = base64.b64encode(att["content"]).decode('utf-8')
+            attachments.append({
                 "content": encoded_content,
-                "name": attachment_name
-            }
-        ]
+                "name": att["name"]
+            })
+
+    if attachments:
+        payload["attachment"] = attachments
 
     try:
         response = requests.post(
@@ -111,6 +121,7 @@ def _send_via_brevo_api(brevo_api_key, from_name, from_email, recipient_email, s
     except Exception as e:
         logger.error(f"[BREVO HTTP API EXCEPTION] Request pipeline error: {str(e)}")
         return False
+
 
 
 def send_verification_email(recipient_email, otp):
@@ -452,6 +463,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
         body = ""
         attachment_bytes = None
         attachment_name = ""
+        attachments_list = []
         
         if decision.lower() in ["accept", "accepted"]:
             case_id = request.get("case_id")
@@ -468,6 +480,7 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 f"document: {display_id}.pdf. The dossier includes the latest approved case narrative, "
                 f"investigation timeline, assigned officer list, and evidence inventory metadata available at "
                 f"the time of generation.\n\n"
+                f"Additionally, all authorized raw evidence files currently filed under this case are attached to this email for your review.\n\n"
                 f"Best regards,\n"
                 f"Bengaluru Police Department Themis's Domain Team\n"
                 f"(Deciding Officer: {officer_name})"
@@ -479,6 +492,22 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
                 teammates=teammates
             )
             attachment_name = f"{display_id}.pdf"
+
+            # Dynamically read and load all associated raw evidence files from disk
+            for ev in evidence_list:
+                file_path = ev.get("file_path")
+                orig_name = ev.get("original_name") or ev.get("file_name") or f"evidence_{ev.get('evidence_id')}"
+                if file_path and os.path.exists(file_path):
+                    try:
+                        with open(file_path, 'rb') as f:
+                            file_bytes = f.read()
+                        attachments_list.append({
+                            "name": orig_name,
+                            "content": file_bytes
+                        })
+                        logger.info(f"[EMAIL ENGINE] Loaded case evidence file '{orig_name}' from path '{file_path}'")
+                    except Exception as e_ev:
+                        logger.error(f"[EMAIL ENGINE] Failed to read evidence file '{orig_name}' at path '{file_path}': {e_ev}")
         else:
             subject = f"[Themis's Domain] Secure Case Access Declined - Case {display_id}"
             body = (
@@ -499,10 +528,10 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
             logger.info(f"[EMAIL ENGINE] Dispatching email to {requester_email} via Brevo HTTP REST Gateway...")
             success = _send_via_brevo_api(
                 brevo_api_key, from_name, from_email, requester_email, 
-                subject, body, attachment_bytes, attachment_name
+                subject, body, attachment_bytes, attachment_name, attachments_list=attachments_list
             )
             if success:
-                logger.info(f"[EMAIL ENGINE] Live API email successfully dispatched to {requester_email}!")
+                logger.info(f"[EMAIL ENGINE] Live API email successfully dispatched to {requester_email} with {len(attachments_list)} raw evidence files attached!")
                 return True
             logger.warning("[EMAIL ENGINE] Brevo API processing execution failed. Reverting to Mock storage...")
                 
@@ -522,7 +551,9 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
             "subject": subject,
             "body": body,
             "attachment_provided": bool(attachment_bytes),
-            "attachment_name": attachment_name
+            "attachment_name": attachment_name,
+            "evidence_attachments_count": len(attachments_list),
+            "evidence_attachments_names": [att["name"] for att in attachments_list]
         }
         
         with open(email_filepath, 'w', encoding='utf-8') as f:
@@ -534,11 +565,20 @@ def send_decision_email(request_id: int, decision: str, officer_id: int):
             with open(pdf_filepath, 'wb') as f:
                 f.write(attachment_bytes)
             logger.info(f"[EMAIL ENGINE] Mock PDF dossier saved: {pdf_filepath}")
+
+        # Also write the mock evidence attachments so we can verify them easily
+        for att in attachments_list:
+            mock_att_path = os.path.join(mock_dir, f"mock_attachment_{timestamp}_{att['name']}")
+            with open(mock_att_path, 'wb') as f:
+                f.write(att["content"])
+            logger.info(f"[EMAIL ENGINE] Mock evidence attachment saved: {mock_att_path}")
             
         return True
     except Exception as e:
         logger.error(f"[EMAIL ENGINE] Fatal error in email processor: {str(e)}")
         return False
+
+
 
 
 def send_decision_email_async(request_id: int, decision: str, officer_id: int):

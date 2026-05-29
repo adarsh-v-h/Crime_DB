@@ -305,6 +305,20 @@ def approve_recommendation(recommendation_id: int, admin_officer_id: int,
         )
         
         conn.commit()
+
+        # Notify each newly-assigned officer by email (fires in background threads,
+        # never affects the DB result even if emails fail)
+        try:
+            from email_utils import send_officer_assignment_notification_async
+        except ImportError:
+            from .email_utils import send_officer_assignment_notification_async
+
+        for oid in officer_ids:
+            try:
+                send_officer_assignment_notification_async(new_case_id, oid, "added")
+            except Exception as email_err:
+                logger.error(f"[ASSIGNMENT EMAIL] Failed to queue email for officer {oid} on case {new_case_id}: {email_err}")
+
         return new_case_id
     except Exception as e:
         conn.rollback()
