@@ -786,6 +786,24 @@ def revoke_officer_session(officer_id: int, session_token: str) -> int:
         conn.close()
 
 
+def revoke_all_officer_sessions(officer_id: int) -> int:
+    """Revokes ALL active sessions for an officer (used by force-login flow)."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """UPDATE officer_sessions
+               SET revoked_at = NOW()
+               WHERE officer_id = %s
+                 AND revoked_at IS NULL""",
+            (officer_id,)
+        )
+        conn.commit()
+        return cur.rowcount
+    finally:
+        cur.close()
+        conn.close()
+
 # ──────────────────────────────────────────────────────────────────────────────
 # AUTH
 # ──────────────────────────────────────────────────────────────────────────────

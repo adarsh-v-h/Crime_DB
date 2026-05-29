@@ -2010,6 +2010,7 @@ def officer_login():
     # Support both badge_id and legacy identifier for backward compatibility/robustness
     badge_id = (body.get("badge_id") or body.get("identifier") or "").strip()
     password = (body.get("password")   or "").strip()
+    force    = bool(body.get("force", False))
 
     if not badge_id:
         return _err("badge_id is required")
@@ -2036,7 +2037,10 @@ def officer_login():
 
         officer_id = officer["officer_id"]
         if queries.officer_has_active_session(officer_id):
-            return _err("This officer is already logged in on another device. Please log out there first.", 409)
+            if not force:
+                return _err("This officer is already logged in on another device. Please log out there first.", 409)
+            # force=True: revoke all existing sessions so a fresh login can proceed
+            queries.revoke_all_officer_sessions(officer_id)
 
         ttl_hours = int(os.getenv("AUTH_SESSION_TTL_HOURS", "12"))
         session_token, session_expires_at = queries.create_officer_session(
