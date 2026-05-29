@@ -821,7 +821,12 @@
         // ─── PUBLIC PORTAL ────────────────────────────────────────────────────
         const PublicPortal = ({ onNavigate }) => {
             const savedComplaintDraft = getPublicComplaintDraft();
-            const [activeTab, setActiveTab] = useState("complaint");
+            const [activeTab, setActiveTab] = useState(() => {
+                return localStorage.getItem("CRMS_PUBLIC_ACTIVE_TAB") || "complaint";
+            });
+            useEffect(() => {
+                localStorage.setItem("CRMS_PUBLIC_ACTIVE_TAB", activeTab);
+            }, [activeTab]);
             const [error, setError] = useState("");
             const [formData, setFormData] = useState({
                 name: savedComplaintDraft?.formData?.name || "",
@@ -859,7 +864,7 @@
                 return Math.max(0, Math.ceil(((savedComplaintDraft.otpExpiresAt || 0) - Date.now()) / 1000));
             });
             const [verifyStep, setVerifyStep] = useState(() => {
-                if (savedComplaintDraft?.verifyStep === "otp" && otpCountdown > 0) return "otp";
+                if (savedComplaintDraft?.verifyStep === "otp") return "otp";
                 return "form";
             }); // "form"|"disclaimer"|"email"|"otp"|"ready"
             const [otpExpiresAt, setOtpExpiresAt] = useState(savedComplaintDraft?.otpExpiresAt || null);
@@ -3644,12 +3649,26 @@
                 return false;
             })();
             const [currentView, setCurrentView] = useState(() => {
+                const persistedView = localStorage.getItem("CRMS_CURRENT_VIEW");
+                if (persistedView) {
+                    if (storedOfficer) {
+                        if (persistedView === "admin" || persistedView === "staff") return persistedView;
+                        return (storedOfficer.role || "").toLowerCase() === "admin" ? "admin" : "staff";
+                    } else {
+                        if (persistedView === "public" || persistedView === "login" || persistedView === "landing") return persistedView;
+                        if (isDraftLive) return "public";
+                        return "landing";
+                    }
+                }
                 if (storedOfficer) {
                     return (storedOfficer.role || "").toLowerCase() === "admin" ? "admin" : "staff";
                 }
                 if (isDraftLive) return "public";
                 return "landing";
             });
+            useEffect(() => {
+                localStorage.setItem("CRMS_CURRENT_VIEW", currentView);
+            }, [currentView]);
             const [officer, setOfficer]         = useState(() => storedOfficer);
 
             // Map DB role to legacy P1/P2 gate the dashboard already uses
