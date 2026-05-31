@@ -481,7 +481,7 @@ Both suites mock the database layer — no live DB needed to run them.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENCE](LICENCE).
 
 ---
 
