@@ -32,74 +32,154 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📎</text></svg>">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600;1,700&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
-                        'space': ['Space Grotesk', 'sans-serif'],
-                        'inter': ['Inter', 'sans-serif'],
+                        // Editorial type system
+                        'display': ['Playfair Display', 'Georgia', 'serif'],   // dramatic magazine headlines
+                        'serif':   ['Spectral', 'Georgia', 'serif'],           // long-form body / drop caps
+                        'sans':    ['Inter', 'system-ui', 'sans-serif'],       // kickers, metadata, UI
+                        'space':   ['Space Grotesk', 'sans-serif'],
+                        'inter':   ['Inter', 'sans-serif'],
                     },
                     colors: {
-                        'accent': '#5E0ED7',
-                        'obsidian': '#070c1e',      // Majestic deep midnight indigo
-                        'void': '#0b1129',          // Enigmatic dark navy
-                        'abyss': '#0f1737',         // Tech-noir dark navy-blue
-                        'slate-deep': '#141d45',
-                        'slate-mid': '#1b2658',
-                        'slate-light': '#243270',
-                        'cyan-glow': '#ff9933',     // Indian Saffron (energy, courage, authority)
-                        'cyan-dim': '#f97316',      // Deep warm Saffron
-                        'blue-electric': '#2563eb', // Ashoka Blue
-                        'blue-glow': '#3b82f6',     // Chakra Blue
-                        'purple-tactical': '#a855f7', 
-                        'purple-glow': '#c084fc',
-                        'red-warn': '#ef4444',
-                        'red-dim': '#b91c1c',
-                        'amber-warn': '#ff9933',
-                        'green-tactical': '#10b981', // Indian Tricolor Emerald Green (peace and growth)
-                        'green-dim': '#059669',
+                        // ── Editorial accent: restrained investigative oxblood ──
+                        'accent': '#8a1c1c',
+                        'accent-deep': '#6d1414',
+                        // ── Paper / ink palette (warm print tones) ──
+                        'paper':       '#f4f0e6',   // warm ivory page
+                        'paper-soft':  '#faf7ef',   // soft off-white
+                        'paper-card':  '#fffdf8',   // near-white card stock
+                        'ink':         '#1c1a17',   // charcoal body text
+                        'ink-black':   '#100e0b',   // rich black headlines
+                        'ink-soft':    '#57514644',
+                        'ink-muted':   '#5b554a',   // metadata / captions
+                        // ── Legacy tokens remapped to print-friendly tones ──
+                        'obsidian':    '#100e0b',
+                        'void':        '#1c1a17',
+                        'abyss':       '#241f17',
+                        'slate-deep':  '#2a2419',
+                        'slate-mid':   '#3a3326',
+                        'slate-light': '#4a4234',
+                        'cyan-glow':   '#8a1c1c',
+                        'cyan-dim':    '#6d1414',
+                        'blue-electric': '#1d3a6b', // editorial ink blue
+                        'blue-glow':   '#2f4f7a',
+                        'purple-tactical': '#8a1c1c',
+                        'purple-glow': '#a4413f',
+                        'red-warn':    '#9b2226',
+                        'red-dim':     '#7a181c',
+                        'amber-warn':  '#9a6a1e',   // muted editorial gold
+                        'green-tactical': '#3f6b4a', // muted forest
+                        'green-dim':   '#33543b',
                     }
                 }
             }
         }
     </script>
     <style>
-        * { scrollbar-width: thin; scrollbar-color: rgba(255,153,51,0.18) transparent; }
-        *::-webkit-scrollbar { width: 4px; }
+        * { scrollbar-width: thin; scrollbar-color: rgba(138,28,28,0.25) transparent; }
+        *::-webkit-scrollbar { width: 6px; height: 6px; }
         *::-webkit-scrollbar-track { background: transparent; }
-        *::-webkit-scrollbar-thumb { background: rgba(255,153,51,0.18); border-radius: 4px; }
-        body { background: #070c1e; color: #e5e7eb; font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        *::-webkit-scrollbar-thumb { background: rgba(138,28,28,0.22); border-radius: 0; }
+        body {
+            background: #f4f0e6;
+            color: #1c1a17;
+            font-family: 'Spectral', Georgia, serif;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+        /* ── Editorial paper texture: faint newsprint dot grid ── */
+        .paper-texture {
+            background-color: #f4f0e6;
+            background-image:
+                radial-gradient(circle at 1px 1px, rgba(28,26,23,0.025) 1px, transparent 0);
+            background-size: 22px 22px;
+        }
+
+        /* ── Glass panels remapped to magazine "card stock" ── */
         .glass-panel {
-            background: rgba(255,255,255,0.02);
-            backdrop-filter: blur(24px) saturate(140%);
-            -webkit-backdrop-filter: blur(24px) saturate(140%);
-            border: 1px solid rgba(255,255,255,0.05);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+            background: #fffdf8;
+            border: 1px solid rgba(28,26,23,0.14);
+            box-shadow: 0 1px 0 rgba(28,26,23,0.04), 0 14px 34px -28px rgba(28,26,23,0.5);
         }
         .glass-panel-strong {
-            background: rgba(255,255,255,0.035);
-            backdrop-filter: blur(32px) saturate(160%);
-            -webkit-backdrop-filter: blur(32px) saturate(160%);
-            border: 1px solid rgba(255,255,255,0.07);
-            box-shadow: 0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+            background: #fffdf8;
+            border: 1px solid rgba(28,26,23,0.2);
+            box-shadow: 0 1px 0 rgba(28,26,23,0.05), 0 22px 48px -30px rgba(28,26,23,0.55);
         }
-        .glow-cyan { box-shadow: 0 0 20px rgba(255,153,51,0.18), 0 0 60px rgba(255,153,51,0.06); }
-        .glow-blue { box-shadow: 0 0 20px rgba(59,130,246,0.12), 0 0 60px rgba(59,130,246,0.04); }
-        .glow-purple { box-shadow: 0 0 20px rgba(168,85,247,0.12), 0 0 60px rgba(168,85,247,0.04); }
-        .glow-green { box-shadow: 0 0 20px rgba(16,185,129,0.12), 0 0 60px rgba(16,185,129,0.04); }
-        .text-glow-cyan { text-shadow: 0 0 20px rgba(255,153,51,0.45), 0 0 40px rgba(255,153,51,0.15); }
-        .text-glow-blue { text-shadow: 0 0 20px rgba(59,130,246,0.4), 0 0 40px rgba(59,130,246,0.15); }
-        .text-glow-purple { text-shadow: 0 0 20px rgba(168,85,247,0.4), 0 0 40px rgba(168,85,247,0.15); }
+
+        /* ── Glows neutralised into subtle editorial elevation ── */
+        .glow-cyan, .glow-blue, .glow-purple, .glow-green { box-shadow: 0 12px 30px -24px rgba(28,26,23,0.5); }
+        .text-glow-cyan { text-shadow: none; color: #8a1c1c; }
+        .text-glow-blue { text-shadow: none; color: #1d3a6b; }
+        .text-glow-purple { text-shadow: none; color: #8a1c1c; }
+
+        /* ── Editorial type utilities ──────────────────────────────────────── */
+        .font-display { font-family: 'Playfair Display', Georgia, serif; }
+        .font-editorial { font-family: 'Spectral', Georgia, serif; }
+        /* Kicker / eyebrow: the small uppercase label above a headline */
+        .kicker {
+            font-family: 'Inter', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.28em;
+            font-weight: 700;
+            font-size: 0.62rem;
+            color: #8a1c1c;
+        }
+        .eyebrow {
+            font-family: 'Inter', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 0.24em;
+            font-weight: 600;
+            font-size: 0.6rem;
+            color: #5b554a;
+        }
+        /* Massive editorial headline */
+        .headline {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-weight: 800;
+            line-height: 0.96;
+            letter-spacing: -0.01em;
+            color: #100e0b;
+        }
+        /* Drop cap for narrative / descriptions */
+        .dropcap::first-letter {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-weight: 800;
+            float: left;
+            font-size: 3.4em;
+            line-height: 0.72;
+            padding: 0.08em 0.12em 0 0;
+            margin: 0.02em 0.04em 0 0;
+            color: #8a1c1c;
+        }
+        /* Pull quote / magazine callout for big numbers */
+        .pull-quote {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-weight: 700;
+            line-height: 0.92;
+            letter-spacing: -0.01em;
+            color: #100e0b;
+            font-variant-numeric: tabular-nums lining-nums;
+        }
+        /* Hairline rules used to separate editorial blocks */
+        .rule-hair { border-top: 1px solid rgba(28,26,23,0.18); }
+        .rule-double { border-top: 3px double rgba(28,26,23,0.55); }
+        .rule-thick { border-top: 2px solid #100e0b; }
+
         .pulse-dot { animation: pulse-glow 2s ease-in-out infinite; }
         @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 4px currentColor, 0 0 12px currentColor; opacity: 1; }
-            50% { box-shadow: 0 0 8px currentColor, 0 0 24px currentColor; opacity: 0.7; }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.45; }
         }
         .scan-line {
             position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: rgba(255,153,51,0.3);
+            background: rgba(138,28,28,0.25);
             animation: scan 4s linear infinite;
             pointer-events: none;
         }
@@ -111,68 +191,66 @@
         }
         .grid-bg {
             background-image: 
-                linear-gradient(rgba(255,153,51,0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,153,51,0.02) 1px, transparent 1px);
+                linear-gradient(rgba(28,26,23,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(28,26,23,0.03) 1px, transparent 1px);
             background-size: 60px 60px;
         }
         .radial-glow {
-            background: radial-gradient(ellipse at 50% 0%, rgba(255,153,51,0.08) 0%, transparent 60%),
-                        radial-gradient(ellipse at 50% 100%, rgba(16,185,129,0.04) 0%, transparent 60%);
+            background: radial-gradient(ellipse at 50% 0%, rgba(138,28,28,0.05) 0%, transparent 60%);
         }
         .noise-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-            pointer-events: none; z-index: 9999; opacity: 0.4;
+            pointer-events: none; z-index: 9999; opacity: 0.5; mix-blend-mode: multiply;
         }
         .particle { position: absolute; border-radius: 50%; pointer-events: none; }
-        .card-hover { transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover { transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
         .card-hover:hover {
-            transform: translateY(-4px) scale(1.01);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(255,153,51,0.06);
-            border-color: rgba(255,153,51,0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 24px 46px -30px rgba(28,26,23,0.6);
+            border-color: rgba(138,28,28,0.4);
         }
         .input-glow:focus {
             outline: none;
-            border-color: rgba(255,153,51,0.3);
-            box-shadow: 0 0 20px rgba(255,153,51,0.08);
+            border-color: #8a1c1c;
+            box-shadow: 0 2px 0 #8a1c1c;
         }
+        /* ── Buttons as editorial press marks ── */
         .btn-primary {
-            background: rgba(255,153,51,0.1);
-            border: 1px solid rgba(255,153,51,0.25);
-            color: #ff9933;
-            transition: all 0.3s ease;
+            background: #8a1c1c;
+            border: 1px solid #6d1414;
+            color: #faf7ef;
+            transition: all 0.25s ease;
         }
         .btn-primary:hover {
-            background: rgba(255,153,51,0.2);
-            border-color: rgba(255,153,51,0.5);
-            box-shadow: 0 0 30px rgba(255,153,51,0.15);
+            background: #6d1414;
+            border-color: #6d1414;
         }
         .btn-danger {
-            background: rgba(239,68,68,0.1);
-            border: 1px solid rgba(239,68,68,0.25);
-            color: #ef4444;
-            transition: all 0.3s ease;
+            background: transparent;
+            border: 1px solid #9b2226;
+            color: #9b2226;
+            transition: all 0.25s ease;
         }
         .btn-danger:hover {
-            background: rgba(239,68,68,0.2);
-            border-color: rgba(239,68,68,0.5);
-            box-shadow: 0 0 30px rgba(239,68,68,0.15);
+            background: #9b2226;
+            color: #faf7ef;
         }
+        /* ── Nav tabs as editorial section markers ── */
         .nav-tab {
             position: relative;
-            transition: all 0.3s ease;
+            transition: all 0.25s ease;
         }
         .nav-tab::after {
             content: '';
             position: absolute; bottom: -2px; left: 50%; right: 50%; height: 2px;
-            background: #ff9933;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 10px rgba(255,153,51,0.5);
+            background: #8a1c1c;
+            transition: all 0.25s ease;
         }
         .nav-tab:hover::after, .nav-tab.active::after {
             left: 0; right: 0;
         }
-        .nav-tab.active { color: #ff9933; text-shadow: 0 0 10px rgba(255,153,51,0.3); }
+        .nav-tab.active { color: #8a1c1c; }
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-10px); }
@@ -185,7 +263,7 @@
         .animate-fade-up { animation: fadeUp 0.6s ease-out forwards; opacity: 0; }
         .metric-value { font-variant-numeric: tabular-nums; }
         .hex-bg {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23ff9933' fill-opacity='0.02'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%238a1c1c' fill-opacity='0.02'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
         .ashoka-watermark {
             position: fixed;
@@ -194,7 +272,7 @@
             transform: translate(-50%, -50%);
             width: 600px;
             height: 600px;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' width='600' height='600'%3E%3Ccircle cx='100' cy='100' r='90' fill='none' stroke='%233b82f6' stroke-width='1.2' stroke-opacity='0.015'/%3E%3Ccircle cx='100' cy='100' r='20' fill='none' stroke='%233b82f6' stroke-width='1.2' stroke-opacity='0.015'/%3E%3Cg stroke='%233b82f6' stroke-width='0.6' stroke-opacity='0.015'%3E%3Cpath d='M100 10v180M10 100h180M36.36 36.36l127.28 127.28M36.36 163.64L163.64 36.36'/%3E%3Cpath d='M100 100L82.68 15.68M100 100l17.32-84.32M100 100L15.68 82.68M100 100l84.32 17.32M100 100l82.68-17.32M100 100l-17.32 84.32M100 100l-84.32-17.32M100 100l17.32 84.32'/%3E%3Cpath d='M100 100l-45-77.94M100 100l45 77.94M100 100l-77.94 45M100 100l77.94-45M100 100l-45 77.94M100 100l45-77.94M100 100l-77.94-45M100 100l77.94 45'/%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' width='600' height='600'%3E%3Ccircle cx='100' cy='100' r='90' fill='none' stroke='%238a1c1c' stroke-width='1.2' stroke-opacity='0.02'/%3E%3Ccircle cx='100' cy='100' r='20' fill='none' stroke='%238a1c1c' stroke-width='1.2' stroke-opacity='0.02'/%3E%3Cg stroke='%238a1c1c' stroke-width='0.6' stroke-opacity='0.02'%3E%3Cpath d='M100 10v180M10 100h180M36.36 36.36l127.28 127.28M36.36 163.64L163.64 36.36'/%3E%3Cpath d='M100 100L82.68 15.68M100 100l17.32-84.32M100 100L15.68 82.68M100 100l84.32 17.32M100 100l82.68-17.32M100 100l-17.32 84.32M100 100l-84.32-17.32M100 100l17.32 84.32'/%3E%3Cpath d='M100 100l-45-77.94M100 100l45 77.94M100 100l-77.94 45M100 100l77.94-45M100 100l-45 77.94M100 100l45-77.94M100 100l-77.94-45M100 100l77.94 45'/%3E%3C/g%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: center;
             pointer-events: none;
@@ -202,7 +280,7 @@
         }
         body.landing-hero .ashoka-watermark,
         body.landing-hero .noise-overlay { display: none; }
-        .landing-hero-text { color: #000; font-family: 'Inter', sans-serif; }
+        .landing-hero-text { color: #100e0b; font-family: 'Spectral', Georgia, serif; }
         @keyframes crms-spin-slow {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
@@ -573,6 +651,20 @@
         // ─── LANDING MOTION VARIANTS ────────────────────────────────────────────
         const LANDING_VIDEO_URL = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260517_222138_3e3205be-3364-417b-a64a-bfe087acbec4.mp4";
 
+        // ─── EDITORIAL PHOTOGRAPHY ──────────────────────────────────────────────
+        // Royalty-free press/archive imagery (Unsplash License — free for commercial
+        // use, no attribution required). Subjects verified: newspaper print, government
+        // archive boxes, and an institutional records library. These reinforce the
+        // investigative-journalism / intelligence-archive atmosphere.
+        const EDITORIAL_IMG = {
+            // "newspaper article lot" — dense print texture
+            press:   "https://images.unsplash.com/photo-1566378246598-5b11a0d486cc?q=80&w=1400&auto=format&fit=crop",
+            // "rows of white archive boxes on wooden shelves" — government records
+            archive: "https://images.unsplash.com/photo-1762627105132-f6ed848a23bf?q=80&w=1200&auto=format&fit=crop",
+            // "a long row of shelves filled with lots of books" — institutional library
+            registry:"https://images.unsplash.com/photo-1721046013656-0a0980264689?q=80&w=1400&auto=format&fit=crop",
+        };
+
         const fadeDown = {
             hidden: { opacity: 0, y: -24 },
             visible: (i = 0) => ({
@@ -600,9 +692,9 @@
             }),
         };
 
-        const ThemisNomos_INPUT = "crms-input w-full rounded-xl border-2 border-black bg-white/80 px-4 py-3 text-sm font-medium text-black placeholder-black/35 transition-all";
-        const ThemisNomos_LABEL = "mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-black";
-        const ThemisNomos_CARD = "rounded-2xl border-2 border-black bg-white p-6 shadow-lg sm:p-8";
+        const ThemisNomos_INPUT = "crms-input w-full border border-ink/30 bg-paper-card px-4 py-3 text-sm font-medium text-ink placeholder-ink/35 transition-all focus:border-accent";
+        const ThemisNomos_LABEL = "mb-2 block text-[10px] font-bold uppercase tracking-[0.2em] text-ink-muted font-sans";
+        const ThemisNomos_CARD = "border border-ink/15 bg-paper-card p-6 shadow-[0_1px_0_rgba(28,26,23,0.04),0_18px_40px_-32px_rgba(28,26,23,0.55)] sm:p-8";
 
         const HeroVideoBackground = ({ scrim = "bg-white/30" }) => (
             <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
@@ -622,20 +714,32 @@
 
         const CrmsPageHeader = ({ title, subtitle, onBack }) => (
             <motion.header
-                className="relative z-20 border-b-2 border-black/10 bg-white/50 backdrop-blur-md"
+                className="relative z-20 border-b-2 border-ink/80 bg-paper/85 backdrop-blur-sm"
                 initial="hidden"
                 animate="visible"
                 variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
             >
-                <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-8">
-                    <motion.div variants={fadeDown} custom={0} className="flex items-center gap-2 sm:gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-black bg-white/80 sm:h-11 sm:w-11">
-                            <Icon name="Shield" size={16} className="text-black" />
+                {/* Top hairline strip — date line / edition marker, newspaper style */}
+                <div className="mx-auto flex max-w-6xl items-center justify-between px-4 pt-2 sm:px-8">
+                    <span className="hidden text-[9px] font-semibold uppercase tracking-[0.22em] text-ink-muted font-sans sm:block">
+                        Bengaluru · Karnataka
+                    </span>
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-ink-muted font-sans">
+                        Confidential Briefing
+                    </span>
+                    <span className="hidden text-[9px] font-semibold uppercase tracking-[0.22em] text-ink-muted font-sans sm:block">
+                        {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+                    </span>
+                </div>
+                <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-8">
+                    <motion.div variants={fadeDown} custom={0} className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-ink bg-paper-card">
+                            <Icon name="Shield" size={18} className="text-accent" />
                         </div>
                         <div>
-                            <div className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.15em] sm:tracking-[0.18em] text-black line-clamp-1">{title}</div>
+                            <div className="font-display text-lg font-extrabold leading-none tracking-tight text-ink-black sm:text-2xl line-clamp-1">{title}</div>
                             {subtitle && (
-                                <div className="text-[8px] sm:text-[10px] font-semibold uppercase tracking-[0.18em] sm:tracking-[0.22em] text-black/65 line-clamp-1">{subtitle}</div>
+                                <div className="mt-0.5 text-[8px] sm:text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-muted font-sans line-clamp-1">{subtitle}</div>
                             )}
                         </div>
                     </motion.div>
@@ -645,7 +749,7 @@
                             variants={fadeDown}
                             custom={1}
                             onClick={onBack}
-                            className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.12em] sm:tracking-[0.16em] text-black transition-opacity hover:opacity-60 shrink-0"
+                            className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.16em] text-ink transition-colors hover:text-accent shrink-0 font-sans"
                         >
                             <Icon name="ArrowLeft" size={12} />
                             Back to Home
@@ -656,13 +760,8 @@
         );
 
         const CrmsPageShell = ({ children, title, subtitle, onBack, scrim, className = "" }) => {
-            useEffect(() => {
-                document.body.classList.add("landing-hero");
-                return () => document.body.classList.remove("landing-hero");
-            }, []);
             return (
-                <div className={`landing-hero-text relative min-h-screen min-h-[100dvh] ${className}`}>
-                    <HeroVideoBackground scrim={scrim} />
+                <div className={`landing-hero-text paper-texture relative min-h-screen min-h-[100dvh] ${className}`}>
                     <CrmsPageHeader title={title} subtitle={subtitle} onBack={onBack} />
                     <div className="relative z-10">{children}</div>
                 </div>
@@ -692,82 +791,101 @@
 
             const headingWords = ["Serve", "Protect", "Justice"];
 
-            return (
-                <div className="landing-hero-text relative flex min-h-screen min-h-[100dvh] flex-col overflow-hidden">
-                    <HeroVideoBackground scrim="bg-white/25" />
+            const todayLine = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 
-                    {/* Navigation */}
+            return (
+                <div className="landing-hero-text paper-texture relative flex min-h-screen min-h-[100dvh] flex-col overflow-hidden">
+                    {/* ── MASTHEAD / NAMEPLATE ───────────────────────────────── */}
                     <motion.header
-                        className="relative z-20 flex items-center justify-between px-5 py-5 sm:px-8 sm:py-6"
+                        className="relative z-20 border-b-2 border-ink/80 px-5 pt-4 sm:px-8"
                         initial="hidden"
                         animate="visible"
                         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
                     >
-                        <motion.div variants={fadeDown} custom={0} className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full border-2 border-black bg-white/80 backdrop-blur-sm">
-                                <Icon name="Shield" size={20} className="text-black" />
-                            </div>
-                            <div className="hidden sm:block">
-                                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-black">Themis's Domain</div>
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-black/70">Bengaluru Police</div>
+                        <motion.div variants={fadeDown} custom={0} className="mx-auto flex max-w-6xl items-center justify-between text-[9px] font-semibold uppercase tracking-[0.24em] text-ink-muted font-sans">
+                            <span className="hidden sm:block">Vol. MMXXVI · No. 1</span>
+                            <span>{todayLine}</span>
+                            <span className="hidden sm:block">Bengaluru Edition</span>
+                        </motion.div>
+                        <motion.div variants={fadeDown} custom={1} className="mx-auto max-w-6xl">
+                            <h1 className="font-display text-center text-[clamp(2.4rem,7vw,5.5rem)] font-black uppercase leading-[0.9] tracking-tight text-ink-black">
+                                Themis&rsquo;s Domain
+                            </h1>
+                            <div className="mx-auto mt-1 mb-3 flex items-center justify-center gap-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-accent font-sans">
+                                <span className="h-px w-8 bg-accent/50" />
+                                Bengaluru Police Intelligence Command
+                                <span className="h-px w-8 bg-accent/50" />
                             </div>
                         </motion.div>
                     </motion.header>
 
-                    {/* Stats row */}
+                    {/* ── PRESS TEXTURE BAND ─────────────────────────────────── */}
+                    <motion.div
+                        variants={fadeDown}
+                        initial="hidden"
+                        animate="visible"
+                        custom={2}
+                        className="relative z-10 mx-auto w-full max-w-6xl overflow-hidden border-b-2 border-ink/80"
+                        aria-hidden="true"
+                    >
+                        <div className="relative h-20 sm:h-28">
+                            <img
+                                src={EDITORIAL_IMG.press}
+                                alt=""
+                                loading="lazy"
+                                className="h-full w-full object-cover opacity-[0.18] grayscale contrast-125"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <p className="eyebrow text-center text-ink-muted">
+                                    Records · Coordination · Accountability · Investigative Intelligence
+                                </p>
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    {/* ── LEAD STORY GRID ────────────────────────────────────── */}
                     <motion.section
-                        className="relative z-10 mt-auto px-5 sm:px-8"
+                        className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-5 py-8 sm:px-8 sm:py-10"
                         initial="hidden"
                         animate="visible"
                         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }}
                     >
-                        <div className="flex flex-col items-end gap-6 sm:gap-8 md:flex-row md:justify-end md:gap-12 lg:gap-16">
-                            {heroStats.map((stat, i) => (
-                                <motion.div
-                                    key={stat.label}
-                                    variants={fadeUp}
-                                    custom={i}
-                                    className="text-right"
-                                >
-                                    <div className="flex items-baseline justify-end gap-0.5">
-                                        <span className="text-2xl font-semibold text-accent sm:text-3xl md:text-4xl">+</span>
-                                        <span className="text-3xl font-semibold tabular-nums tracking-tight text-black sm:text-4xl md:text-5xl lg:text-6xl">
-                                            {stat.value === null
-                                                ? <span className="inline-block h-9 w-16 animate-pulse rounded bg-black/10 sm:h-11 sm:w-20" />
-                                                : <AnimatedCounter value={stat.value} />}
-                                        </span>
-                                    </div>
-                                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-black/80 sm:text-xs">
-                                        {stat.label}
-                                    </p>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </motion.section>
-
-                    {/* Bottom content */}
-                    <motion.section
-                        className="relative z-10 mt-8 flex flex-1 flex-col justify-end px-5 pb-8 sm:mt-12 sm:px-8 sm:pb-12 md:pb-16"
-                        variants={fadeUp}
-                        initial="hidden"
-                        animate="visible"
-                        custom={2}
-                    >
-                        <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-12">
-                            <div className="max-w-xl">
+                        <div className="grid flex-1 gap-8 lg:grid-cols-[1.6fr_1fr] lg:gap-10">
+                            {/* Lead column */}
+                            <div className="flex flex-col justify-center border-ink/15 lg:border-r lg:pr-10">
+                                <motion.p variants={fadeUp} custom={0} className="kicker mb-3">
+                                    The Lead · Command Briefing
+                                </motion.p>
+                                <div className="overflow-hidden">
+                                    {headingWords.map((word, i) => (
+                                        <div key={word} className="overflow-hidden">
+                                            <motion.h2
+                                                variants={slideUpReveal}
+                                                initial="hidden"
+                                                animate="visible"
+                                                custom={i}
+                                                className="font-display text-[clamp(3rem,12vw,9rem)] font-black uppercase leading-[0.84] tracking-tight text-ink-black"
+                                            >
+                                                {word}
+                                            </motion.h2>
+                                        </div>
+                                    ))}
+                                </div>
                                 <motion.p
                                     variants={fadeUp}
-                                    custom={0}
-                                    className="mb-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-black sm:text-xs"
+                                    custom={2}
+                                    className="dropcap mt-6 max-w-xl font-editorial text-base leading-relaxed text-ink sm:text-lg"
                                 >
-                                    Bengaluru Police Department · Themis's Domain Command Center
+                                    An advanced intelligence platform for real-time case tracking, officer coordination,
+                                    and cybercrime analytics across the city of Bengaluru — uniting the field and the
+                                    command room under a single, accountable record.
                                 </motion.p>
 
-                                <motion.div variants={fadeUp} custom={1} className="mb-6 flex flex-wrap gap-3 sm:gap-4">
+                                <motion.div variants={fadeUp} custom={3} className="mt-7 flex flex-wrap gap-3">
                                     <button
                                         type="button"
                                         onClick={() => onNavigate("public")}
-                                        className="inline-flex items-center gap-2 rounded-full border-2 border-black bg-black px-6 py-3 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-80 sm:px-8"
+                                        className="inline-flex items-center gap-2 border-2 border-ink bg-ink-black px-7 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-paper transition-colors hover:bg-accent hover:border-accent font-sans"
                                     >
                                         <Icon name="Globe" size={16} />
                                         Public Portal
@@ -782,40 +900,64 @@
                                                 onNavigate("login");
                                             }
                                         }}
-                                        className="inline-flex items-center gap-2 rounded-full border-2 border-black bg-white/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.15em] text-black backdrop-blur-sm transition-opacity hover:opacity-80 sm:px-8"
+                                        className="inline-flex items-center gap-2 border-2 border-ink bg-transparent px-7 py-3 text-[11px] font-bold uppercase tracking-[0.18em] text-ink transition-colors hover:bg-ink hover:text-paper font-sans"
                                     >
                                         <Icon name="Shield" size={16} />
                                         Staff Dashboard
                                     </button>
                                 </motion.div>
-
-                                <motion.p
-                                    variants={fadeUp}
-                                    custom={2}
-                                    className="text-xs font-semibold uppercase leading-relaxed tracking-[0.12em] text-black/90 sm:text-sm sm:leading-relaxed sm:tracking-[0.14em]"
-                                >
-                                    Advanced intelligence platform for real-time case tracking, officer coordination,
-                                    and cybercrime analytics across Bengaluru.
-                                </motion.p>
                             </div>
 
-                            <div className="overflow-hidden">
-                                {headingWords.map((word, i) => (
-                                    <div key={word} className="overflow-hidden">
-                                        <motion.h1
-                                            variants={slideUpReveal}
-                                            initial="hidden"
-                                            animate="visible"
-                                            custom={i}
-                                            className="text-[clamp(3rem,14vw,11rem)] font-semibold uppercase leading-[0.88] tracking-[0.02em] text-black"
-                                        >
-                                            {word}
-                                        </motion.h1>
+                            {/* Sidebar — statistics as editorial pull quotes */}
+                            <motion.aside variants={fadeUp} custom={1} className="flex flex-col justify-center">
+                                {/* Photo plate — government records archive */}
+                                <figure className="mb-6 overflow-hidden border border-ink/20">
+                                    <div className="relative">
+                                        <img
+                                            src={EDITORIAL_IMG.archive}
+                                            alt="Rows of departmental case files in the records archive"
+                                            loading="lazy"
+                                            className="h-44 w-full object-cover grayscale-[35%] sepia-[12%] contrast-[1.05]"
+                                        />
+                                        <span className="absolute left-0 top-0 bg-ink-black/85 px-2 py-1 text-[8px] font-bold uppercase tracking-[0.22em] text-paper font-sans">
+                                            From the Archive
+                                        </span>
                                     </div>
-                                ))}
-                            </div>
+                                    <figcaption className="border-t border-ink/15 bg-paper-card px-3 py-2 font-editorial text-[11px] italic text-ink-muted">
+                                        Case records, held under departmental custody.
+                                    </figcaption>
+                                </figure>
+                                <p className="eyebrow mb-1 border-b-2 border-ink pb-2">By the Numbers</p>
+                                <div className="divide-y divide-ink/15">
+                                    {heroStats.map((stat, i) => (
+                                        <motion.div
+                                            key={stat.label}
+                                            variants={fadeUp}
+                                            custom={i}
+                                            className="flex items-baseline justify-between gap-4 py-5"
+                                        >
+                                            <p className="max-w-[7rem] text-[10px] font-semibold uppercase leading-tight tracking-[0.18em] text-ink-muted font-sans">
+                                                {stat.label}
+                                            </p>
+                                            <div className="pull-quote text-5xl sm:text-6xl">
+                                                {stat.value === null
+                                                    ? <span className="inline-block h-10 w-16 animate-pulse rounded bg-ink/10" />
+                                                    : <AnimatedCounter value={stat.value} />}
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                                <p className="mt-4 font-editorial text-xs italic leading-relaxed text-ink-muted">
+                                    Figures drawn live from active departmental records and updated continuously.
+                                </p>
+                            </motion.aside>
                         </div>
                     </motion.section>
+
+                    {/* ── FOOTER RULE ────────────────────────────────────────── */}
+                    <footer className="relative z-10 mx-auto w-full max-w-6xl border-t-2 border-ink/80 px-5 py-3 text-center text-[9px] font-semibold uppercase tracking-[0.24em] text-ink-muted font-sans sm:px-8">
+                        Published under authority · Bengaluru Police Department
+                    </footer>
                 </div>
             );
         };
@@ -852,6 +994,9 @@
             const [browsingCases, setBrowsingCases] = useState([]);
             const [browseCaseFilters, setBrowseCaseFilters] = useState({ status: "Active", crime_type: "", location: "", search: "" });
             const [browseCaseLoading, setBrowseCaseLoading] = useState(false);
+            const [browseCasePage, setBrowseCasePage] = useState(1);
+            const [browseCaseTotalPages, setBrowseCaseTotalPages] = useState(1);
+            const BROWSE_PAGE_SIZE = 20;
 
             // Safety and Verification states
             const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -1091,7 +1236,7 @@
                 if (activeTab === "browse") {
                     loadBrowsingCases();
                 }
-            }, [activeTab]);
+            }, [activeTab, browseCaseFilters, browseCasePage]);
 
             const loadBrowsingCases = async () => {
                 setBrowseCaseLoading(true);
@@ -1101,9 +1246,14 @@
                     if (browseCaseFilters.crime_type) params.append("crime_type", browseCaseFilters.crime_type);
                     if (browseCaseFilters.location) params.append("location", browseCaseFilters.location);
                     if (browseCaseFilters.search) params.append("search", browseCaseFilters.search);
+                    params.append("page", browseCasePage);
+                    params.append("limit", BROWSE_PAGE_SIZE);
 
                     const res = await apiFetch(`/public/cases?${params.toString()}`, { method: "GET" });
                     setBrowsingCases(res.data || []);
+                    if (res.pagination) {
+                        setBrowseCaseTotalPages(res.pagination.total_pages || 1);
+                    }
                 } catch (err) {
                     console.warn("[Themis's Domain] Failed to load cases:", err.message);
                     setBrowsingCases([]);
@@ -1113,21 +1263,9 @@
             };
 
             const handleBrowseCaseFilterChange = (field, value) => {
-                const updated = { ...browseCaseFilters, [field]: value };
-                setBrowseCaseFilters(updated);
-                // Trigger immediate filter update
-                setBrowsingCases([]); // Clear loading state
-                setTimeout(() => {
-                    const params = new URLSearchParams();
-                    if (updated.status) params.append("status", updated.status);
-                    if (updated.crime_type) params.append("crime_type", updated.crime_type);
-                    if (updated.location) params.append("location", updated.location);
-                    if (updated.search) params.append("search", updated.search);
-
-                    apiFetch(`/public/cases?${params.toString()}`, { method: "GET" })
-                        .then(res => setBrowsingCases(res.data || []))
-                        .catch(err => { console.warn(err.message); setBrowsingCases([]); });
-                }, 300);
+                // Filter changes reset to page 1; the effect above re-fetches.
+                setBrowseCasePage(1);
+                setBrowseCaseFilters({ ...browseCaseFilters, [field]: value });
             };
 
             const handleSelectCaseForAccess = (caseId, caseDisplayId) => {
@@ -1150,18 +1288,36 @@
                         animate="visible"
                         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }}
                     >
-                        <motion.div variants={fadeUp} custom={0} className="mb-10 text-center sm:mb-12">
-                            <h1 className="mb-3 text-2xl font-semibold uppercase tracking-[0.12em] text-black sm:text-3xl md:text-4xl">Public Services</h1>
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/70 sm:text-sm">File complaints and request case information securely</p>
+                        <motion.div variants={fadeUp} custom={0} className="mb-10 border-b-2 border-ink/80 pb-6 text-center sm:mb-12">
+                            <p className="kicker mb-3">Citizen Services Desk</p>
+                            <h1 className="headline mb-3 text-4xl sm:text-5xl md:text-6xl">Public Services</h1>
+                            <p className="font-editorial text-sm italic text-ink-muted sm:text-base">File complaints and request case information securely</p>
                         </motion.div>
 
-                        {/* Tabs */}
+                        {/* Editorial banner — institutional records registry */}
+                        <motion.figure variants={fadeUp} custom={0} className="mb-10 overflow-hidden border border-ink/20">
+                            <div className="relative">
+                                <img
+                                    src={EDITORIAL_IMG.registry}
+                                    alt="The departmental records registry"
+                                    loading="lazy"
+                                    className="h-40 w-full object-cover grayscale-[40%] sepia-[10%] contrast-[1.05] sm:h-52"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-ink-black/70 via-ink-black/10 to-transparent" />
+                                <figcaption className="absolute bottom-0 left-0 right-0 px-4 py-3">
+                                    <p className="font-display text-lg font-bold text-paper sm:text-xl">A public record, kept in trust.</p>
+                                    <p className="mt-0.5 font-editorial text-[11px] italic text-paper/80">Every complaint and request is logged, tracked, and accountable.</p>
+                                </figcaption>
+                            </div>
+                        </motion.figure>
+
+                        {/* Tabs — editorial section markers */}
                         <motion.div variants={fadeUp} custom={1} className="mb-10 flex justify-center px-4">
-                            <div className="flex flex-col sm:flex-row gap-1 rounded-2xl sm:rounded-full border-2 border-black bg-white/80 p-1 backdrop-blur-sm w-full sm:w-auto">
+                            <div className="flex w-full flex-col gap-0 border-y-2 border-ink sm:w-auto sm:flex-row sm:divide-x sm:divide-ink/20">
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab("complaint")}
-                                    className={`rounded-xl sm:rounded-full w-full sm:w-auto px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "complaint" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
+                                    className={`w-full sm:w-auto px-6 py-3 text-[10px] font-bold uppercase tracking-[0.18em] transition-all sm:text-xs font-sans ${activeTab === "complaint" ? "bg-ink-black text-paper" : "text-ink/60 hover:text-accent"}`}
                                 >
                                     <span className="flex items-center justify-center gap-2">
                                         <Icon name="FilePlus" size={14} />
@@ -1171,7 +1327,7 @@
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab("browse")}
-                                    className={`rounded-xl sm:rounded-full w-full sm:w-auto px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "browse" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
+                                    className={`w-full sm:w-auto px-6 py-3 text-[10px] font-bold uppercase tracking-[0.18em] transition-all sm:text-xs font-sans ${activeTab === "browse" ? "bg-ink-black text-paper" : "text-ink/60 hover:text-accent"}`}
                                 >
                                     <span className="flex items-center justify-center gap-2">
                                         <Icon name="Search" size={14} />
@@ -1181,7 +1337,7 @@
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab("access")}
-                                    className={`rounded-xl sm:rounded-full w-full sm:w-auto px-5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all sm:px-6 sm:text-xs ${activeTab === "access" ? "bg-black text-white" : "text-black/60 hover:text-black"}`}
+                                    className={`w-full sm:w-auto px-6 py-3 text-[10px] font-bold uppercase tracking-[0.18em] transition-all sm:text-xs font-sans ${activeTab === "access" ? "bg-ink-black text-paper" : "text-ink/60 hover:text-accent"}`}
                                 >
                                     <span className="flex items-center justify-center gap-2">
                                         <Icon name="Eye" size={14} />
@@ -1466,6 +1622,25 @@
                                             <Icon name="Search" size={32} className="mx-auto mb-3 text-black/30" />
                                             <p className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">No cases found. Try adjusting your filters.</p>
                                         </div>
+                                    </div>
+                                )}
+                                {browseCaseTotalPages > 1 && (
+                                    <div className="mt-3 flex items-center justify-center gap-2">
+                                        <button
+                                            onClick={() => setBrowseCasePage(p => Math.max(1, p - 1))}
+                                            disabled={browseCasePage === 1 || browseCaseLoading}
+                                            className="rounded-full border-2 border-black/20 px-3 py-1 text-[10px] disabled:opacity-50"
+                                        >
+                                            ←
+                                        </button>
+                                        <span className="text-xs text-black/60">Page {browseCasePage} of {browseCaseTotalPages}</span>
+                                        <button
+                                            onClick={() => setBrowseCasePage(p => Math.min(browseCaseTotalPages, p + 1))}
+                                            disabled={browseCasePage === browseCaseTotalPages || browseCaseLoading}
+                                            className="rounded-full border-2 border-black/20 px-3 py-1 text-[10px] disabled:opacity-50"
+                                        >
+                                            →
+                                        </button>
                                     </div>
                                 )}
                             </motion.div>
@@ -2006,16 +2181,16 @@
                     onBack={() => onNavigate("landing")}
                     scrim="bg-white/42"
                 >
-                    <div className="border-b-2 border-black/10 bg-white/55 backdrop-blur-md">
+                    <div className="border-b-2 border-ink/80 bg-paper/85 backdrop-blur-sm">
                         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8">
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/70 sm:text-xs">
-                                Operator: <span className="text-black">{officer?.name || "UNKNOWN"}</span>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted font-sans sm:text-xs">
+                                Operator: <span className="text-ink-black">{officer?.name || "UNKNOWN"}</span>
                                 <span className="text-accent"> ({userRole?.toUpperCase()})</span>
                             </div>
                             <button
                                 type="button"
                                 onClick={onLogout}
-                                className="rounded-full border-2 border-black bg-black px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition-opacity hover:opacity-80 sm:text-xs"
+                                className="border-2 border-ink bg-ink-black px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-paper transition-colors hover:bg-accent hover:border-accent sm:text-xs font-sans"
                             >
                                 Sign Out
                             </button>
@@ -2028,15 +2203,21 @@
                         animate="visible"
                         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.06 } } }}
                     >
+                        {/* SECTION TITLE */}
+                        <motion.div variants={fadeUp} custom={0} className="border-b-2 border-ink/80 pb-4">
+                            <p className="kicker mb-1">Officer Command</p>
+                            <h2 className="headline text-3xl sm:text-4xl md:text-5xl">The Case Desk</h2>
+                        </motion.div>
+
                         {/* SUB TAB NAVIGATION BAR */}
-                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex flex-wrap gap-4 border-b-2 border-black/15 sm:gap-6">
+                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex flex-wrap gap-6 border-b border-ink/20 sm:gap-8">
                             <button
                                 type="button"
                                 onClick={() => setActiveSubTab("dossiers")}
-                                className={`pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
+                                className={`pb-3 text-[10px] font-bold uppercase tracking-[0.16em] transition-all border-b-2 sm:text-xs font-sans ${
                                     activeSubTab === "dossiers"
-                                        ? "border-accent text-black"
-                                        : "border-transparent text-black/50 hover:text-black"
+                                        ? "border-accent text-ink-black"
+                                        : "border-transparent text-ink/50 hover:text-accent"
                                 }`}
                             >
                                 Case Dossiers
@@ -2044,15 +2225,15 @@
                             <button
                                 type="button"
                                 onClick={() => setActiveSubTab("requests")}
-                                className={`relative pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
+                                className={`relative pb-3 text-[10px] font-bold uppercase tracking-[0.16em] transition-all border-b-2 sm:text-xs font-sans ${
                                     activeSubTab === "requests"
-                                        ? "border-accent text-black"
-                                        : "border-transparent text-black/50 hover:text-black"
+                                        ? "border-accent text-ink-black"
+                                        : "border-transparent text-ink/50 hover:text-accent"
                                 }`}
                             >
                                 Access Requests
                                 {pendingCount > 0 && (
-                                    <span className="ml-2 animate-pulse rounded-full border-2 border-black bg-accent px-2 py-0.5 text-[10px] font-bold text-white">
+                                    <span className="ml-2 animate-pulse border border-accent bg-accent px-2 py-0.5 text-[10px] font-bold text-paper">
                                         {pendingCount}
                                     </span>
                                 )}
@@ -2653,6 +2834,8 @@
             const [activeTab, setActiveTab] = useState("overview");
             const [statusFilter, setStatusFilter] = useState("All");
             const [currentPage, setCurrentPage] = useState(1);
+            const [totalPages, setTotalPages] = useState(1);
+            const [totalRecords, setTotalRecords] = useState(0);
             const [reassignLoading, setReassignLoading] = useState(false);
             const [reassignError, setReassignError] = useState(null);
             const [selectedOfficerToAdd, setSelectedOfficerToAdd] = useState(null);
@@ -2689,13 +2872,21 @@
             const loadAllCases = async () => {
                 setLoading(true);
                 try {
-                    const statusParam = statusFilter !== "All" ? `status=${statusFilter}` : "";
-                    const url = "/admin/cases" + (statusParam ? `?${statusParam}` : "");
+                    const params = new URLSearchParams({
+                        page: currentPage,
+                        limit: itemsPerPage,
+                    });
+                    if (statusFilter !== "All") params.append("status", statusFilter);
+                    const url = `/admin/cases?${params.toString()}`;
                     const res = await apiFetch(url, {
                         headers: { "X-Officer-Id": officer?.officer_id?.toString() }
                     });
                     if (res.success) {
                         setAllCases(res.data || []);
+                        if (res.pagination) {
+                            setTotalPages(res.pagination.total_pages || 1);
+                            setTotalRecords(res.pagination.total_records || 0);
+                        }
                     } else {
                         setError(res.error || "Failed to load cases");
                     }
@@ -2945,10 +3136,11 @@
             useEffect(() => {
                 loadDashboardStats();
                 loadAllCases();
-            }, [statusFilter]);
+            }, [statusFilter, currentPage]);
 
-            const totalPages = Math.ceil(allCases.length / itemsPerPage);
-            const paginatedCases = allCases.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+            // Server-side pagination — `allCases` already holds only the current page,
+            // and totalPages comes from the API response.
+            const paginatedCases = allCases;
 
             return (
                 <CrmsPageShell
@@ -2957,16 +3149,16 @@
                     onBack={() => onNavigate("landing")}
                     scrim="bg-white/42"
                 >
-                    <div className="border-b-2 border-black/10 bg-white/55 backdrop-blur-md">
+                    <div className="border-b-2 border-ink/80 bg-paper/85 backdrop-blur-sm">
                         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8">
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/70 sm:text-xs">
-                                Administrator: <span className="text-black">{officer?.name || "UNKNOWN"}</span>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted font-sans sm:text-xs">
+                                Administrator: <span className="text-ink-black">{officer?.name || "UNKNOWN"}</span>
                                 <span className="text-accent"> (ADMIN)</span>
                             </div>
                             <button
                                 type="button"
                                 onClick={onLogout}
-                                className="rounded-full border-2 border-black bg-black px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white transition-opacity hover:opacity-80 sm:text-xs"
+                                className="border-2 border-ink bg-ink-black px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-paper transition-colors hover:bg-accent hover:border-accent sm:text-xs font-sans"
                             >
                                 Sign Out
                             </button>
@@ -2979,15 +3171,21 @@
                         animate="visible"
                         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.06 } } }}
                     >
+                        {/* SECTION TITLE */}
+                        <motion.div variants={fadeUp} custom={0} className="border-b-2 border-ink/80 pb-4">
+                            <p className="kicker mb-1">Administration · Command Room</p>
+                            <h2 className="headline text-3xl sm:text-4xl md:text-5xl">The Bureau Ledger</h2>
+                        </motion.div>
+
                         {/* TAB NAVIGATION */}
-                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex flex-wrap gap-4 border-b-2 border-black/15 sm:gap-6">
+                        <motion.div variants={fadeUp} custom={0} className="mb-6 flex flex-wrap gap-6 border-b border-ink/20 sm:gap-8">
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("overview")}
-                                className={`pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
+                                className={`pb-3 text-[10px] font-bold uppercase tracking-[0.16em] transition-all border-b-2 sm:text-xs font-sans ${
                                     activeTab === "overview"
-                                        ? "border-accent text-black"
-                                        : "border-transparent text-black/50 hover:text-black"
+                                        ? "border-accent text-ink-black"
+                                        : "border-transparent text-ink/50 hover:text-accent"
                                 }`}
                             >
                                 Dashboard Overview
@@ -2995,10 +3193,10 @@
                             <button
                                 type="button"
                                 onClick={() => setActiveTab("cases")}
-                                className={`pb-3 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all border-b-2 sm:text-xs ${
+                                className={`pb-3 text-[10px] font-bold uppercase tracking-[0.16em] transition-all border-b-2 sm:text-xs font-sans ${
                                     activeTab === "cases"
-                                        ? "border-accent text-black"
-                                        : "border-transparent text-black/50 hover:text-black"
+                                        ? "border-accent text-ink-black"
+                                        : "border-transparent text-ink/50 hover:text-accent"
                                 }`}
                             >
                                 All Cases
@@ -3009,33 +3207,33 @@
                         {activeTab === "overview" && (
                             <>
                                 {loading ? (
-                                    <motion.div variants={fadeUp} className={`${ThemisNomos_CARD} p-8 text-center text-black/60`}>
+                                    <motion.div variants={fadeUp} className={`${ThemisNomos_CARD} p-8 text-center text-ink-muted font-editorial italic`}>
                                         Loading dashboard...
                                     </motion.div>
                                 ) : error ? (
-                                    <motion.div variants={fadeUp} className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                    <motion.div variants={fadeUp} className="flex items-center gap-2 border-l-4 border-red-warn bg-red-warn/5 px-4 py-3 text-xs font-semibold text-red-warn font-sans">
                                         <Icon name="AlertTriangle" size={14} />
                                         <span>{error}</span>
                                     </motion.div>
                                 ) : dashboardStats ? (
                                     <>
-                                        {/* STATISTICS CARDS */}
-                                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                                            <motion.div variants={fadeUp} custom={1} className={`${ThemisNomos_CARD} p-4`}>
-                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Total Cases</div>
-                                                <div className="mt-2 text-3xl font-bold text-accent">{dashboardStats.cases?.total || 0}</div>
+                                        {/* STATISTICS — editorial fact blocks / pull quotes */}
+                                        <div className="grid gap-px border border-ink/20 bg-ink/20 sm:grid-cols-2 lg:grid-cols-4">
+                                            <motion.div variants={fadeUp} custom={1} className="bg-paper-card p-5">
+                                                <div className="eyebrow">Total Cases</div>
+                                                <div className="pull-quote mt-2 text-5xl text-ink-black">{dashboardStats.cases?.total || 0}</div>
                                             </motion.div>
-                                            <motion.div variants={fadeUp} custom={2} className={`${ThemisNomos_CARD} p-4`}>
-                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Active Cases</div>
-                                                <div className="mt-2 text-3xl font-bold text-amber-600">{dashboardStats.cases?.active || 0}</div>
+                                            <motion.div variants={fadeUp} custom={2} className="bg-paper-card p-5">
+                                                <div className="eyebrow">Active Cases</div>
+                                                <div className="pull-quote mt-2 text-5xl text-accent">{dashboardStats.cases?.active || 0}</div>
                                             </motion.div>
-                                            <motion.div variants={fadeUp} custom={3} className={`${ThemisNomos_CARD} p-4`}>
-                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Solved Cases</div>
-                                                <div className="mt-2 text-3xl font-bold text-emerald-600">{dashboardStats.cases?.solved || 0}</div>
+                                            <motion.div variants={fadeUp} custom={3} className="bg-paper-card p-5">
+                                                <div className="eyebrow">Solved Cases</div>
+                                                <div className="pull-quote mt-2 text-5xl text-green-tactical">{dashboardStats.cases?.solved || 0}</div>
                                             </motion.div>
-                                            <motion.div variants={fadeUp} custom={4} className={`${ThemisNomos_CARD} p-4`}>
-                                                <div className="text-xs font-semibold uppercase tracking-[0.1em] text-black/60">Total Officers</div>
-                                                <div className="mt-2 text-3xl font-bold text-blue-600">{dashboardStats.officers?.total || 0}</div>
+                                            <motion.div variants={fadeUp} custom={4} className="bg-paper-card p-5">
+                                                <div className="eyebrow">Total Officers</div>
+                                                <div className="pull-quote mt-2 text-5xl text-blue-electric">{dashboardStats.officers?.total || 0}</div>
                                             </motion.div>
                                         </div>
 
@@ -3601,11 +3799,13 @@
                             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                         >
                             <div className="mb-10 text-center">
-                                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border-2 border-black bg-white">
-                                    <Icon name="Shield" size={24} className="text-black" />
+                                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border-2 border-ink bg-paper-card">
+                                    <Icon name="Shield" size={24} className="text-accent" />
                                 </div>
-                                <h1 className="mb-1 text-xl font-semibold uppercase tracking-[0.12em] text-black sm:text-2xl">Staff Login</h1>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/65 sm:text-xs">Secure officer access</p>
+                                <p className="kicker mb-2">Authorised Personnel Only</p>
+                                <h1 className="headline mb-2 text-3xl sm:text-4xl">Staff Login</h1>
+                                <div className="rule-hair mx-auto mt-3 w-16" />
+                                <p className="mt-3 font-editorial text-sm italic text-ink-muted">Secure officer access</p>
                             </div>
 
                             <form onSubmit={handleLogin} className="space-y-5">
@@ -3624,12 +3824,12 @@
                                         placeholder="••••••••" />
                                 </div>
                                 {error && (
-                                    <div className="flex items-center gap-2 rounded-xl border-2 border-red-600/40 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+                                    <div className="flex items-center gap-2 border-l-4 border-red-warn bg-red-warn/5 px-4 py-3 text-xs font-semibold text-red-warn font-sans">
                                         <Icon name="AlertTriangle" size={14} /> {error}
                                     </div>
                                 )}
                                 <button type="submit" disabled={loading}
-                                    className={`flex w-full items-center justify-center gap-2 rounded-full border-2 border-black bg-black py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-80 ${loading ? "cursor-not-allowed opacity-60" : ""}`}>
+                                    className={`flex w-full items-center justify-center gap-2 border-2 border-ink bg-ink-black py-3.5 text-xs font-bold uppercase tracking-[0.18em] text-paper transition-colors hover:bg-accent hover:border-accent font-sans ${loading ? "cursor-not-allowed opacity-60" : ""}`}>
                                     <Icon name={loading ? "Clock" : "Lock"} size={16} />
                                     {loading ? "Authenticating..." : "Sign In"}
                                 </button>
