@@ -31,7 +31,7 @@ def _email_sender():
     from_email = (
         os.getenv("BREVO_FROM_EMAIL")
         or os.getenv("SMTP_FROM_EMAIL")
-        or "adarshvh2005@gmail.com"
+        or "no-reply@example.com"
     ).strip()
     from_name = (
         os.getenv("BREVO_FROM_NAME")

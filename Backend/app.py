@@ -86,13 +86,31 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
+# CORS: origin is environment-driven (CORS_ORIGIN). For production set this to the
+# exact frontend origin(s) rather than "*". Auth here uses custom headers
+# (X-Officer-Id / X-Session-Token), not cookies, so credential mode is not enabled.
 CORS(app, origins=config.CORS_ORIGIN)
+
+
+@app.after_request
+def _apply_security_headers(response):
+    """Adds baseline hardening headers to every response."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-XSS-Protection", "0")
+    # Don't let browsers cache authenticated API responses by default.
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 # Configure evidence upload parameters
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB file size limit
+# Global hard cap on request bodies. Evidence uploads are limited to 10MB by the
+# route; this slightly higher cap (12MB) lets the route return a clean JSON 413
+# while still rejecting absurdly large payloads early at the WSGI layer.
+app.config['MAX_CONTENT_LENGTH'] = 12 * 1024 * 1024  # 12MB
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -161,6 +179,13 @@ def _err(msg, code=400):
     return jsonify({"success": False, "error": msg}), code
 
 
+def _db_err(e, code=500):
+    """Logs the real database/exception detail server-side and returns a
+    generic message to the client (prevents internal info disclosure)."""
+    logger.error(f"[DB] {e}", exc_info=True)
+    return _err("A database error occurred", code)
+
+
 def _ok(data=None, **kwargs):
     body = {"success": True}
     if data is not None:
@@ -218,6 +243,43 @@ def _parse_officer_id_for_file_request():
     return officer_id, None
 
 
+# ── Pagination helpers ────────────────────────────────────────────────────────
+# Default page size if the client doesn't ask for one. Also enforces a hard cap
+# so a malicious or buggy client can't ask the DB for everything in one call.
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE     = 100
+
+
+def _parse_pagination(default_limit=DEFAULT_PAGE_SIZE, max_limit=MAX_PAGE_SIZE):
+    """
+    Parses ?page= and ?limit= from the request and clamps them to safe bounds.
+    Returns (page, limit, offset). page>=1, 1<=limit<=max_limit.
+    """
+    try:
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        limit = int(request.args.get("limit", default_limit))
+    except (TypeError, ValueError):
+        limit = default_limit
+
+    page  = max(1, page)
+    limit = max(1, min(limit, max_limit))
+    return page, limit, (page - 1) * limit
+
+
+def _pagination_meta(total_records, page, limit):
+    """Builds the standard pagination dict used in JSON responses."""
+    total_pages = (total_records + limit - 1) // limit if limit else 1
+    return {
+        "total_records": int(total_records),
+        "total_pages":   int(total_pages),
+        "current_page":  int(page),
+        "limit":         int(limit),
+    }
+
+
 @app.before_request
 def _require_valid_officer_session():
     """
@@ -258,6 +320,31 @@ def _is_admin(officer: dict) -> bool:
     return (officer.get("role") or "").lower() == "admin"
 
 
+def _require_officer():
+    """
+    Resolves and validates the calling officer from headers (id + active session).
+    Returns (officer_dict, None) on success or (None, error_response) on failure.
+    Use at the top of any officer-only route that previously trusted the header.
+    """
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return None, err
+    officer = queries.get_officer_by_id(officer_id)
+    if not officer:
+        return None, _err("Unauthorized: Officer record not found", 401)
+    return officer, None
+
+
+def _require_admin():
+    """Like _require_officer() but also enforces the admin role."""
+    officer, err = _require_officer()
+    if err:
+        return None, err
+    if not _is_admin(officer):
+        return None, _err("Forbidden: Admin access required", 403)
+    return officer, None
+
+
 def _officer_may_decide_access_request(officer: dict, case_id: int) -> bool:
     """
     Admin may always decide.
@@ -296,7 +383,8 @@ def _verify_captcha(token):
       error_msg: Error message if verification failed
     """
     if not config.RECAPTCHA_SECRET_KEY:
-        # If secret key not configured, allow the request to proceed
+        # If secret key not configured, allow the request to proceed (dev only).
+        logger.warning("[CAPTCHA] RECAPTCHA_SECRET_KEY not configured — CAPTCHA check is being skipped. Do not run like this in production.")
         return (True, None, None)
     
     if not token:
@@ -363,13 +451,9 @@ def get_cases():
     location   = request.args.get("location")
     search     = request.args.get("search")
 
-    # Pagination parameters
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-        limit = max(1, int(request.args.get("limit", 16)))
-    except ValueError:
-        page = 1
-        limit = 16
+    # Pagination — clamped to safe bounds. Default page size for the cases grid
+    # is 16 (matches the original frontend layout), capped at MAX_PAGE_SIZE.
+    page, limit, offset = _parse_pagination(default_limit=16)
 
     officer_id_str = request.headers.get("X-Officer-Id")
     if not officer_id_str:
@@ -397,7 +481,6 @@ def get_cases():
             officer_id=officer_id,
             bypass_visibility=bypass_visibility
         )
-        total_pages = (total_records + limit - 1) // limit  # Ceiling division
 
         paginated_cases = queries.get_all_cases(
             status=status,
@@ -407,20 +490,15 @@ def get_cases():
             officer_id=officer_id,
             bypass_visibility=bypass_visibility,
             limit=limit,
-            offset=(page - 1) * limit,
+            offset=offset,
         )
 
         return _ok(
             data=paginated_cases,
-            pagination={
-                "total_records": total_records,
-                "total_pages": total_pages,
-                "current_page": page,
-                "limit": limit
-            }
+            pagination=_pagination_meta(total_records, page, limit),
         )
     except Exception as e:
-        return _err(f"Database error while fetching cases: {str(e)}", 500)
+        return _db_err(e)
 
 @app.route("/cases/<int:case_id>", methods=["GET"])
 @app.route("/api/cases/<int:case_id>", methods=["GET"])
@@ -456,7 +534,7 @@ def get_case(case_id):
         case["case_id_display"] = _format_case_id(case_id)
         return _ok(case)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/cases", methods=["POST"])
@@ -473,6 +551,9 @@ def add_case():
 
     Returns: { success, case_id, case_id_display }
     """
+    _, err = _require_officer()
+    if err:
+        return err
     body = request.get_json(silent=True) or {}
 
     title          = (body.get("title") or "").strip()
@@ -512,7 +593,7 @@ def add_case():
             "case_id_display": _format_case_id(new_id),
         }), 201
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/cases/<int:case_id>", methods=["PATCH"])
@@ -536,21 +617,14 @@ def update_case(case_id):
     if "complaint_mode" in body and body["complaint_mode"] not in VALID_COMPLAINT_MODES:
         return _err("complaint_mode must be Online or Offline")
 
-    # If status is being updated, enforce authorization
-    if "status" in body:
-        officer_id, err = _parse_officer_id_header()
-        if err:
-            return err
-        
-        try:
-            officer = queries.get_officer_by_id(officer_id)
-            if not officer:
-                return _err("Unauthorized: Officer record not found", 401)
-            
-            if not _officer_may_update_case_status(officer, case_id):
-                return _err("Unauthorized: Only admins may update case status", 403)
-        except mysql.connector.Error as e:
-            return _err(f"Database error: {str(e)}", 500)
+    # All case edits require a valid officer session.
+    officer, err = _require_officer()
+    if err:
+        return err
+
+    # Status changes are admin-only.
+    if "status" in body and not _officer_may_update_case_status(officer, case_id):
+        return _err("Unauthorized: Only admins may update case status", 403)
 
     try:
         rows = queries.update_case(case_id, body)
@@ -558,23 +632,26 @@ def update_case(case_id):
             return _err(f"Case {case_id} not found", 404)
         return _ok(updated_case_id=case_id)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/cases/<int:case_id>", methods=["DELETE"])
 def delete_case(case_id):
     """
     DELETE /cases/<case_id>
-    Hard deletes the case. P1 role only (enforced client-side; add auth middleware for production).
+    Hard deletes the case. Admin only (server-enforced).
     Recommended: use PATCH to set status=Closed instead.
     """
+    _, err = _require_admin()
+    if err:
+        return err
     try:
         rows = queries.delete_case(case_id)
         if rows == 0:
             return _err(f"Case {case_id} not found", 404)
         return _ok(deleted_case_id=case_id)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -593,18 +670,13 @@ def get_case_officers(case_id):
         if not case:
             return _err(f"Case {case_id} not found", 404)
 
-        # Hydrate officer objects
-        officers = []
-        for oid in case.get("officer_ids", []):
-            o = queries.get_officer_by_id(oid)
-            if o:
-                officers.append(o)
-
-        case["officers"] = officers
+        # Hydrate officer objects in a single JOIN query (was an N+1 loop
+        # calling get_officer_by_id once per assigned officer).
+        case["officers"] = queries.get_officers_assigned_to_case(case_id)
         case["case_id_display"] = _format_case_id(case_id)
         return _ok(case)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/cases/<int:case_id>/highest-ranked", methods=["GET"])
@@ -621,7 +693,7 @@ def get_case_highest_ranked(case_id):
             return _err(f"No officers assigned to case {case_id}", 404)
         return _ok(data=officer)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -632,13 +704,23 @@ def get_case_highest_ranked(case_id):
 def get_officers():
     """
     GET /officers
-    Returns all officers with active_cases and solved_cases counts computed via JOINs.
+    Returns officers with active_cases and solved_cases counts computed via JOINs.
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
+    Requires a valid officer session.
     """
+    _, err = _require_officer()
+    if err:
+        return err
+    page, limit, offset = _parse_pagination()
     try:
-        officers = queries.get_all_officers()
-        return _ok(officers)
+        total_records = queries.count_officers()
+        officers = queries.get_all_officers(limit=limit, offset=offset)
+        return _ok(
+            data=officers,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/officers/available", methods=["GET"])
@@ -647,22 +729,27 @@ def get_available_officers():
     GET /officers/available?case_id=<case_id>
     Returns all officers NOT currently assigned to the given case.
     Used by the admin modal to show available officers for reassignment.
+    Requires a valid officer session.
     """
+    _, err = _require_officer()
+    if err:
+        return err
     case_id_param = request.args.get("case_id", type=int)
     if case_id_param is None:
         return _err("case_id query parameter is required")
     
     try:
-        all_officers = queries.get_all_officers()
+        # Single anti-join query: officers not assigned to this case, with their
+        # workload counts. Verify the case exists first so we still return 404
+        # for a bad case_id (an empty list would otherwise be ambiguous).
         case = queries.get_case_by_id(case_id_param)
         if not case:
             return _err(f"Case {case_id_param} not found", 404)
-        
-        assigned_ids = set(case.get("officer_ids", []))
-        available = [o for o in all_officers if o["officer_id"] not in assigned_ids]
+
+        available = queries.get_officers_not_on_case(case_id_param)
         return _ok(available)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/officers", methods=["POST"])
@@ -670,7 +757,11 @@ def add_officer():
     """
     POST /officers
     Body: { name*, rank* }
+    Admin only — creates a new officer record.
     """
+    _, err = _require_admin()
+    if err:
+        return err
     body = request.get_json(silent=True) or {}
     name = (body.get("name") or "").strip()
     rank = (body.get("rank") or "").strip()
@@ -684,7 +775,7 @@ def add_officer():
         new_id = queries.insert_officer(name, rank)
         return jsonify({"success": True, "officer_id": new_id}), 201
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -695,13 +786,24 @@ def add_officer():
 def get_assignments():
     """
     GET /case-officer
-    Returns every case–officer pairing as a flat list for the Assignments view.
+    Returns case–officer pairings as a flat list for the Assignments view.
     Each row: { case_id, case_title, crime_type, status, location, officer_id, officer_name, officer_rank }
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
+    Requires a valid officer session.
     """
+    _, err = _require_officer()
+    if err:
+        return err
+    page, limit, offset = _parse_pagination()
     try:
-        return _ok(queries.get_all_assignments())
+        total_records = queries.count_assignments()
+        rows = queries.get_all_assignments(limit=limit, offset=offset)
+        return _ok(
+            data=rows,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/case-officer", methods=["POST"])
@@ -709,8 +811,11 @@ def assign_officer():
     """
     POST /case-officer
     Body: { case_id*, officer_id* }
-    Assigns an officer to a case.
+    Assigns an officer to a case. Admin only.
     """
+    _, err = _require_admin()
+    if err:
+        return err
     body       = request.get_json(silent=True) or {}
     case_id    = body.get("case_id")
     officer_id = body.get("officer_id")
@@ -732,7 +837,7 @@ def assign_officer():
             email_utils.send_officer_assignment_notification_async(int(case_id), int(officer_id), "added")
         return _ok(assigned=rows > 0)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/case-officer", methods=["DELETE"])
@@ -740,8 +845,11 @@ def unassign_officer():
     """
     DELETE /case-officer
     Body: { case_id*, officer_id* }
-    Removes a case–officer assignment.
+    Removes a case–officer assignment. Admin only.
     """
+    _, err = _require_admin()
+    if err:
+        return err
     body       = request.get_json(silent=True) or {}
     case_id    = body.get("case_id")
     officer_id = body.get("officer_id")
@@ -758,7 +866,7 @@ def unassign_officer():
         email_utils.send_officer_assignment_notification_async(int(case_id), int(officer_id), "removed")
         return _ok()
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -837,12 +945,12 @@ def admin_add_officer_to_case():
         )
     
     except ValueError as ve:
-        return _err(f"Invalid parameter format: {str(ve)}", 400)
+        return _err("Invalid parameter format", 400)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[REASSIGNMENT] Error adding officer: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/case-officer/remove", methods=["POST"])
@@ -917,12 +1025,12 @@ def admin_remove_officer_from_case():
         )
     
     except ValueError as ve:
-        return _err(f"Invalid parameter format: {str(ve)}", 400)
+        return _err("Invalid parameter format", 400)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[REASSIGNMENT] Error removing officer: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/cases/<int:case_id>/request-dossier", methods=["POST"])
@@ -971,7 +1079,7 @@ def request_case_dossier_email(case_id):
         
     except Exception as e:
         logger.error(f"[DOSSIER REQUEST] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -992,10 +1100,13 @@ def get_case_updates_route(case_id):
     GET /cases/<case_id>/updates
     Retrieves chronological timeline investigation updates for a case.
     Requires X-Officer-Id auth header and Visibility clearance.
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
     """
     officer_id, err = _parse_officer_id_header()
     if err:
         return err
+
+    page, limit, offset = _parse_pagination()
         
     try:
         # 1. Verify officer exists
@@ -1014,15 +1125,19 @@ def get_case_updates_route(case_id):
             if officer_id not in case.get("officer_ids", []):
                 return _err("Access denied: You are not assigned to this case", 403)
                 
-        # 4. Fetch timeline updates
-        updates = queries.get_case_updates(case_id)
-        return _ok(updates)
+        # 4. Fetch timeline updates (paginated)
+        total_records = queries.count_case_updates(case_id)
+        updates = queries.get_case_updates(case_id, limit=limit, offset=offset)
+        return _ok(
+            data=updates,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
         
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[TIMELINE GET] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/cases/<int:case_id>/updates", methods=["POST"])
@@ -1077,10 +1192,10 @@ def add_case_update_route(case_id):
         )
         
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[TIMELINE ADD] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/cases/<int:case_id>/evidence", methods=["GET"])
@@ -1089,10 +1204,13 @@ def get_case_evidence_route(case_id):
     GET /cases/<case_id>/evidence
     Retrieves evidence metadata items for a case.
     Requires X-Officer-Id auth header and Visibility clearance.
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
     """
     officer_id, err = _parse_officer_id_header()
     if err:
         return err
+
+    page, limit, offset = _parse_pagination()
         
     try:
         # 1. Verify officer exists
@@ -1111,15 +1229,19 @@ def get_case_evidence_route(case_id):
             if officer_id not in case.get("officer_ids", []):
                 return _err("Access denied: You are not assigned to this case", 403)
                 
-        # 4. Fetch evidence list
-        evidence = queries.get_case_evidence(case_id)
-        return _ok(evidence)
+        # 4. Fetch evidence list (paginated)
+        total_records = queries.count_case_evidence(case_id)
+        evidence = queries.get_case_evidence(case_id, limit=limit, offset=offset)
+        return _ok(
+            data=evidence,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
         
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[EVIDENCE GET] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 # Whitelist of allowed file extensions
@@ -1242,10 +1364,10 @@ def upload_case_evidence_route(case_id):
         )
         
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[EVIDENCE UPLOAD] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/cases/evidence/file/<int:case_id>/<string:filename>", methods=["GET"])
@@ -1289,10 +1411,10 @@ def serve_evidence_file_route(case_id, filename):
         return send_from_directory(case_dir, filename)
         
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[EVIDENCE SERVE] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/cases/<int:case_id>/evidence/<string:filename>/download", methods=["GET"])
@@ -1336,10 +1458,10 @@ def download_evidence_file_route(case_id, filename):
         return send_from_directory(case_dir, filename, as_attachment=True)
         
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[EVIDENCE DOWNLOAD] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/cases/evidence/<int:evidence_id>", methods=["DELETE"])
@@ -1388,10 +1510,10 @@ def delete_case_evidence_route(evidence_id):
         return _ok(message="Evidence metadata and physical file successfully deleted.")
         
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
     except Exception as e:
         logger.error(f"[EVIDENCE DELETION] Error: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1404,11 +1526,15 @@ def get_analytics():
     GET /analytics
     Returns aggregated data for all four Analytics charts:
       crime_distribution, status_distribution, monthly_trends, location_distribution
+    Requires a valid officer session.
     """
+    _, err = _require_officer()
+    if err:
+        return err
     try:
         return _ok(queries.get_analytics())
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1419,14 +1545,24 @@ def get_analytics():
 def get_pending_assignments():
     """
     GET /assignments/pending
-    Returns all pending complaints that are waiting to be automatically assigned to officers.
-    This shows the queue of cases waiting for the assignment algorithm to process.
+    Returns pending complaints waiting to be auto-assigned.
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
+    Requires a valid officer session (exposes complainant PII).
     """
+    _, err = _require_officer()
+    if err:
+        return err
+    page, limit, offset = _parse_pagination()
     try:
-        pending = queries.get_public_complaints(status="Pending")
-        return _ok(pending_count=len(pending), complaints=pending)
+        total_records = queries.count_public_complaints(status="Pending")
+        pending = queries.get_public_complaints(status="Pending", limit=limit, offset=offset)
+        return _ok(
+            pending_count=total_records,
+            complaints=pending,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/assignments/process", methods=["POST"])
@@ -1437,6 +1573,9 @@ def trigger_assignment_process():
     Useful for SHO override or testing the assignment process.
     Returns: {success, processed, errors, details}
     """
+    _, err = _require_admin()
+    if err:
+        return err
     try:
         results = process_pending_complaints()
         return _ok(
@@ -1446,7 +1585,7 @@ def trigger_assignment_process():
         )
     except Exception as e:
         logger.error(f"[API] Error in manual assignment trigger: {str(e)}")
-        return _err(f"Assignment process error: {str(e)}", 500)
+        return _err("Assignment process failed", 500)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1620,7 +1759,7 @@ def public_complaint():
             "reference": f"PC-{str(new_id).zfill(3)}",
         }), 201
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 
@@ -1685,7 +1824,7 @@ def public_access_request():
             "message": "Access request successfully submitted for officer review."
         }), 201
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/public/cases", methods=["GET"])
@@ -1694,10 +1833,8 @@ def public_browse_cases():
     GET /public/cases
     Returns public cases for citizen browsing/discovery.
     Query parameters:
-      - status: filter by case status (Active, Solved, Closed, or All)
-      - crime_type: filter by crime type
-      - location: filter by location (partial match)
-      - search: search in case title
+      - status, crime_type, location, search (filters)
+      - page (default 1), limit (default 25, max 100)
     No authentication required — public endpoint.
     """
     status = request.args.get("status")
@@ -1705,16 +1842,22 @@ def public_browse_cases():
     location = request.args.get("location")
     search = request.args.get("search")
 
+    page, limit, offset = _parse_pagination()
+
     try:
-        cases = queries.get_public_cases(
-            status=status,
-            crime_type=crime_type,
-            location=location,
-            search=search
+        total_records = queries.count_public_cases(
+            status=status, crime_type=crime_type, location=location, search=search,
         )
-        return _ok(data=cases)
+        cases = queries.get_public_cases(
+            status=status, crime_type=crime_type, location=location, search=search,
+            limit=limit, offset=offset,
+        )
+        return _ok(
+            data=cases,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/api/access-requests", methods=["GET"])
@@ -1723,6 +1866,7 @@ def get_access_requests():
     GET /api/access-requests
     Lists access requests filed for review, based on officer authority visibility boundary.
     Header: X-Officer-Id required.
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
     """
     officer_id_str = request.headers.get("X-Officer-Id")
     if not officer_id_str:
@@ -1731,6 +1875,8 @@ def get_access_requests():
         officer_id = int(officer_id_str)
     except ValueError:
         return _err("Invalid X-Officer-Id header", 400)
+
+    page, limit, offset = _parse_pagination()
 
     try:
         # Check officer identity and role for visibility boundary enforcement
@@ -1741,13 +1887,19 @@ def get_access_requests():
         role = officer.get("role")
         bypass_visibility = (role in ("admin", "inspector"))
 
-        requests_list = queries.get_case_access_requests(
-            officer_id=officer_id,
-            bypass_visibility=bypass_visibility
+        total_records = queries.count_case_access_requests(
+            officer_id=officer_id, bypass_visibility=bypass_visibility,
         )
-        return _ok(requests_list)
+        requests_list = queries.get_case_access_requests(
+            officer_id=officer_id, bypass_visibility=bypass_visibility,
+            limit=limit, offset=offset,
+        )
+        return _ok(
+            data=requests_list,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
     except mysql.connector.Error as e:
-        return _err(f"Database error while fetching access requests: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/api/access-requests/<int:request_id>/approve", methods=["POST"])
@@ -1782,7 +1934,7 @@ def approve_access_request(request_id):
 
         return _ok(message=f"Access request {request_id} has been approved. Dispatching dossier via email...")
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/api/access-requests/<int:request_id>/reject", methods=["POST"])
@@ -1817,7 +1969,7 @@ def reject_access_request(request_id):
 
         return _ok(message=f"Access request {request_id} has been declined. Dispatching decline notification email...")
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 
@@ -1836,7 +1988,7 @@ def public_stats():
     try:
         return _ok(queries.get_public_stats())
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1847,13 +1999,15 @@ def public_stats():
 def admin_get_all_cases():
     """
     GET /admin/cases
-    Returns ALL cases (bypass visibility) for admin dashboard.
-    Admin role required.
-    Optional filters: status, crime_type, location, search
+    Returns cases (bypass visibility) for the admin dashboard. Admin role required.
+    Filters: status, crime_type, location, search.
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
     """
     officer_id, err = _parse_officer_id_header()
     if err:
         return err
+
+    page, limit, offset = _parse_pagination()
     
     try:
         officer = queries.get_officer_by_id(officer_id)
@@ -1868,17 +2022,26 @@ def admin_get_all_cases():
         location = request.args.get("location")
         search = request.args.get("search")
         
+        total_records = queries.count_cases(
+            status=status, crime_type=crime_type, location=location, search=search,
+            bypass_visibility=True,
+        )
         cases = queries.get_all_cases(
             status=status,
             crime_type=crime_type,
             location=location,
             search=search,
-            bypass_visibility=True
+            bypass_visibility=True,
+            limit=limit,
+            offset=offset,
         )
         
-        return _ok(_enrich_cases(cases))
+        return _ok(
+            data=_enrich_cases(cases),
+            pagination=_pagination_meta(total_records, page, limit),
+        )
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/admin/dashboard", methods=["GET"])
@@ -1980,7 +2143,7 @@ def admin_dashboard_stats():
             cur.close()
             conn.close()
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2063,7 +2226,7 @@ def officer_login():
 
         return _ok(officer=officer)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/auth/logout", methods=["POST"])
@@ -2088,7 +2251,7 @@ def officer_logout():
     except ValueError:
         return _err("Invalid officer_id", 400)
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2100,12 +2263,23 @@ def list_public_complaints():
     """
     GET /public-complaints?status=Pending
     Returns staging complaints for officer review dashboard.
+    Paginated. Query params: page (default 1), limit (default 25, max 100).
+    Requires a valid officer session (exposes complainant PII).
     """
+    _, err = _require_officer()
+    if err:
+        return err
     status = request.args.get("status")
+    page, limit, offset = _parse_pagination()
     try:
-        return _ok(queries.get_public_complaints(status))
+        total_records = queries.count_public_complaints(status=status)
+        rows = queries.get_public_complaints(status=status, limit=limit, offset=offset)
+        return _ok(
+            data=rows,
+            pagination=_pagination_meta(total_records, page, limit),
+        )
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/public-complaints/<int:complaint_id>/promote", methods=["POST"])
@@ -2113,36 +2287,48 @@ def promote_complaint(complaint_id):
     """
     POST /public-complaints/<id>/promote
     Promotes a staging complaint to a full case.
-    Header: X-Officer-Id required.
+    Header: X-Officer-Id required (admin only).
     """
-    officer_id = request.headers.get("X-Officer-Id")
-    if not officer_id:
-        return _err("X-Officer-Id header required", 401)
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
     try:
-        new_case_id = queries.promote_complaint(complaint_id, int(officer_id))
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+        if not _is_admin(officer):
+            return _err("Forbidden: Admin access required", 403)
+
+        new_case_id = queries.promote_complaint(complaint_id, officer_id)
         if not new_case_id:
             return _err(f"Complaint {complaint_id} not found", 404)
         return _ok(case_id=new_case_id, case_id_display=_format_case_id(new_case_id))
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/public-complaints/<int:complaint_id>/reject", methods=["POST"])
 def reject_complaint(complaint_id):
     """
     POST /public-complaints/<id>/reject
-    Header: X-Officer-Id required.
+    Header: X-Officer-Id required (admin only).
     """
-    officer_id = request.headers.get("X-Officer-Id")
-    if not officer_id:
-        return _err("X-Officer-Id header required", 401)
+    officer_id, err = _parse_officer_id_header()
+    if err:
+        return err
     try:
-        rows = queries.reject_complaint(complaint_id, int(officer_id))
+        officer = queries.get_officer_by_id(officer_id)
+        if not officer:
+            return _err("Unauthorized: Officer record not found", 401)
+        if not _is_admin(officer):
+            return _err("Forbidden: Admin access required", 403)
+
+        rows = queries.reject_complaint(complaint_id, officer_id)
         if not rows:
             return _err(f"Complaint {complaint_id} not found", 404)
         return _ok()
     except mysql.connector.Error as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2159,9 +2345,16 @@ def method_not_allowed(_):
     return _err("Method not allowed", 405)
 
 
+@app.errorhandler(413)
+def payload_too_large(_):
+    return _err("Payload too large", 413)
+
+
 @app.errorhandler(500)
 def internal_error(e):
-    return _err(f"Internal server error: {str(e)}", 500)
+    # Log the real exception server-side, but never leak internals to the client.
+    logger.error(f"[500] Unhandled error: {e}", exc_info=True)
+    return _err("Internal server error", 500)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2250,7 +2443,7 @@ def get_recommendations():
             cur.close()
             conn.close()
     except Exception as e:
-        return _err(f"Database error: {str(e)}", 500)
+        return _db_err(e)
 
 
 @app.route("/admin/recommendations/<int:recommendation_id>/approve", methods=["POST"])
@@ -2307,7 +2500,7 @@ def approve_recommendation(recommendation_id):
         })
     except Exception as e:
         logger.error(f"Error approving recommendation {recommendation_id}: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 @app.route("/admin/recommendations/<int:recommendation_id>/reject", methods=["POST"])
@@ -2389,7 +2582,7 @@ def reject_recommendation(recommendation_id):
             conn.close()
     except Exception as e:
         logger.error(f"Error rejecting recommendation {recommendation_id}: {str(e)}")
-        return _err(f"Internal server error: {str(e)}", 500)
+        return _err("Internal server error", 500)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

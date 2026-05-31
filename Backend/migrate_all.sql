@@ -1,13 +1,27 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Themis's Domain Consolidated Migration
--- This single migration creates the complete schema and seeds demo data.
--- It is intended to replace: setup_db.sql, migrate_v2.sql, migrate_v3.sql,
--- migrate_v4.sql, migrate_v5.sql, migrate_v6.sql, migrate_v7.sql
+-- Themis's Domain — Consolidated Database Migration (single source of truth)
 --
--- Usage:
---   mysql -u <user> -p crms < migrate_all.sql
--- Note: Safe to run on a new DB. If running against an existing DB,
--- review and backup first. This script is additive where possible.
+-- This ONE file creates the complete schema, all performance indexes, the
+-- single-device login session table, and seeds demo data. Run it once on a
+-- fresh database and the project is ready to go — no other .sql files needed.
+--
+-- Includes:
+--   • All tables (officers, cases, case_officer, public_complaints,
+--     case_access_requests, assignment_recommendations, case_updates,
+--     case_evidence, officer_sessions)
+--   • All performance indexes (inline with each table)
+--   • Demo seed data (officers, cases, assignments, sample complaint/requests)
+--
+-- Demo accounts use placeholder emails (e.g. *.bpd.gov.in). Replace them with
+-- real addresses in your own environment if you want live email delivery —
+-- see the commented "OFFICER EMAIL OVERRIDES" block near the bottom.
+--
+-- Usage (fresh DB):
+--   mysql -u <user> -p crms < Backend/migrate_all.sql
+--
+-- For a managed host that disallows CREATE DATABASE / USE (e.g. Aiven free tier),
+-- apply with:  venv/bin/python scratch/migrate_to_aiven.py
+-- Note: Safe to run on a new DB. If running against an existing DB, back up first.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE DATABASE IF NOT EXISTS crms CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -38,7 +52,11 @@ CREATE TABLE officers (
     join_date   DATE         DEFAULT NULL,
     password_hash VARCHAR(255) DEFAULT NULL,
     `role`      ENUM('admin','inspector','viewer') NOT NULL DEFAULT 'viewer',
-    PRIMARY KEY (officer_id)
+    PRIMARY KEY (officer_id),
+    -- Performance indexes (back login/badge/role lookups in queries.py)
+    INDEX idx_officers_badge (badge),
+    INDEX idx_officers_name  (`name`),
+    INDEX idx_officers_role  (`role`)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;
@@ -85,7 +103,11 @@ CREATE TABLE cases (
     complainant_contact VARCHAR(120) DEFAULT NULL,
     complainant_aadhaar CHAR(12) DEFAULT NULL,
     `source` ENUM('public','officer') NOT NULL DEFAULT 'officer',
-    PRIMARY KEY (case_id)
+    PRIMARY KEY (case_id),
+    -- Performance indexes (back the filter/sort patterns in queries.py)
+    INDEX idx_cases_status_date   (`status`, date_reported),
+    INDEX idx_cases_crime_type    (crime_type),
+    INDEX idx_cases_date_reported (date_reported)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci;
@@ -124,6 +146,7 @@ CREATE TABLE IF NOT EXISTS public_complaints (
     reviewed_by INT DEFAULT NULL,
     reviewed_at DATETIME DEFAULT NULL,
     PRIMARY KEY (complaint_id),
+    INDEX idx_pc_status_submitted (`status`, submitted_at),
     CONSTRAINT fk_public_case FOREIGN KEY (promoted_case_id) REFERENCES cases(case_id) ON DELETE SET NULL,
     CONSTRAINT fk_public_reviewed_by FOREIGN KEY (reviewed_by) REFERENCES officers(officer_id) ON DELETE SET NULL
 ) ENGINE=InnoDB
@@ -146,6 +169,7 @@ CREATE TABLE IF NOT EXISTS case_access_requests (
     decided_by       INT          DEFAULT NULL,
     decided_at       DATETIME     DEFAULT NULL,
     PRIMARY KEY (request_id),
+    INDEX idx_car_requested_at (requested_at),
     CONSTRAINT fk_access_request_case FOREIGN KEY (case_id) REFERENCES cases (case_id) ON DELETE CASCADE,
     CONSTRAINT fk_access_request_officer FOREIGN KEY (decided_by) REFERENCES officers (officer_id) ON DELETE SET NULL
 ) ENGINE=InnoDB
@@ -188,6 +212,7 @@ CREATE TABLE IF NOT EXISTS case_updates (
     update_text TEXT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (update_id),
+    INDEX idx_cu_case_created (case_id, created_at),
     CONSTRAINT fk_update_case FOREIGN KEY (case_id) REFERENCES cases(case_id) ON DELETE CASCADE,
     CONSTRAINT fk_update_officer FOREIGN KEY (officer_id) REFERENCES officers(officer_id) ON DELETE CASCADE
 ) ENGINE=InnoDB
@@ -210,6 +235,7 @@ CREATE TABLE IF NOT EXISTS case_evidence (
     description VARCHAR(255) DEFAULT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (evidence_id),
+    INDEX idx_ce_case_created (case_id, created_at),
     CONSTRAINT fk_evidence_case FOREIGN KEY (case_id) REFERENCES cases(case_id) ON DELETE CASCADE,
     CONSTRAINT fk_evidence_officer FOREIGN KEY (officer_id) REFERENCES officers(officer_id) ON DELETE CASCADE
 ) ENGINE=InnoDB
@@ -336,6 +362,25 @@ VALUES
 -- SEED: assignment_recommendations (empty example)
 -- ────────────────────────────────────────────────────────────────────────────
 -- (Left empty by default; algorithm creates rows at runtime.)
+
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- OPTIONAL: OFFICER EMAIL OVERRIDES
+-- ────────────────────────────────────────────────────────────────────────────
+-- The seed officers above use placeholder *.bpd.gov.in addresses, which will NOT
+-- receive real email. If you want live email delivery (case dossiers, evidence
+-- notifications, etc.) to land in inboxes you control, replace the dummy values
+-- below with your OWN addresses and run these statements.
+--
+-- These are intentionally left COMMENTED OUT and use dummy@example.com so that
+-- cloning + running this file never emails strangers. Uncomment to use.
+--
+-- UPDATE officers SET email = 'admin@example.com'      WHERE `role` = 'admin';
+-- UPDATE officers SET email = 'officer1@example.com'   WHERE `name` = 'Inspector Arjun Nair';
+-- UPDATE officers SET email = 'officer2@example.com'   WHERE `name` = 'Inspector Vikram Rao';
+-- UPDATE officers SET email = 'officer3@example.com'   WHERE `name` = 'Sub-Inspector Priya Menon';
+-- UPDATE officers SET email = 'officer4@example.com'   WHERE `name` = 'Constable Ravi Kumar';
+-- UPDATE officers SET email = 'officer5@example.com'   WHERE `name` = 'Inspector Meera Iyer';
 
 
 -- ────────────────────────────────────────────────────────────────────────────

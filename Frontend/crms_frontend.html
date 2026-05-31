@@ -983,6 +983,10 @@
             });
             const [aadhaarError, setAadhaarError] = useState("");
             const [submitted, setSubmitted] = useState(false);
+            // Geolocation auto-fill for the Location field.
+            // geoStatus: null | "loading" | "ok" | "denied" | "unsupported" | "error"
+            const [geoStatus, setGeoStatus] = useState(null);
+            const [geoMessage, setGeoMessage] = useState("");
             const [accessForm, setAccessForm] = useState({ case_id: "", requester_name: "", requester_email: "", requester_number: "", reason: "" });
 
             const [accessSubmitted, setAccessSubmitted] = useState(false);
@@ -1192,6 +1196,8 @@
                         name: "", contact: "", email: "", aadhaar: "",
                         incident_desc: "", crime_type: "", location: ""
                     });
+                    setGeoStatus(null);
+                    setGeoMessage("");
                     setVerifyStep("form");
                 } catch (err) {
                     setError("Submission failed: " + err.message);
@@ -1200,6 +1206,74 @@
                     setSubmitting(false);
                 }
                 setTimeout(() => { setSubmitted(false); setCaseRef(null); }, 8000);
+            };
+
+            // ─── GEOLOCATION AUTO-FILL ──────────────────────────────────────
+            // Triggers the browser's native permission prompt. On allow, reverse-
+            // geocodes the coordinates to a human-readable address (OpenStreetMap
+            // Nominatim — free, no API key) and fills the Location field. On deny
+            // or any failure, we keep whatever the user typed manually.
+            const handleUseMyLocation = () => {
+                if (!("geolocation" in navigator)) {
+                    setGeoStatus("unsupported");
+                    setGeoMessage("Your browser does not support location access. Please type the address manually.");
+                    return;
+                }
+
+                setGeoStatus("loading");
+                setGeoMessage("Requesting your location…");
+
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const { latitude, longitude } = position.coords;
+                        try {
+                            // Reverse geocode via OpenStreetMap Nominatim.
+                            const res = await fetch(
+                                `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+                                { headers: { "Accept": "application/json" } }
+                            );
+                            if (!res.ok) throw new Error("reverse geocode failed");
+                            const data = await res.json();
+
+                            // Build a concise, readable address from the parts we care about.
+                            const a = data.address || {};
+                            const parts = [
+                                a.neighbourhood || a.suburb || a.residential,
+                                a.city || a.town || a.village || a.county,
+                                a.state,
+                                a.postcode,
+                            ].filter(Boolean);
+                            const readable = parts.length ? parts.join(", ") : (data.display_name || "");
+
+                            if (readable) {
+                                setFormData(prev => ({ ...prev, location: readable }));
+                                setGeoStatus("ok");
+                                setGeoMessage("Location detected. You can edit it if needed.");
+                            } else {
+                                // Fall back to raw coordinates so the field is still useful.
+                                setFormData(prev => ({ ...prev, location: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` }));
+                                setGeoStatus("ok");
+                                setGeoMessage("Couldn't resolve an address; filled with coordinates instead. You can edit it.");
+                            }
+                        } catch (err) {
+                            // Geocoding failed but we still have coordinates.
+                            setFormData(prev => ({ ...prev, location: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` }));
+                            setGeoStatus("ok");
+                            setGeoMessage("Location detected (as coordinates). You can edit it if needed.");
+                        }
+                    },
+                    (err) => {
+                        // PERMISSION_DENIED (1), POSITION_UNAVAILABLE (2), TIMEOUT (3)
+                        if (err.code === 1) {
+                            setGeoStatus("denied");
+                            setGeoMessage("Location access denied. No problem — please type the address manually.");
+                        } else {
+                            setGeoStatus("error");
+                            setGeoMessage("Couldn't determine your location. Please type the address manually.");
+                        }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
             };
 
 
@@ -1498,8 +1572,25 @@
                                             </div>
                                             <div>
                                                 <label className={ThemisNomos_LABEL}>Location</label>
-                                                <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}
-                                                    className={ThemisNomos_INPUT} placeholder="Bengaluru area" />
+                                                <div className="flex gap-2">
+                                                    <input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})}
+                                                        className={`${ThemisNomos_INPUT} flex-1`} placeholder="Bengaluru area" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleUseMyLocation}
+                                                        disabled={geoStatus === "loading"}
+                                                        title="Detect my current location"
+                                                        className="flex shrink-0 items-center gap-1.5 border-2 border-ink bg-paper-card px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-ink transition-colors hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+                                                    >
+                                                        <Icon name={geoStatus === "loading" ? "Clock" : "MapPin"} size={14} />
+                                                        {geoStatus === "loading" ? "Locating…" : "Use my location"}
+                                                    </button>
+                                                </div>
+                                                {geoMessage && (
+                                                    <p className={`mt-1.5 text-[11px] font-medium ${geoStatus === "ok" ? "text-green-tactical" : geoStatus === "denied" || geoStatus === "error" || geoStatus === "unsupported" ? "text-accent" : "text-ink-muted"}`}>
+                                                        {geoMessage}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                         <input type="hidden" value="Online" name="complaint_mode" />

@@ -100,30 +100,37 @@ def get_all_cases(status=None, crime_type=None, location=None, search=None, offi
     conn = get_db()
     cur  = conn.cursor()
     try:
-        sql    = "SELECT * FROM cases WHERE 1=1"
+        # Single JOIN query: pull the cases AND their assigned officer_ids in one
+        # round trip. GROUP_CONCAT collapses the case_officer rows into a CSV that
+        # we split back into a list below — no second query needed.
+        sql = """SELECT c.*,
+                        GROUP_CONCAT(co.officer_id ORDER BY co.officer_id) AS officer_ids_csv
+                 FROM cases c
+                 LEFT JOIN case_officer co ON c.case_id = co.case_id
+                 WHERE 1=1"""
         params = []
 
         if not bypass_visibility and officer_id is not None:
-            sql += " AND case_id IN (SELECT case_id FROM case_officer WHERE officer_id = %s)"
+            sql += " AND c.case_id IN (SELECT case_id FROM case_officer WHERE officer_id = %s)"
             params.append(officer_id)
 
         if status and status != "All":
-            sql += " AND `status` = %s"
+            sql += " AND c.`status` = %s"
             params.append(status)
 
         if crime_type and crime_type != "All":
-            sql += " AND crime_type = %s"
+            sql += " AND c.crime_type = %s"
             params.append(crime_type)
 
         if location:
-            sql += " AND `location` LIKE %s"
+            sql += " AND c.`location` LIKE %s"
             params.append(f"%{location}%")
 
         if search:
-            sql += " AND (title LIKE %s OR `location` LIKE %s)"
+            sql += " AND (c.title LIKE %s OR c.`location` LIKE %s)"
             params.extend([f"%{search}%", f"%{search}%"])
 
-        sql += " ORDER BY date_reported DESC"
+        sql += " GROUP BY c.case_id ORDER BY c.date_reported DESC"
 
         if limit is not None:
             sql += " LIMIT %s OFFSET %s"
@@ -132,20 +139,9 @@ def get_all_cases(status=None, crime_type=None, location=None, search=None, offi
         cur.execute(sql, params)
         cases = _rows_to_list(cur, cur.fetchall())
 
-        officer_ids_by_case = {case["case_id"]: [] for case in cases}
-        if officer_ids_by_case:
-            placeholders = ", ".join(["%s"] * len(officer_ids_by_case))
-            cur.execute(
-                f"""SELECT case_id, officer_id
-                    FROM case_officer
-                    WHERE case_id IN ({placeholders})""",
-                tuple(officer_ids_by_case.keys())
-            )
-            for case_id, assigned_officer_id in cur.fetchall():
-                officer_ids_by_case.setdefault(case_id, []).append(assigned_officer_id)
-
         for case in cases:
-            case["officer_ids"] = officer_ids_by_case.get(case["case_id"], [])
+            csv = case.pop("officer_ids_csv", None)
+            case["officer_ids"] = [int(x) for x in csv.split(",")] if csv else []
 
             # Serialise date/datetime fields to strings for JSON
             for key in ("date_reported", "last_updated"):
@@ -163,16 +159,23 @@ def get_case_by_id(case_id):
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute("SELECT * FROM cases WHERE case_id = %s", (case_id,))
+        # Single query: case row + its assigned officer_ids via GROUP_CONCAT.
+        cur.execute(
+            """SELECT c.*,
+                      GROUP_CONCAT(co.officer_id ORDER BY co.officer_id) AS officer_ids_csv
+               FROM cases c
+               LEFT JOIN case_officer co ON c.case_id = co.case_id
+               WHERE c.case_id = %s
+               GROUP BY c.case_id""",
+            (case_id,)
+        )
         row = cur.fetchone()
         if not row:
             return None
         case = _row_to_dict(cur, row)
 
-        cur.execute(
-            "SELECT officer_id FROM case_officer WHERE case_id = %s", (case_id,)
-        )
-        case["officer_ids"] = [r[0] for r in cur.fetchall()]
+        csv = case.pop("officer_ids_csv", None)
+        case["officer_ids"] = [int(x) for x in csv.split(",")] if csv else []
 
         for key in ("date_reported", "last_updated"):
             if case.get(key) and hasattr(case[key], "isoformat"):
@@ -269,10 +272,78 @@ def delete_case(case_id):
 # OFFICERS
 # ──────────────────────────────────────────────────────────────────────────────
 
-def get_all_officers():
+def get_all_officers(limit=None, offset=0):
     """
     Returns all officers with computed active_cases and solved_cases counts
     so the frontend Analytics workload bar renders correctly.
+    Pass limit/offset for server-side pagination; omit for unbounded results.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        sql = (
+            """SELECT
+                 o.*,
+                 COALESCE(w.active_cases, 0) AS active_cases,
+                 COALESCE(w.solved_cases, 0) AS solved_cases
+               FROM officers o
+               LEFT JOIN (
+                 SELECT
+                   co.officer_id,
+                   SUM(c.`status` = 'Active') AS active_cases,
+                   SUM(c.`status` = 'Solved') AS solved_cases
+                 FROM case_officer co
+                 JOIN cases c ON co.case_id = c.case_id
+                 GROUP BY co.officer_id
+               ) w ON o.officer_id = w.officer_id
+               ORDER BY o.officer_id"""
+        )
+        params = []
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
+
+        cur.execute(sql, params)
+        officers = _rows_to_list(cur, cur.fetchall())
+
+        for officer in officers:
+            oid = officer["officer_id"]
+
+            # Add extras the frontend officer modal shows.
+            # These columns may not exist in the minimal schema — supply defaults if absent.
+            officer.setdefault("badge",      f"BPD-{1000 + oid}")
+            officer.setdefault("station",    "Bengaluru City Police")
+            officer.setdefault("phone",      "")
+            officer.setdefault("email",      "")
+            officer.setdefault("join_date",  "")
+
+        for o in officers:
+            o.pop("password_hash", None)   # never send hash to frontend
+
+        return officers
+    finally:
+        cur.close()
+        conn.close()
+
+
+def count_officers():
+    """Total officer count for pagination."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM officers")
+        return cur.fetchone()[0]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_officers_not_on_case(case_id: int):
+    """
+    Returns all officers NOT currently assigned to the given case, with their
+    computed active/solved case counts — in a single query using an anti-join.
+    Replaces the old approach of loading all officers + the case and filtering
+    in Python.
     """
     conn = get_db()
     cur  = conn.cursor()
@@ -292,23 +363,22 @@ def get_all_officers():
                  JOIN cases c ON co.case_id = c.case_id
                  GROUP BY co.officer_id
                ) w ON o.officer_id = w.officer_id
-               ORDER BY o.officer_id"""
+               WHERE o.officer_id NOT IN (
+                 SELECT officer_id FROM case_officer WHERE case_id = %s
+               )
+               ORDER BY o.officer_id""",
+            (case_id,)
         )
         officers = _rows_to_list(cur, cur.fetchall())
 
         for officer in officers:
             oid = officer["officer_id"]
-
-            # Add extras the frontend officer modal shows.
-            # These columns may not exist in the minimal schema — supply defaults if absent.
             officer.setdefault("badge",      f"BPD-{1000 + oid}")
             officer.setdefault("station",    "Bengaluru City Police")
             officer.setdefault("phone",      "")
             officer.setdefault("email",      "")
             officer.setdefault("join_date",  "")
-
-        for o in officers:
-            o.pop("password_hash", None)   # never send hash to frontend
+            officer.pop("password_hash", None)
 
         return officers
     finally:
@@ -383,15 +453,16 @@ def unassign_officer(case_id, officer_id):
         conn.close()
 
 
-def get_all_assignments():
+def get_all_assignments(limit=None, offset=0):
     """
     JOIN query across all three tables.
     Returns one row per case–officer pair — exactly what the Assignments view needs.
+    Pass limit/offset for server-side pagination; omit for the full list.
     """
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute(
+        sql = (
             """SELECT
                  c.case_id,
                  c.title       AS case_title,
@@ -406,7 +477,25 @@ def get_all_assignments():
                JOIN officers o ON co.officer_id = o.officer_id
                ORDER BY c.case_id, o.officer_id"""
         )
+        params = []
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
+
+        cur.execute(sql, params)
         return _rows_to_list(cur, cur.fetchall())
+    finally:
+        cur.close()
+        conn.close()
+
+
+def count_assignments():
+    """Total case-officer assignment count for pagination."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM case_officer")
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -526,7 +615,7 @@ def submit_public_complaint(name, contact, email, aadhaar,
         conn.close()
 
 
-def get_public_complaints(status=None):
+def get_public_complaints(status=None, limit=None, offset=0):
     """Returns all public complaints (for officer review dashboard)."""
     conn = get_db()
     cur  = conn.cursor()
@@ -537,6 +626,9 @@ def get_public_complaints(status=None):
             sql += " AND `status` = %s"
             params.append(status)
         sql += " ORDER BY submitted_at DESC"
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
         cur.execute(sql, params)
         rows = _rows_to_list(cur, cur.fetchall())
         for r in rows:
@@ -544,6 +636,23 @@ def get_public_complaints(status=None):
                 if r.get(key) and hasattr(r[key], "isoformat"):
                     r[key] = r[key].isoformat()
         return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def count_public_complaints(status=None):
+    """Counts public complaints using the same status filter as get_public_complaints."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        sql = "SELECT COUNT(*) FROM public_complaints WHERE 1=1"
+        params = []
+        if status:
+            sql += " AND `status` = %s"
+            params.append(status)
+        cur.execute(sql, params)
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -661,21 +770,19 @@ def enrich_officer_details(o: dict):
     cur  = conn.cursor()
     try:
         oid = o["officer_id"]
+        # Single conditional-aggregate query for both counts (was two COUNT(*) queries).
         cur.execute(
-            """SELECT COUNT(*) FROM case_officer co
+            """SELECT
+                 COALESCE(SUM(c.`status` = 'Active'), 0) AS active_cases,
+                 COALESCE(SUM(c.`status` = 'Solved'), 0) AS solved_cases
+               FROM case_officer co
                JOIN cases c ON co.case_id = c.case_id
-               WHERE co.officer_id = %s AND c.`status` = 'Active'""",
+               WHERE co.officer_id = %s""",
             (oid,)
         )
-        o["active_cases"] = cur.fetchone()[0]
-
-        cur.execute(
-            """SELECT COUNT(*) FROM case_officer co
-               JOIN cases c ON co.case_id = c.case_id
-               WHERE co.officer_id = %s AND c.`status` = 'Solved'""",
-            (oid,)
-        )
-        o["solved_cases"] = cur.fetchone()[0]
+        active, solved = cur.fetchone()
+        o["active_cases"] = int(active or 0)
+        o["solved_cases"] = int(solved or 0)
 
         # Supply defaults if absent
         o.setdefault("badge",      f"BPD-{1000 + oid}")
@@ -833,22 +940,20 @@ def verify_officer_login(badge_or_name: str, plain_password: str):
         if not bcrypt.checkpw(plain_password.encode(), stored_hash.encode()):
             return None
 
-        # Attach computed case counts
+        # Attach computed case counts — single conditional-aggregate query.
         oid = o["officer_id"]
         cur.execute(
-            """SELECT COUNT(*) FROM case_officer co
+            """SELECT
+                 COALESCE(SUM(c.`status` = 'Active'), 0) AS active_cases,
+                 COALESCE(SUM(c.`status` = 'Solved'), 0) AS solved_cases
+               FROM case_officer co
                JOIN cases c ON co.case_id = c.case_id
-               WHERE co.officer_id = %s AND c.`status` = 'Active'""",
+               WHERE co.officer_id = %s""",
             (oid,)
         )
-        o["active_cases"] = cur.fetchone()[0]
-        cur.execute(
-            """SELECT COUNT(*) FROM case_officer co
-               JOIN cases c ON co.case_id = c.case_id
-               WHERE co.officer_id = %s AND c.`status` = 'Solved'""",
-            (oid,)
-        )
-        o["solved_cases"] = cur.fetchone()[0]
+        active, solved = cur.fetchone()
+        o["active_cases"] = int(active or 0)
+        o["solved_cases"] = int(solved or 0)
 
         return o   # role is included; frontend uses it to gate write actions
     finally:
@@ -877,7 +982,7 @@ def set_officer_password(officer_id: int, plain_password: str):
 # PUBLIC BROWSING — case discovery for citizens
 # ──────────────────────────────────────────────────────────────────────────────
 
-def get_public_cases(status=None, crime_type=None, location=None, search=None):
+def get_public_cases(status=None, crime_type=None, location=None, search=None, limit=None, offset=0):
     """
     Returns public cases safe for citizen browsing.
     Returns only: case_id, title, crime_type, location, date_reported, status
@@ -911,6 +1016,9 @@ def get_public_cases(status=None, crime_type=None, location=None, search=None):
             params.append(f"%{search}%")
 
         sql += " ORDER BY date_reported DESC"
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
 
         cur.execute(sql, params)
         cases = _rows_to_list(cur, cur.fetchall())
@@ -922,6 +1030,34 @@ def get_public_cases(status=None, crime_type=None, location=None, search=None):
             case["case_id_display"] = f"BLR-{str(case['case_id']).zfill(3)}"
 
         return cases
+    finally:
+        cur.close()
+        conn.close()
+
+
+def count_public_cases(status=None, crime_type=None, location=None, search=None):
+    """Counts public cases using the same filters as get_public_cases."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        sql = "SELECT COUNT(*) FROM cases WHERE 1=1"
+        params = []
+
+        if status and status != "All":
+            sql += " AND `status` = %s"
+            params.append(status)
+        if crime_type and crime_type != "All":
+            sql += " AND crime_type = %s"
+            params.append(crime_type)
+        if location:
+            sql += " AND `location` LIKE %s"
+            params.append(f"%{location}%")
+        if search:
+            sql += " AND (title LIKE %s)"
+            params.append(f"%{search}%")
+
+        cur.execute(sql, params)
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -986,7 +1122,7 @@ def submit_case_access_request(case_id: int, requester_name: str, requester_emai
         conn.close()
 
 
-def get_case_access_requests(officer_id: int = None, bypass_visibility: bool = False):
+def get_case_access_requests(officer_id: int = None, bypass_visibility: bool = False, limit=None, offset=0):
     """
     Fetches all access requests from the DB, with role-based visibility.
     If bypass_visibility is False and officer_id is provided, returns only requests 
@@ -1009,6 +1145,9 @@ def get_case_access_requests(officer_id: int = None, bypass_visibility: bool = F
             params.append(officer_id)
             
         sql += " ORDER BY ar.requested_at DESC"
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
         
         cur.execute(sql, params)
         rows = _rows_to_list(cur, cur.fetchall())
@@ -1022,6 +1161,23 @@ def get_case_access_requests(officer_id: int = None, bypass_visibility: bool = F
             r["case_id_display"] = f"BLR-{str(r['case_id']).zfill(3)}"
             
         return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def count_case_access_requests(officer_id: int = None, bypass_visibility: bool = False):
+    """Counts access requests using the same visibility rules as get_case_access_requests."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        sql = "SELECT COUNT(*) FROM case_access_requests ar"
+        params = []
+        if not bypass_visibility and officer_id is not None:
+            sql += " WHERE ar.case_id IN (SELECT case_id FROM case_officer WHERE officer_id = %s)"
+            params.append(officer_id)
+        cur.execute(sql, params)
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -1154,24 +1310,41 @@ def insert_case_update(case_id, officer_id, update_text):
         conn.close()
 
 
-def get_case_updates(case_id):
+def get_case_updates(case_id, limit=None, offset=0):
     """Retrieves all timeline updates for a case, ordered chronologically."""
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute(
+        sql = (
             """SELECT cu.*, o.name AS officer_name, o.rank AS officer_rank
                FROM case_updates cu
                JOIN officers o ON cu.officer_id = o.officer_id
                WHERE cu.case_id = %s
-               ORDER BY cu.created_at ASC""",
-            (case_id,)
+               ORDER BY cu.created_at ASC"""
         )
+        params = [case_id]
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
+
+        cur.execute(sql, params)
         rows = _rows_to_list(cur, cur.fetchall())
         for r in rows:
             if r.get("created_at") and hasattr(r["created_at"], "isoformat"):
                 r["created_at"] = r["created_at"].isoformat()
         return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def count_case_updates(case_id):
+    """Counts timeline updates for a case."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM case_updates WHERE case_id = %s", (case_id,))
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -1195,24 +1368,41 @@ def insert_case_evidence(case_id, officer_id, file_name, original_name, file_pat
         conn.close()
 
 
-def get_case_evidence(case_id):
+def get_case_evidence(case_id, limit=None, offset=0):
     """Retrieves all evidence items for a case, ordered newest first."""
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute(
+        sql = (
             """SELECT ce.*, o.name AS officer_name, o.rank AS officer_rank
                FROM case_evidence ce
                JOIN officers o ON ce.officer_id = o.officer_id
                WHERE ce.case_id = %s
-               ORDER BY ce.created_at DESC""",
-            (case_id,)
+               ORDER BY ce.created_at DESC"""
         )
+        params = [case_id]
+        if limit is not None:
+            sql += " LIMIT %s OFFSET %s"
+            params.extend([int(limit), int(offset or 0)])
+
+        cur.execute(sql, params)
         rows = _rows_to_list(cur, cur.fetchall())
         for r in rows:
             if r.get("created_at") and hasattr(r["created_at"], "isoformat"):
                 r["created_at"] = r["created_at"].isoformat()
         return rows
+    finally:
+        cur.close()
+        conn.close()
+
+
+def count_case_evidence(case_id):
+    """Counts evidence items for a case."""
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM case_evidence WHERE case_id = %s", (case_id,))
+        return cur.fetchone()[0]
     finally:
         cur.close()
         conn.close()
@@ -1275,7 +1465,8 @@ def get_admin_officer():
 
 def get_officers_assigned_to_case(case_id: int):
     """
-    Returns a list of officer dicts assigned to the given case.
+    Returns a list of officer dicts assigned to the given case (single JOIN query).
+    The password_hash is stripped so the result is safe to send to the frontend.
     """
     conn = get_db()
     cur  = conn.cursor()
@@ -1283,10 +1474,14 @@ def get_officers_assigned_to_case(case_id: int):
         cur.execute(
             """SELECT o.* FROM officers o
                JOIN case_officer co ON o.officer_id = co.officer_id
-               WHERE co.case_id = %s""",
+               WHERE co.case_id = %s
+               ORDER BY o.officer_id""",
             (case_id,)
         )
-        return _rows_to_list(cur, cur.fetchall())
+        officers = _rows_to_list(cur, cur.fetchall())
+        for o in officers:
+            o.pop("password_hash", None)
+        return officers
     finally:
         cur.close()
         conn.close()
