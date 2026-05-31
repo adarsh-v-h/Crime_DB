@@ -1,275 +1,491 @@
 <div align="center">
 
-# Themis's Domain — Crime Record Management System 🎯
+# Themis's Domain — Crime Record Management System
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)  [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)  [![Build Status](https://img.shields.io/badge/build-passing-success.svg)](#)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/) [![Build](https://img.shields.io/badge/build-passing-success.svg)](#)
+
+**A police investigation dashboard for the Bengaluru Police Department.**  
+Flask · MySQL · React · Deployed on Render + Aiven + Brevo.
 
 </div>
 
 ---
 
 ## Table of Contents
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [API Reference](#api-reference)
-- [Frontend](#frontend)
-- [Security](#security)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact & Acknowledgements](#contact--acknowledgements)
+1. [What it does](#what-it-does)
+2. [Tech stack & accounts you need](#tech-stack--accounts-you-need)
+3. [Local setup — step by step](#local-setup--step-by-step)
+4. [Environment variables reference](#environment-variables-reference)
+5. [Deploy to production](#deploy-to-production)
+6. [Project structure](#project-structure)
+7. [Frontend — editing & building](#frontend--editing--building)
+8. [API reference](#api-reference)
+9. [Performance optimizations](#performance-optimizations)
+10. [Security](#security)
+11. [Testing](#testing)
+12. [Contributing](#contributing)
+13. [License](#license)
 
 ---
 
-## Overview
-Themis's Domain is a **police investigation dashboard** built for the Bengaluru Police Department. It combines a Flask‑powered backend, a MySQL database, and an editorial‑styled single‑page React frontend. The system streamlines case management, citizen complaint intake, automated case assignment, and secure dossier delivery.
+## What it does
+
+| Who | What they can do |
+|-----|-----------------|
+| **Citizens** | File complaints (reCAPTCHA + email OTP), browse public cases, request dossier access |
+| **Officers (inspector)** | Log in, manage cases, upload evidence, add timeline updates, approve/reject access requests |
+| **Admin** | Everything above + create officers, hard-delete cases, promote/reject complaints, trigger auto-assignment |
+
+Key features:
+- Role-based single-device login with session tokens
+- Automated complaint → case assignment (background scheduler)
+- PDF dossier generation + email delivery via Brevo
+- Geolocation auto-fill on the complaint form
+- Editorial magazine-style UI (no bundler — React via CDN)
+- Server-side pagination on every list endpoint
+- Consolidated DB indexes on all filter/sort columns
 
 ---
 
-## Features ✨
-- **Staff portal** – Role‑based login, full CRUD on cases, officer assignments, analytics, status updates.
-- **Public portal** – Citizens file complaints, browse public cases, and request case‑dossier access (protected by reCAPTCHA + email OTP). The complaint form supports **one‑tap geolocation auto‑fill** for the incident address (with manual fallback).
-- **Case discovery** – Search / filter by status, crime type, location, or keywords, with server‑side pagination.
-- **Automated assignment** – Background scheduler promotes pending complaints to cases and auto‑assigns officers by severity and workload.
-- **Access‑request workflow** – Authorized officers approve/reject citizen requests; approval triggers PDF dossier generation and email delivery (via Brevo HTTP API).
-- **Editorial UI** – Magazine/newspaper‑inspired design (serif headlines, pull‑quote statistics, archival imagery).
+## Tech stack & accounts you need
+
+Before you start, create accounts on these free services:
+
+| Service | What for | Sign up |
+|---------|----------|---------|
+| **GitHub** | Host the repo | github.com |
+| **Render** | Host the Flask app (free tier) | render.com |
+| **Aiven** | Managed MySQL database (free tier) | aiven.io |
+| **Brevo** | Transactional email API (free tier, 300 emails/day) | brevo.com |
+| **Google reCAPTCHA** | Protect public forms | google.com/recaptcha/admin |
+
+> **Local dev only?** You only need a local MySQL install. Skip Aiven, Render, and Brevo — the app runs in offline mock mode for emails.
 
 ---
 
-## Architecture
-Three logical layers:
-1. **Backend (Flask)** – `Backend/` — REST API, authentication/sessions, business logic, background scheduler, PDF + email utilities.
-2. **Database (MySQL)** – Officers, cases, complaints, access requests, sessions, evidence, timeline updates. Hosted on Aiven in production.
-3. **Frontend (React via CDN)** – `Frontend/` — interactive SPA for staff and citizens, served by Flask at `/`.
+## Local setup — step by step
 
-```
-Crime_DB/
-├── Backend/
-│   ├── app.py                  # Flask API — all routes, auth guards, validation
-│   ├── queries.py              # all SQL (parameterized) + pagination helpers
-│   ├── db_connection.py        # pooled MySQL connection
-│   ├── assignment_algorithm.py # automated complaint → case assignment
-│   ├── email_utils.py          # Brevo HTTP email + PDF dossier (mock fallback)
-│   ├── otp_store.py            # in‑memory email OTP store (rate‑limited)
-│   ├── config.py               # env‑driven config (.env)
-│   ├── migrate_all.sql         # SINGLE consolidated migration (schema+indexes+seed)
-│   └── test_*.py               # unit + security test suites
-├── Frontend/
-│   ├── src/                    # modular JSX + CSS sources (edit these)
-│   ├── index.template.html     # HTML shell with __STYLES__ / __APP_JS__ slots
-│   ├── build.py                # assembles src/ → crms_frontend.html
-│   ├── crms_frontend.html      # GENERATED — do not edit by hand
-│   └── README.md               # frontend build/workflow docs
-├── scratch/                    # one‑off DB utilities (config‑driven, no secrets)
-├── requirements.txt
-├── Procfile                    # gunicorn entrypoint for Render
-└── .env.example
-```
+### 1. Prerequisites
 
----
-
-## Installation 🚀
 ```bash
-# Clone
+# Required
+python3 --version   # 3.10 or higher
+mysql --version     # any recent MySQL 8.x
+
+# Optional (only needed if you edit Frontend/src/)
+python3 -m pip install --upgrade pip
+```
+
+### 2. Clone the repo
+
+```bash
 git clone https://github.com/your-org/Crime_DB.git
 cd Crime_DB
+```
 
-# Environment variables
-cp .env.example .env
-# Edit .env: MySQL credentials, reCAPTCHA keys, Brevo email (optional)
+### 3. Python environment
 
-# Python environment
+```bash
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Database Setup
-A **single consolidated migration** creates the complete schema, all performance
-indexes, the session table, and demo seed data:
+### 4. Create your `.env`
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in at minimum:
+
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=your_mysql_user
+DB_PASSWORD=your_mysql_password
+DB_NAME=crms
+
+# Use Google's public TEST keys for local dev (accept any token):
+RECAPTCHA_SECRET_KEY=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
+RECAPTCHA_PUBLIC_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+```
+
+Everything else has sensible defaults — see [Environment variables reference](#environment-variables-reference).
+
+### 5. Set up the database
+
+One command creates the full schema, all indexes, and demo seed data:
 
 ```bash
 mysql -u root -p < Backend/migrate_all.sql
 ```
 
-For a managed host that disallows `CREATE DATABASE` / `USE` (e.g. Aiven free tier):
-```bash
-python3 scratch/migrate_to_aiven.py     # reads DB_* from .env
-```
+> If your MySQL user isn't `root`, replace accordingly. The script creates the `crms` database automatically.
 
-> Demo accounts use placeholder emails. To enable real email delivery, see the
-> commented "OFFICER EMAIL OVERRIDES" block at the bottom of `migrate_all.sql`.
+### 6. Run the app
 
----
-
-## Quick Start
 ```bash
 python3 Backend/app.py
 ```
-Open **http://localhost:5000**. The backend serves both the API and the frontend.
 
-**Dev login:** Badge `BPD-7821`, password `crms1234` (inspector). Admin badge `ADM-0001`.
+Open **http://localhost:5000** — Flask serves both the API and the frontend.
 
----
+### 7. Log in
 
-## API Reference 📚
-All responses follow `{ "success": true, "data": … }` or `{ "success": false, "error": "…" }`.
-List endpoints return a `pagination` block: `{ total_records, total_pages, current_page, limit }`.
+| Role | Badge | Password |
+|------|-------|----------|
+| Admin | `ADM-0001` | `crms1234` |
+| Inspector | `BPD-7821` | `crms1234` |
+| Inspector | `BPD-8912` | `crms1234` |
 
-Protected routes require the `X-Officer-Id` **and** `X-Session-Token` headers
-(issued at login). Routes are guarded by role — see [Security](#security).
+> Change these passwords before any real deployment.
 
-### Health & Stats
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health` | public | Health check |
-| GET | `/stats` | public | Public landing statistics |
+### 8. (Optional) Enable real email locally
 
-### Cases
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/cases`, `/api/cases` | officer | List cases (filters, pagination, visibility) |
-| GET | `/cases/<id>` | officer | Case detail |
-| POST | `/cases` | officer | Create case |
-| PATCH | `/cases/<id>` | officer (admin for status) | Update case fields |
-| DELETE | `/cases/<id>` | **admin** | Hard‑delete a case |
-| GET | `/cases/<id>/officers` | officer | Officers on a case |
-| GET | `/cases/<id>/highest-ranked` | officer | Highest‑ranked officer on a case |
-
-### Timeline & Evidence
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET / POST | `/cases/<id>/updates` | officer (on case) | Case timeline (paginated) |
-| GET / POST | `/cases/<id>/evidence` | officer (on case) | Evidence list / upload |
-| GET | `/cases/evidence/file/<id>/<name>` | officer (on case) | Inline view |
-| GET | `/cases/<id>/evidence/<name>/download` | officer (on case) | Download |
-| DELETE | `/cases/evidence/<id>` | officer (admin/inspector/uploader) | Delete evidence |
-
-### Officers & Assignments
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/officers` | officer | List officers (paginated) |
-| POST | `/officers` | **admin** | Add officer |
-| GET | `/officers/available?case_id=` | officer | Officers not on a case |
-| GET | `/case-officer` | officer | Case‑officer pairings (paginated) |
-| POST / DELETE | `/case-officer` | **admin** | Assign / unassign |
-| POST | `/case-officer/add`, `/case-officer/remove` | **admin** | Reassign + email notify |
-
-### Analytics & Assignment Engine
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/analytics` | officer | Dashboard analytics |
-| GET | `/assignments/pending` | officer | Pending complaint queue (paginated) |
-| POST | `/assignments/process` | **admin** | Trigger assignment algorithm |
-| GET | `/admin/dashboard` | **admin** | Admin aggregate stats |
-| GET | `/admin/cases` | **admin** | All cases (paginated) |
-| GET/POST | `/admin/recommendations[...]` | **admin** | Assignment recommendation review |
-
-### Public Portal (Citizens)
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/public/cases` | Browse public cases (paginated) |
-| POST | `/public/complaint` | Submit complaint (CAPTCHA + email OTP) |
-| POST | `/public/access-request` | Request dossier access (CAPTCHA) |
-| POST | `/public/verify-email`, `/public/otp/send`, `/public/otp/verify` | Email verification flow |
-
-### Public Complaints Review (Staff)
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/public-complaints` | officer | Review queue (paginated) |
-| POST | `/public-complaints/<id>/promote` | **admin** | Promote to case |
-| POST | `/public-complaints/<id>/reject` | **admin** | Reject complaint |
-
-### Authentication
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/auth/login` | Officer login (badge ID, password, reCAPTCHA); single‑device session |
-| POST | `/auth/logout` | Revoke active session |
-
-### Access Requests (Staff)
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/access-requests` | officer | List (role‑filtered, paginated) |
-| POST | `/api/access-requests/<id>/approve` | highest‑ranked/admin | Approve → emails PDF dossier |
-| POST | `/api/access-requests/<id>/reject` | highest‑ranked/admin | Reject → notifies citizen |
+Leave `BREVO_API_KEY` empty and the app writes mock emails as JSON files to `Backend/mock_emails/` — useful for testing the email flow without a real account.
 
 ---
 
-## Frontend 🎨
-The UI is **modular** under `Frontend/src/` and assembled by a small Python build
-step into the single `crms_frontend.html` that Flask serves (React + Tailwind +
-Framer Motion from CDNs — no bundler / no Node required on the server).
+## Environment variables reference
 
-```bash
-# After editing anything in Frontend/src/ or index.template.html:
-python3 Frontend/build.py            # rebuild crms_frontend.html
-python3 Frontend/build.py --check    # CI guard: fail if output is stale
+Copy `.env.example` to `.env`. All variables with a default are optional.
+
+### Database
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `DB_HOST` | ✅ | — | MySQL hostname |
+| `DB_PORT` | ✅ | — | Usually `3306` |
+| `DB_USER` | ✅ | — | MySQL username |
+| `DB_PASSWORD` | ✅ | — | MySQL password |
+| `DB_NAME` | ✅ | — | Database name (`crms`) |
+| `DB_POOL_SIZE` | | `10` | Connections per process. Keep `workers × pool_size` under your DB's `max_connections`. Aiven free ≈ 20. |
+
+### Flask
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `FLASK_HOST` | | `0.0.0.0` | |
+| `FLASK_PORT` | | `5000` | Render sets `PORT` automatically |
+| `FLASK_DEBUG` | | `false` | Never `true` in production |
+
+### CORS
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `CORS_ORIGIN` | | `*` | Set to your exact frontend URL in production |
+
+### Auth & scheduler
+| Variable | Required | Default | Notes |
+|----------|----------|---------|-------|
+| `AUTH_SESSION_TTL_HOURS` | | `12` | How long a login session lasts |
+| `ENABLE_ASSIGNMENT_SCHEDULER` | | `true` | Set `false` to disable the background job |
+| `ASSIGNMENT_SCHEDULER_INTERVAL_SECONDS` | | `60` | How often the scheduler runs |
+
+### reCAPTCHA
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `RECAPTCHA_SECRET_KEY` | ✅ | Get from [google.com/recaptcha/admin](https://google.com/recaptcha/admin). Use test keys locally. |
+| `RECAPTCHA_PUBLIC_KEY` | ✅ | Embedded in the frontend |
+
+### Brevo email
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `BREVO_API_KEY` | | Leave empty → offline mock mode |
+| `BREVO_FROM_EMAIL` | | Must be verified in your Brevo account |
+| `BREVO_FROM_NAME` | | Display name for outgoing emails |
+
+---
+
+## Deploy to production
+
+### Step 1 — Aiven (database)
+
+1. Sign up at **aiven.io** → create a free **MySQL** service.
+2. Once running, copy the connection details from the Aiven console:
+   - Host, Port, User, Password, Database name (`defaultdb` on free tier).
+3. Run the migration against Aiven (reads from your `.env`):
+   ```bash
+   # Set DB_* in .env to your Aiven values first
+   python3 scratch/migrate_to_aiven.py
+   ```
+4. To set real officer emails (so notifications actually land in inboxes), uncomment and edit the `OFFICER EMAIL OVERRIDES` block at the bottom of `Backend/migrate_all.sql`, then run those `UPDATE` statements manually.
+
+### Step 2 — Brevo (email)
+
+1. Sign up at **brevo.com** → go to **SMTP & API → API Keys** → create a key.
+2. Go to **Senders & IPs → Senders** → add and verify your sender email address.
+3. Copy the API key — you'll add it to Render in the next step.
+
+### Step 3 — Google reCAPTCHA
+
+1. Go to **[google.com/recaptcha/admin](https://www.google.com/recaptcha/admin)**.
+2. Register a new site → choose **reCAPTCHA v2 "I'm not a robot"** (or Invisible).
+3. Add your Render domain (e.g. `your-app.onrender.com`) to the allowed domains.
+4. Copy the **Site Key** (public) and **Secret Key** (private).
+
+### Step 4 — Render (hosting)
+
+1. Sign up at **render.com** → **New → Web Service** → connect your GitHub repo.
+2. Settings:
+   - **Runtime:** Python 3
+   - **Build command:** `pip install -r requirements.txt`
+   - **Start command:** `gunicorn Backend.app:app`
+   - (The `Procfile` already sets this — Render picks it up automatically.)
+3. Under **Environment**, add every variable from your `.env`:
+
+   ```
+   DB_HOST          → your Aiven host
+   DB_PORT          → your Aiven port
+   DB_USER          → avnadmin (or your Aiven user)
+   DB_PASSWORD      → your Aiven password
+   DB_NAME          → defaultdb
+   DB_POOL_SIZE     → 10
+   FLASK_DEBUG      → false
+   CORS_ORIGIN      → https://your-app.onrender.com
+   RECAPTCHA_SECRET_KEY  → your real secret key
+   RECAPTCHA_PUBLIC_KEY  → your real site key
+   BREVO_API_KEY    → your Brevo API key
+   BREVO_FROM_EMAIL → your verified sender email
+   BREVO_FROM_NAME  → Bengaluru Police Themis's Domain Team
+   AUTH_SESSION_TTL_HOURS → 12
+   ENABLE_ASSIGNMENT_SCHEDULER → true
+   ```
+
+4. Click **Deploy**. Render builds and starts the app. Your URL is `https://your-app.onrender.com`.
+
+> **Free tier note:** Render spins down after 15 minutes of inactivity. The first request after sleep takes ~30 seconds. Upgrade to a paid plan to avoid this.
+
+### Step 5 — Update reCAPTCHA domain
+
+Go back to your reCAPTCHA admin console and confirm your Render domain is in the allowed list.
+
+---
+
+## Project structure
+
+```
+Crime_DB/
+├── Backend/
+│   ├── app.py                  # Flask API — all routes, auth guards, validation
+│   ├── queries.py              # all SQL (explicit columns, parameterized, paginated)
+│   ├── db_connection.py        # pooled MySQL connection (env-configurable size)
+│   ├── assignment_algorithm.py # automated complaint → case assignment
+│   ├── email_utils.py          # Brevo HTTP email + PDF dossier (mock fallback)
+│   ├── otp_store.py            # in-memory email OTP store (rate-limited)
+│   ├── config.py               # env-driven config
+│   ├── migrate_all.sql         # single consolidated migration (schema+indexes+seed)
+│   ├── test_evidence_features.py
+│   └── test_security_guards.py
+├── Frontend/
+│   ├── src/                    # modular JSX + CSS sources — edit these
+│   │   ├── 00-config.jsx       # API base, auth helpers, apiFetch
+│   │   ├── 01-icons.jsx
+│   │   ├── 02-shared.jsx       # shared components + style constants
+│   │   ├── 03-layout.jsx       # page shell + masthead
+│   │   ├── 04-LandingPage.jsx
+│   │   ├── 05-PublicPortal.jsx # complaint form, browse, access request
+│   │   ├── 06-StaffDashboard.jsx
+│   │   ├── 07-AdminDashboard.jsx
+│   │   ├── 08-LoginPage.jsx
+│   │   ├── 09-App.jsx
+│   │   └── styles.css
+│   ├── index.template.html     # HTML shell with __STYLES__ / __APP_JS__ slots
+│   ├── build.py                # assembles src/ → crms_frontend.html
+│   ├── crms_frontend.html      # GENERATED — do not edit by hand
+│   └── README.md
+├── scratch/
+│   ├── migrate_to_aiven.py     # apply migrate_all.sql to a managed host
+│   ├── migrate_indexes.py      # idempotent index applier (--dry-run supported)
+│   └── test_conn.py            # quick DB connectivity check
+├── .env.example
+├── .gitignore
+├── Procfile
+└── requirements.txt
 ```
 
-> **Never edit `Frontend/crms_frontend.html` directly** — it's generated.
-> See `Frontend/README.md` for the module layout and load order.
-
 ---
 
-## Security 🔐
-- **Passwords:** bcrypt hashing (cost 12).
-- **Sessions:** random 64‑char tokens, single‑device enforcement, TTL + revocation.
-  Protected routes require `X-Officer-Id` + `X-Session-Token`, validated per request.
-- **Authorization:** role‑based guards — reads require a valid officer session;
-  destructive/admin actions (create/delete case, manage officers/assignments,
-  promote/reject complaints, run the assignment job) require the **admin** role.
-- **Performance:** consolidated DB indexes back all common filter/sort paths;
-  list endpoints are paginated with a hard page‑size cap.
-- **Error hygiene:** internal exceptions are logged server‑side; clients receive
-  generic messages (no stack/DB detail leakage).
-- **Headers:** `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
-  `Cache-Control: no-store` on every response.
-- **Input:** parameterized SQL throughout; file uploads restricted by extension +
-  size with path‑traversal guards; reCAPTCHA on public forms.
+## Frontend — editing & building
 
-**Before production:** rotate any credentials that were ever in plaintext, set
-`CORS_ORIGIN` to your real frontend origin, use real reCAPTCHA keys, keep
-`FLASK_DEBUG=false`, and serve over HTTPS.
+The UI is modular under `Frontend/src/`. A Python build step assembles the modules into the single `crms_frontend.html` that Flask serves. No Node, no bundler.
 
----
-
-## Testing 🧪
 ```bash
-# From Backend/ (with the venv active)
+# After editing any file in Frontend/src/:
+python3 Frontend/build.py
+
+# CI guard — fails if the generated file is stale:
+python3 Frontend/build.py --check
+```
+
+> **Never edit `Frontend/crms_frontend.html` directly.** It is regenerated from `src/` and your changes will be overwritten.
+
+The browser always receives the single assembled file — same performance as before modularization.
+
+---
+
+## API reference
+
+All responses: `{ "success": true/false, "data": …, "error": "…" }`.  
+List endpoints also return `"pagination": { total_records, total_pages, current_page, limit }`.  
+Protected routes require headers: `X-Officer-Id: <id>` and `X-Session-Token: <token>` (issued at login).
+
+### Public (no auth)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Serves the frontend |
+| GET | `/health` | Health check |
+| GET | `/stats` | Landing page statistics |
+| GET | `/public/cases` | Browse cases (paginated, filterable) |
+| POST | `/public/verify-email` | Validate email domain (MX check) |
+| POST | `/public/otp/send` | Send OTP to email |
+| POST | `/public/otp/verify` | Verify OTP → returns token |
+| POST | `/public/complaint` | Submit complaint (CAPTCHA + OTP token) |
+| POST | `/public/access-request` | Request case dossier access (CAPTCHA) |
+
+### Auth
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/auth/login` | Login with badge + password + CAPTCHA |
+| POST | `/auth/logout` | Revoke session |
+
+### Cases — officer
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/cases`, `/api/cases` | Filtered, paginated, visibility-scoped |
+| GET | `/cases/<id>` | Case detail |
+| POST | `/cases` | Create case |
+| PATCH | `/cases/<id>` | Update fields (status change = admin only) |
+| DELETE | `/cases/<id>` | Hard delete — **admin only** |
+| GET | `/cases/<id>/officers` | Assigned officers |
+| GET | `/cases/<id>/highest-ranked` | Highest-ranked officer on case |
+| GET/POST | `/cases/<id>/updates` | Timeline (paginated) |
+| GET/POST | `/cases/<id>/evidence` | Evidence list / upload |
+| GET | `/cases/evidence/file/<id>/<name>` | Inline file view |
+| GET | `/cases/<id>/evidence/<name>/download` | Download |
+| DELETE | `/cases/evidence/<id>` | Delete evidence |
+| POST | `/cases/<id>/request-dossier` | Email dossier to self |
+
+### Officers & assignments — officer/admin
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET | `/officers` | officer | Paginated |
+| POST | `/officers` | **admin** | Create officer |
+| GET | `/officers/available?case_id=` | officer | Officers not on a case |
+| GET | `/case-officer` | officer | All pairings (paginated) |
+| POST/DELETE | `/case-officer` | **admin** | Assign / unassign |
+| POST | `/case-officer/add` | **admin** | Add + email notify |
+| POST | `/case-officer/remove` | **admin** | Remove + email notify |
+
+### Admin
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/dashboard` | Aggregate stats |
+| GET | `/admin/cases` | All cases (paginated) |
+| GET | `/analytics` | Charts data |
+| GET | `/assignments/pending` | Pending complaint queue |
+| POST | `/assignments/process` | Trigger auto-assignment |
+| GET | `/public-complaints` | Complaint review queue |
+| POST | `/public-complaints/<id>/promote` | Promote to case |
+| POST | `/public-complaints/<id>/reject` | Reject |
+| GET | `/api/access-requests` | Access request list |
+| POST | `/api/access-requests/<id>/approve` | Approve → email PDF |
+| POST | `/api/access-requests/<id>/reject` | Reject → notify |
+| GET/POST | `/admin/recommendations[...]` | Assignment recommendation review |
+
+---
+
+## Performance optimizations
+
+The following optimizations have been applied to keep the app fast under load:
+
+### 1. Connection pooling
+`db_connection.py` uses `mysql.connector.pooling.MySQLConnectionPool`. Pool size is configurable via `DB_POOL_SIZE` (default 10, clamped 1–32). The pool is initialized once at startup and shared across all requests in a process.
+
+```
+Total DB connections = (Gunicorn workers) × DB_POOL_SIZE
+Keep this under your DB's max_connections (Aiven free ≈ 20).
+```
+
+### 2. JOIN queries instead of multiple round-trips
+All multi-table reads use a single JOIN query rather than separate queries per record. Examples:
+- Case lists fetch assigned officer IDs in the same query via `GROUP_CONCAT`.
+- Officer workload counts use a single conditional aggregate (`SUM(status = 'Active')`) instead of two `COUNT(*)` queries.
+- `/case-officer/add` and `/case-officer/remove` use the existing join-based helpers.
+
+### 3. Explicit column selection — no `SELECT *`
+Every query selects only the columns its consumers actually read. `SELECT *` has been eliminated across `queries.py` and `assignment_algorithm.py`. Benefits:
+- Less data transferred over the network from Aiven.
+- Smaller result sets to deserialize.
+- Queries are stable against future schema additions.
+
+### 4. Database indexes
+All common filter and sort columns are indexed. Applied via `Backend/migrate_all.sql` (inline with each table) and idempotently via `scratch/migrate_indexes.py`.
+
+| Table | Index | Backs |
+|-------|-------|-------|
+| `cases` | `(status, date_reported)` | Status filter + date sort |
+| `cases` | `(crime_type)` | Crime type filter + analytics |
+| `cases` | `(date_reported)` | Unfiltered sort + 6-month range |
+| `officers` | `(badge)`, `(name)`, `(role)` | Login lookup, admin lookup |
+| `public_complaints` | `(status, submitted_at)` | Pending queue filter + sort |
+| `case_access_requests` | `(requested_at)` | Requests list sort |
+| `case_updates` | `(case_id, created_at)` | Timeline per case |
+| `case_evidence` | `(case_id, created_at)` | Evidence per case |
+
+### 5. Server-side pagination
+Every list endpoint accepts `?page=` and `?limit=` (default 25, max 100). The DB returns only the requested page — no full-table loads.
+
+### 6. Modular frontend — no runtime cost
+The frontend source is split into 10 modules under `Frontend/src/` for maintainability, but `build.py` assembles them into a single file before serving. The browser receives the same single file as before — zero performance difference.
+
+---
+
+## Security
+
+- **Passwords:** bcrypt (cost 12).
+- **Sessions:** random 64-char tokens, single-device enforcement, TTL + revocation. Every protected request validates `X-Officer-Id` + `X-Session-Token`.
+- **Authorization:** role guards on every route — reads require a valid officer session; writes/admin actions require the `admin` role (server-enforced, not just client-side).
+- **Error hygiene:** exceptions logged server-side; clients receive generic messages — no stack traces or DB details leak.
+- **HTTP headers:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Cache-Control: no-store` on every response.
+- **Input:** parameterized SQL everywhere; file uploads restricted by extension + size with path-traversal guards; reCAPTCHA on all public forms; email OTP on complaint submission.
+- **CORS:** origin is env-driven — set `CORS_ORIGIN` to your exact frontend URL in production.
+
+---
+
+## Testing
+
+```bash
+# From the project root, with venv active:
+cd Backend
 python3 -m pytest -q
 ```
-- `test_evidence_features.py` — upload validation, evidence access control, status‑update auth.
-- `test_security_guards.py` — auth/role guards, session validation, error hygiene, security headers.
+
+| File | What it tests |
+|------|---------------|
+| `test_evidence_features.py` | Upload validation, evidence access control, status-update auth |
+| `test_security_guards.py` | Auth/role guards, session validation, error hygiene, security headers |
+
+Both suites mock the database layer — no live DB needed to run them.
 
 ---
 
-## Deployment
-- **Hosting:** Render (free tier) via `Procfile` → `gunicorn Backend.app:app`.
-- **Database:** Aiven managed MySQL (SSL).
-- **Email:** Brevo HTTP API (Render free tier blocks outbound SMTP ports).
-- Configure all of the above through environment variables in the Render dashboard.
+## Contributing
+
+1. Fork the repo and create a feature branch.
+2. Edit `Frontend/src/` for UI changes, then run `python3 Frontend/build.py`.
+3. Edit `Backend/` for API/logic changes.
+4. Run `python3 -m pytest -q` (all tests must pass).
+5. Run `python3 Frontend/build.py --check` (generated file must be up to date).
+6. Open a pull request with a clear description of what changed and why.
 
 ---
 
-## Contributing 🤝
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feat/awesome-feature`).
-3. Edit `Frontend/src/` (then `python3 Frontend/build.py`) and/or `Backend/`.
-4. Ensure `pytest` passes and `python3 Frontend/build.py --check` is clean.
-5. Submit a pull request with a clear description.
+## License
 
----
-
-## License 📄
-Licensed under the MIT License — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
 ---
 
 ## Contact & Acknowledgements
-- **Maintainer**: Venzz ([@venzz](https://github.com/venzz))
-- **Thanks** to the Bengaluru Police Department for the domain context.
-- **Special thanks** to the open‑source community for the libraries used.
+
+- **Maintainer:** Venzz ([@adarsh-v-h](https://github.com/adarsh-v-h))
+- Built with Flask, MySQL, React, Tailwind CSS, Framer Motion, ReportLab, Brevo, and the Unsplash image library.
