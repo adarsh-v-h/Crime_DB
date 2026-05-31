@@ -16,7 +16,6 @@ venv/
 .venv/
 env/
 ENV/
-Frontend/crms_frontend.html
 node_modules/
 npm-debug.log*
 yarn-debug.log*
