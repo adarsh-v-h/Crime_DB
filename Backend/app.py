@@ -2044,6 +2044,22 @@ def admin_get_all_cases():
         return _db_err(e)
 
 
+@app.route("/admin/map-data", methods=["GET"])
+def admin_map_data():
+    """
+    GET /admin/map-data
+    Returns aggregated station + case-location data for the admin map view.
+    Admin role required. Geocoding to coordinates happens client-side.
+    """
+    _, err = _require_admin()
+    if err:
+        return err
+    try:
+        return _ok(queries.get_map_data())
+    except mysql.connector.Error as e:
+        return _db_err(e)
+
+
 @app.route("/admin/dashboard", methods=["GET"])
 def admin_dashboard_stats():
     """

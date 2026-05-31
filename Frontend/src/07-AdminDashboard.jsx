@@ -377,7 +377,23 @@
                             >
                                 All Cases
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab("map")}
+                                className={`pb-3 text-[10px] font-bold uppercase tracking-[0.16em] transition-all border-b-2 sm:text-xs font-sans ${
+                                    activeTab === "map"
+                                        ? "border-accent text-ink-black"
+                                        : "border-transparent text-ink/50 hover:text-accent"
+                                }`}
+                            >
+                                Map
+                            </button>
                         </motion.div>
+
+                        {/* MAP TAB — mounted only when active so Leaflet sizes correctly */}
+                        {activeTab === "map" && (
+                            <CrimeMap officer={officer} />
+                        )}
 
                         {/* OVERVIEW TAB */}
                         {activeTab === "overview" && (

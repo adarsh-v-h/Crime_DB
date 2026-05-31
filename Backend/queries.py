@@ -574,6 +574,59 @@ def get_analytics():
         conn.close()
 
 
+def get_map_data():
+    """
+    Aggregated data for the admin map view.
+      - stations: distinct officer stations (green markers) with officer counts
+      - case_locations: distinct case locations (red markers) with case counts
+        plus a status breakdown so the frontend can colour/label them.
+    Aggregating server-side keeps the payload small and avoids overlapping markers
+    for the same place. Geocoding (name -> lat/lng) happens client-side.
+    """
+    conn = get_db()
+    cur  = conn.cursor()
+    try:
+        # Police stations — distinct, non-empty officer.station values.
+        cur.execute(
+            """SELECT station, COUNT(*) AS officer_count
+               FROM officers
+               WHERE station IS NOT NULL AND TRIM(station) <> ''
+               GROUP BY station
+               ORDER BY officer_count DESC"""
+        )
+        stations = [
+            {"station": r[0], "officer_count": int(r[1])}
+            for r in cur.fetchall()
+        ]
+
+        # Case locations — distinct, non-empty case.location values with counts
+        # and a per-location active count for richer marker tooltips.
+        cur.execute(
+            """SELECT `location`,
+                      COUNT(*) AS case_count,
+                      COALESCE(SUM(`status` = 'Active'), 0) AS active_count,
+                      COALESCE(SUM(`status` = 'Solved'), 0) AS solved_count
+               FROM cases
+               WHERE `location` IS NOT NULL AND TRIM(`location`) <> ''
+               GROUP BY `location`
+               ORDER BY case_count DESC"""
+        )
+        case_locations = [
+            {
+                "location": r[0],
+                "case_count": int(r[1]),
+                "active_count": int(r[2]),
+                "solved_count": int(r[3]),
+            }
+            for r in cur.fetchall()
+        ]
+
+        return {"stations": stations, "case_locations": case_locations}
+    finally:
+        cur.close()
+        conn.close()
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC PORTAL — complaint + access request
 # ──────────────────────────────────────────────────────────────────────────────

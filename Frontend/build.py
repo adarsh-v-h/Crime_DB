@@ -33,6 +33,7 @@ MODULE_ORDER = [
     "01-icons.jsx",
     "02-shared.jsx",
     "03-layout.jsx",
+    "03b-CrimeMap.jsx",
     "04-LandingPage.jsx",
     "05-PublicPortal.jsx",
     "06-StaffDashboard.jsx",

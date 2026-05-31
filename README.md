@@ -34,13 +34,14 @@ Flask · MySQL · React · Deployed on Render + Aiven + Brevo.
 |-----|-----------------|
 | **Citizens** | File complaints (reCAPTCHA + email OTP), browse public cases, request dossier access |
 | **Officers (inspector)** | Log in, manage cases, upload evidence, add timeline updates, approve/reject access requests |
-| **Admin** | Everything above + create officers, hard-delete cases, promote/reject complaints, trigger auto-assignment |
+| **Admin** | Everything above + create officers, hard-delete cases, promote/reject complaints, trigger auto-assignment, view the geospatial operations map |
 
 Key features:
 - Role-based single-device login with session tokens
 - Automated complaint → case assignment (background scheduler)
 - PDF dossier generation + email delivery via Brevo
 - Geolocation auto-fill on the complaint form
+- Admin geospatial map (Leaflet + OpenStreetMap): police stations and case locations plotted across Bengaluru
 - Editorial magazine-style UI (no bundler — React via CDN)
 - Server-side pagination on every list endpoint
 - Consolidated DB indexes on all filter/sort columns
