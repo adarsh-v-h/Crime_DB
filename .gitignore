@@ -63,6 +63,9 @@ scripts/
 
 Backend/uploads/
 
+# Private: real officer test emails (never commit)
+Backend/update_officer_emails.sql
+
 *.pdf
 ca.pem
 scratch/

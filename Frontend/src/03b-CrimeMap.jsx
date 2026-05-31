@@ -1,19 +1,20 @@
         // ─── CRIME MAP (Leaflet + OpenStreetMap) ────────────────────────────────
-        // Admin map of Bengaluru: green markers = police stations, red markers =
-        // case locations. Free-text places (e.g. "JP Nagar") are geocoded via
-        // Nominatim, anchored to Bengaluru, and cached so they resolve once.
+        // Admin map of Bengaluru: green pins = police stations, red pins = case
+        // locations. Coordinates come pre-resolved from the server (DB geocode
+        // cache), so the map renders instantly. If the server is still warming the
+        // cache for never-seen places ("pending" > 0), we poll a few times to pick
+        // up the freshly-geocoded coordinates — no client-side geocoding at all.
         const CrimeMap = ({ officer }) => {
             const mapElRef = useRef(null);     // the <div> the map mounts into
             const mapRef = useRef(null);       // the Leaflet map instance
-            const layerRef = useRef(null);     // marker layer group (for clean redraws)
+            const layerRef = useRef(null);     // marker layer group (cleared on redraw)
 
-            const [status, setStatus] = useState("loading");   // loading | geocoding | ready | error
+            const [status, setStatus] = useState("loading");   // loading | warming | ready | error
             const [error, setError] = useState(null);
-            const [progress, setProgress] = useState({ done: 0, total: 0 });
-            const [counts, setCounts] = useState({ stations: 0, locations: 0, unresolved: 0 });
+            const [counts, setCounts] = useState({ stations: 0, locations: 0, pending: 0 });
 
-            // Build a coloured map pin as a div icon (no external image assets),
-            // styled to match the editorial palette. `count` shows inside the pin.
+            // Coloured map pin as a div icon (no external image assets), styled to
+            // match the editorial palette. `count` shows inside the pin.
             const makeIcon = (color, count) => window.L.divIcon({
                 className: "",
                 html: `<div style="position:relative;width:26px;height:34px;">
@@ -30,36 +31,59 @@
                 popupAnchor: [0, -32],
             });
 
+            // Draw all markers that have coordinates; returns the plotted counts.
+            const draw = (stations, caseLocations) => {
+                if (!layerRef.current) return { stations: 0, locations: 0 };
+                layerRef.current.clearLayers();
+                const bounds = [];
+                let stationMarks = 0, caseMarks = 0;
+
+                stations.forEach((s) => {
+                    if (s.lat == null || s.lng == null) return;
+                    window.L.marker([s.lat, s.lng], { icon: makeIcon("#3f6b4a", s.officer_count) })
+                        .bindPopup(`<strong>${s.station}</strong><br/>Police station · ${s.officer_count} officer(s)`)
+                        .addTo(layerRef.current);
+                    bounds.push([s.lat, s.lng]);
+                    stationMarks++;
+                });
+                caseLocations.forEach((c) => {
+                    if (c.lat == null || c.lng == null) return;
+                    window.L.marker([c.lat, c.lng], { icon: makeIcon("#8a1c1c", c.case_count) })
+                        .bindPopup(`<strong>${c.location}</strong><br/>${c.case_count} case(s)`
+                            + ` · ${c.active_count} active · ${c.solved_count} solved`)
+                        .addTo(layerRef.current);
+                    bounds.push([c.lat, c.lng]);
+                    caseMarks++;
+                });
+
+                if (bounds.length && mapRef.current) {
+                    try { mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 }); }
+                    catch { /* single point / fitBounds edge cases — ignore */ }
+                }
+                return { stations: stationMarks, locations: caseMarks };
+            };
+
             useEffect(() => {
                 let cancelled = false;
+                let pollTimer = null;
+                const MAX_POLLS = 8;   // ~ a few seconds apart; bounded so we never loop forever
 
-                const init = async () => {
-                    // Guard: Leaflet must have loaded from the CDN.
+                const fetchData = async () => {
+                    const res = await apiFetch("/admin/map-data", {
+                        headers: { "X-Officer-Id": officer?.officer_id?.toString() },
+                    });
+                    if (!res.success) throw new Error(res.error || "Failed to load map data");
+                    return res.data;
+                };
+
+                const run = async () => {
                     if (!window.L) {
                         setStatus("error");
                         setError("Map library failed to load. Check your network connection.");
                         return;
                     }
 
-                    // 1. Fetch aggregated station + case-location data.
-                    let data;
-                    try {
-                        const res = await apiFetch("/admin/map-data", {
-                            headers: { "X-Officer-Id": officer?.officer_id?.toString() },
-                        });
-                        if (!res.success) throw new Error(res.error || "Failed to load map data");
-                        data = res.data;
-                    } catch (err) {
-                        if (cancelled) return;
-                        setStatus("error");
-                        setError(err.message);
-                        return;
-                    }
-
-                    const stations = data.stations || [];
-                    const caseLocations = data.case_locations || [];
-
-                    // 2. Create the map once (centred on Bengaluru).
+                    // Create the map once, centred on Bengaluru.
                     if (!mapRef.current && mapElRef.current) {
                         mapRef.current = window.L.map(mapElRef.current).setView(
                             [BENGALURU_CENTER.lat, BENGALURU_CENTER.lng], 12
@@ -70,63 +94,47 @@
                         }).addTo(mapRef.current);
                         layerRef.current = window.L.layerGroup().addTo(mapRef.current);
                     }
-                    // Map div may have been sized after creation; nudge Leaflet to recalc.
                     setTimeout(() => mapRef.current && mapRef.current.invalidateSize(), 100);
 
-                    // 3. Geocode every unique place sequentially (Nominatim politeness).
-                    const unique = [
-                        ...stations.map((s) => ({ kind: "station", name: s.station, meta: s })),
-                        ...caseLocations.map((c) => ({ kind: "case", name: c.location, meta: c })),
-                    ];
-                    setProgress({ done: 0, total: unique.length });
-                    setStatus("geocoding");
-
-                    const bounds = [];
-                    let unresolved = 0;
-                    let stationMarks = 0;
-                    let caseMarks = 0;
-
-                    for (let i = 0; i < unique.length; i++) {
+                    let polls = 0;
+                    const load = async () => {
                         if (cancelled) return;
-                        const item = unique[i];
-                        const coord = await geocodePlace(item.name, item.kind);
-                        setProgress({ done: i + 1, total: unique.length });
-
-                        if (!coord) { unresolved++; }
-                        else if (layerRef.current) {
-                            const isStation = item.kind === "station";
-                            const color = isStation ? "#3f6b4a" : "#8a1c1c";  // editorial green / oxblood
-                            const badgeCount = isStation ? item.meta.officer_count : item.meta.case_count;
-                            const popup = isStation
-                                ? `<strong>${item.name}</strong><br/>Police station · ${item.meta.officer_count} officer(s)`
-                                : `<strong>${item.name}</strong><br/>${item.meta.case_count} case(s)`
-                                  + ` · ${item.meta.active_count} active · ${item.meta.solved_count} solved`;
-                            window.L.marker([coord.lat, coord.lng], { icon: makeIcon(color, badgeCount) })
-                                .bindPopup(popup)
-                                .addTo(layerRef.current);
-                            bounds.push([coord.lat, coord.lng]);
-                            if (isStation) stationMarks++; else caseMarks++;
+                        let data;
+                        try {
+                            data = await fetchData();
+                        } catch (err) {
+                            if (cancelled) return;
+                            setStatus("error");
+                            setError(err.message);
+                            return;
                         }
+                        if (cancelled) return;
 
-                        // Only pause between actual network calls. Cached lookups are instant;
-                        // we approximate by always sleeping a short, polite interval.
-                        await sleep(1100);
-                    }
+                        const stations = data.stations || [];
+                        const caseLocations = data.case_locations || [];
+                        const plotted = draw(stations, caseLocations);
+                        const pending = data.pending || 0;
 
-                    if (cancelled) return;
-                    setCounts({ stations: stationMarks, locations: caseMarks, unresolved });
-                    if (bounds.length && mapRef.current) {
-                        try { mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 }); }
-                        catch { /* single point / fitBounds edge cases — ignore */ }
-                    }
-                    setStatus("ready");
+                        setCounts({ stations: plotted.stations, locations: plotted.locations, pending });
+
+                        if (pending > 0 && polls < MAX_POLLS) {
+                            // Server is still warming the cache for new places — poll again.
+                            polls++;
+                            setStatus("warming");
+                            pollTimer = setTimeout(load, 2500);
+                        } else {
+                            setStatus("ready");
+                        }
+                    };
+
+                    await load();
                 };
 
-                init();
+                run();
 
-                // Cleanup: stop in-flight loop and tear down the map on unmount.
                 return () => {
                     cancelled = true;
+                    if (pollTimer) clearTimeout(pollTimer);
                     if (mapRef.current) {
                         mapRef.current.remove();
                         mapRef.current = null;
@@ -157,16 +165,16 @@
                     </div>
 
                     {/* Status line */}
-                    {status === "geocoding" && (
+                    {status === "warming" && (
                         <p className="mb-2 text-[11px] font-sans text-ink-muted">
-                            Mapping locations… {progress.done}/{progress.total}
-                            <span className="ml-1 italic">(first load geocodes each place once, then caches it)</span>
+                            Resolving {counts.pending} new location(s) on the server…
+                            <span className="ml-1 italic">they're cached once resolved, so this only happens the first time.</span>
                         </p>
                     )}
                     {status === "ready" && (
                         <p className="mb-2 text-[11px] font-sans text-ink-muted">
                             {counts.stations} station(s) · {counts.locations} case location(s) plotted
-                            {counts.unresolved > 0 && ` · ${counts.unresolved} could not be located`}
+                            {counts.pending > 0 && ` · ${counts.pending} could not be located`}
                         </p>
                     )}
                     {status === "error" && (
@@ -177,10 +185,10 @@
 
                     {/* The map canvas */}
                     <div className="crms-map relative">
-                        {(status === "loading" || status === "geocoding") && (
+                        {(status === "loading" || status === "warming") && (
                             <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center">
                                 <div className="rounded-full border-2 border-ink/15 bg-paper-card/90 px-4 py-2 text-[11px] font-sans font-semibold text-ink-muted shadow">
-                                    {status === "loading" ? "Loading map…" : "Plotting markers…"}
+                                    {status === "loading" ? "Loading map…" : "Resolving new locations…"}
                                 </div>
                             </div>
                         )}

@@ -2,7 +2,7 @@
 
 # Themis's Domain — Crime Record Management System
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/) [![Build](https://img.shields.io/badge/build-passing-success.svg)](#)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENCE) [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/) [![Build](https://img.shields.io/badge/build-passing-success.svg)](#)
 
 **A police investigation dashboard for the Bengaluru Police Department.**  
 Flask · MySQL · React · Deployed on Render + Aiven + Brevo.
@@ -41,7 +41,7 @@ Key features:
 - Automated complaint → case assignment (background scheduler)
 - PDF dossier generation + email delivery via Brevo
 - Geolocation auto-fill on the complaint form
-- Admin geospatial map (Leaflet + OpenStreetMap): police stations and case locations plotted across Bengaluru
+- Admin geospatial map (Leaflet + OpenStreetMap): police stations and case locations plotted across Bengaluru, with a permanent server-side geocode cache
 - Editorial magazine-style UI (no bundler — React via CDN)
 - Server-side pagination on every list endpoint
 - Consolidated DB indexes on all filter/sort columns
@@ -272,6 +272,7 @@ Crime_DB/
 │   ├── assignment_algorithm.py # automated complaint → case assignment
 │   ├── email_utils.py          # Brevo HTTP email + PDF dossier (mock fallback)
 │   ├── otp_store.py            # in-memory email OTP store (rate-limited)
+│   ├── geocode.py              # server-side geocoding + DB cache (admin map)
 │   ├── config.py               # env-driven config
 │   ├── migrate_all.sql         # single consolidated migration (schema+indexes+seed)
 │   ├── test_evidence_features.py
@@ -381,6 +382,7 @@ Protected routes require headers: `X-Officer-Id: <id>` and `X-Session-Token: <to
 |--------|------|-------------|
 | GET | `/admin/dashboard` | Aggregate stats |
 | GET | `/admin/cases` | All cases (paginated) |
+| GET | `/admin/map-data` | Stations + case locations with cached coordinates for the map |
 | GET | `/analytics` | Charts data |
 | GET | `/assignments/pending` | Pending complaint queue |
 | POST | `/assignments/process` | Trigger auto-assignment |
@@ -438,7 +440,37 @@ Every list endpoint accepts `?page=` and `?limit=` (default 25, max 100). The DB
 ### 6. Modular frontend — no runtime cost
 The frontend source is split into 10 modules under `Frontend/src/` for maintainability, but `build.py` assembles them into a single file before serving. The browser receives the same single file as before — zero performance difference.
 
+### 7. Server-side geocode cache (admin map)
+The admin map plots police stations and case locations across Bengaluru. Place
+names (even vague ones like "JP Nagar") are resolved to coordinates **once** by
+the backend (`geocode.py`) via OpenStreetMap Nominatim, then stored permanently
+in the `geocode_cache` table — shared across all admins and browsers.
+
+- `/admin/map-data` returns coordinates straight from the DB cache, so the map
+  renders **instantly** after the first warm-up.
+- Never-seen places are geocoded in a **background thread**; the response reports
+  a `pending` count and the client polls briefly to pick up new coordinates.
+- Confirmed-unresolvable names (e.g. org units like "Cyber Crime Division") are
+  cached as misses so they're never retried.
+- Map tiles, the Leaflet library, and (formerly) geocoding all run client-side or
+  are cached — nothing here depends on Render's blocked outbound SMTP ports.
+
 ---
+
+## Docker (optional)
+
+The project ships a `Dockerfile` and `docker-compose.yml` for one-command local
+setup — handy if you don't want to install Python/MySQL on your machine.
+
+```bash
+# Build + run the app and a MySQL container together:
+docker compose up --build
+# App: http://localhost:5000   (migration runs automatically on first boot)
+```
+
+> Docker is **optional**. Production on Render does **not** use it — Render builds
+> from the `Procfile`/`requirements.txt` directly. Docker is purely a convenience
+> for local development and for hosts that expect a container image.
 
 ## Security
 

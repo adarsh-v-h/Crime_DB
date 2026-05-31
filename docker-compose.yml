@@ -1,0 +1,49 @@
+# ─── Themis's Domain — local dev stack (optional) ─────────────────────────────
+# One command to run the app + a MySQL database with the schema + seed data:
+#     docker compose up --build
+# App:  http://localhost:5000
+#
+# This is for LOCAL DEVELOPMENT ONLY. Production uses Render (Procfile), not this.
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: crms
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      # migrate_all.sql runs automatically the FIRST time the DB is created.
+      - ./Backend/migrate_all.sql:/docker-entrypoint-initdb.d/01_migrate_all.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: crms
+      DB_POOL_SIZE: "10"
+      FLASK_DEBUG: "false"
+      CORS_ORIGIN: "*"
+      # Google's public reCAPTCHA TEST keys (accept any token) — local dev only.
+      RECAPTCHA_SECRET_KEY: "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
+      RECAPTCHA_PUBLIC_KEY: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+      # Leave Brevo empty → offline mock email mode.
+      BREVO_API_KEY: ""
+      BREVO_FROM_EMAIL: ""
+
+volumes:
+  db_data:

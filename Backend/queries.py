@@ -52,6 +52,69 @@ def ensure_auth_schema():
         conn.close()
 
 
+def ensure_geocode_schema():
+    """
+    Creates the geocode cache table — a permanent, shared store of
+    place-name -> lat/lng so the map never re-geocodes the same place.
+    `place_key` is the normalized lookup key (e.g. "station:Whitefield PS").
+    A resolved=0 row records a confirmed miss so we don't retry forever.
+    """
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS geocode_cache (
+                place_key   VARCHAR(255) NOT NULL,
+                lat         DOUBLE DEFAULT NULL,
+                lng         DOUBLE DEFAULT NULL,
+                resolved    TINYINT(1) NOT NULL DEFAULT 0,
+                updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (place_key)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"""
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_geocode_cache():
+    """Returns the full geocode cache as {place_key: {lat, lng, resolved}}."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT place_key, lat, lng, resolved FROM geocode_cache")
+        out = {}
+        for key, lat, lng, resolved in cur.fetchall():
+            out[key] = {
+                "lat": float(lat) if lat is not None else None,
+                "lng": float(lng) if lng is not None else None,
+                "resolved": bool(resolved),
+            }
+        return out
+    finally:
+        cur.close()
+        conn.close()
+
+
+def upsert_geocode(place_key, lat, lng, resolved):
+    """Inserts or updates a single geocode cache entry."""
+    conn = get_db()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO geocode_cache (place_key, lat, lng, resolved)
+               VALUES (%s, %s, %s, %s)
+               ON DUPLICATE KEY UPDATE lat = VALUES(lat), lng = VALUES(lng),
+                                       resolved = VALUES(resolved)""",
+            (place_key, lat, lng, 1 if resolved else 0)
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # CASES
 # ──────────────────────────────────────────────────────────────────────────────

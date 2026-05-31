@@ -28,12 +28,14 @@ if __package__:
     from . import queries
     from .assignment_algorithm import process_pending_complaints
     from . import email_utils
+    from . import geocode
 else:
     import config
     from db_connection import init_pool, get_db
     import queries
     from assignment_algorithm import process_pending_complaints
     import email_utils
+    import geocode
 
 def verify_email_mx(email):
     """
@@ -159,6 +161,7 @@ def startup_services():
     """
     init_pool()
     queries.ensure_auth_schema()
+    queries.ensure_geocode_schema()
     if os.getenv("ENABLE_ASSIGNMENT_SCHEDULER", "true").lower() == "true":
         start_assignment_scheduler()
 
@@ -2048,14 +2051,56 @@ def admin_get_all_cases():
 def admin_map_data():
     """
     GET /admin/map-data
-    Returns aggregated station + case-location data for the admin map view.
-    Admin role required. Geocoding to coordinates happens client-side.
+    Returns aggregated stations + case locations for the admin map, each with
+    cached lat/lng coordinates attached where known. Coordinates come from the
+    server-side geocode cache (DB), so the map renders instantly.
+
+    Any place not yet in the cache is geocoded in a background thread; the
+    response includes "pending" (count not-yet-resolved) so the client can poll
+    again shortly to pick up the freshly-cached coordinates.
+
+    Admin role required.
     """
     _, err = _require_admin()
     if err:
         return err
     try:
-        return _ok(queries.get_map_data())
+        data = queries.get_map_data()
+        cache = queries.get_geocode_cache()
+
+        items_to_resolve = []   # (kind, place) tuples lacking a resolved coord
+        pending = 0
+
+        def attach(kind, entry, name):
+            nonlocal pending
+            key = f"{kind}:{(name or '').strip()}"
+            cached = cache.get(key)
+            if cached and cached["resolved"] and cached["lat"] is not None:
+                entry["lat"] = cached["lat"]
+                entry["lng"] = cached["lng"]
+            elif cached and not cached["resolved"]:
+                pass  # confirmed un-geocodable — leave without coords, don't retry
+            else:
+                items_to_resolve.append((kind, name))
+                pending += 1
+
+        for s in data["stations"]:
+            attach("station", s, s.get("station"))
+        for c in data["case_locations"]:
+            attach("case", c, c.get("location"))
+
+        # Warm the cache for any never-seen places in the background so this
+        # request stays fast (and doesn't risk a Render request timeout).
+        if items_to_resolve:
+            def _warm(to_resolve):
+                try:
+                    geocode.resolve_places(to_resolve)
+                except Exception as e:
+                    logger.error(f"[MAP] background geocode warm-up failed: {e}")
+            threading.Thread(target=_warm, args=(items_to_resolve,), daemon=True).start()
+
+        data["pending"] = pending
+        return _ok(data)
     except mysql.connector.Error as e:
         return _db_err(e)
 

@@ -86,6 +86,23 @@ CREATE TABLE IF NOT EXISTS officer_sessions (
 
 
 -- ────────────────────────────────────────────────────────────────────────────
+-- TABLE: geocode_cache (permanent place-name -> lat/lng cache for the admin map)
+-- Populated lazily by the backend; resolved=0 marks a confirmed un-geocodable
+-- place so it is never retried.
+-- ────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS geocode_cache (
+    place_key   VARCHAR(255) NOT NULL,
+    lat         DOUBLE DEFAULT NULL,
+    lng         DOUBLE DEFAULT NULL,
+    resolved    TINYINT(1) NOT NULL DEFAULT 0,
+    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (place_key)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+
+-- ────────────────────────────────────────────────────────────────────────────
 -- TABLE: cases (final schema)
 -- Includes lifecycle statuses, complainant metadata, and audit timestamps.
 -- ────────────────────────────────────────────────────────────────────────────
