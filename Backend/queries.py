@@ -103,7 +103,11 @@ def get_all_cases(status=None, crime_type=None, location=None, search=None, offi
         # Single JOIN query: pull the cases AND their assigned officer_ids in one
         # round trip. GROUP_CONCAT collapses the case_officer rows into a CSV that
         # we split back into a list below — no second query needed.
-        sql = """SELECT c.*,
+        # Explicit columns (every field a consumer reads); `source` is omitted as
+        # it is unused anywhere in the backend or frontend.
+        sql = """SELECT c.case_id, c.title, c.description, c.crime_type, c.`status`,
+                        c.date_reported, c.`location`, c.complaint_mode, c.last_updated,
+                        c.complainant_name, c.complainant_contact, c.complainant_aadhaar,
                         GROUP_CONCAT(co.officer_id ORDER BY co.officer_id) AS officer_ids_csv
                  FROM cases c
                  LEFT JOIN case_officer co ON c.case_id = co.case_id
@@ -160,8 +164,11 @@ def get_case_by_id(case_id):
     cur  = conn.cursor()
     try:
         # Single query: case row + its assigned officer_ids via GROUP_CONCAT.
+        # Explicit columns (union of all consumer needs); `source` omitted (unused).
         cur.execute(
-            """SELECT c.*,
+            """SELECT c.case_id, c.title, c.description, c.crime_type, c.`status`,
+                      c.date_reported, c.`location`, c.complaint_mode, c.last_updated,
+                      c.complainant_name, c.complainant_contact, c.complainant_aadhaar,
                       GROUP_CONCAT(co.officer_id ORDER BY co.officer_id) AS officer_ids_csv
                FROM cases c
                LEFT JOIN case_officer co ON c.case_id = co.case_id
@@ -390,7 +397,13 @@ def get_officer_by_id(officer_id):
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute("SELECT * FROM officers WHERE officer_id = %s", (officer_id,))
+        # Explicit columns only — never select password_hash here, and skip
+        # columns no consumer reads (station/phone/join_date).
+        cur.execute(
+            """SELECT officer_id, `name`, `rank`, badge, email, `role`
+               FROM officers WHERE officer_id = %s""",
+            (officer_id,)
+        )
         row = cur.fetchone()
         if not row:
             return None
@@ -620,7 +633,11 @@ def get_public_complaints(status=None, limit=None, offset=0):
     conn = get_db()
     cur  = conn.cursor()
     try:
-        sql = "SELECT * FROM public_complaints WHERE 1=1"
+        # Explicit columns (full set the review API exposes) — no SELECT *.
+        sql = """SELECT complaint_id, complainant_name, contact, email, aadhaar,
+                        crime_type, `location`, incident_desc, complaint_mode,
+                        `status`, promoted_case_id, submitted_at, reviewed_by, reviewed_at
+                 FROM public_complaints WHERE 1=1"""
         params = []
         if status:
             sql += " AND `status` = %s"
@@ -667,7 +684,12 @@ def promote_complaint(complaint_id, officer_id):
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute("SELECT * FROM public_complaints WHERE complaint_id = %s", (complaint_id,))
+        cur.execute(
+            """SELECT complaint_id, complainant_name, contact, aadhaar, crime_type,
+                      `location`, incident_desc, complaint_mode, promoted_case_id
+               FROM public_complaints WHERE complaint_id = %s""",
+            (complaint_id,)
+        )
         row = cur.fetchone()
         if not row:
             return None
@@ -749,12 +771,16 @@ def reject_complaint(complaint_id, officer_id):
 def get_officer_by_badge(badge: str):
     """
     Looks up an officer by their badge ID.
-    Returns the complete officer dictionary (including password_hash) or None if not found.
+    Returns the officer dictionary (including password_hash for auth flows) or None.
     """
     conn = get_db()
     cur  = conn.cursor()
     try:
-        cur.execute("SELECT * FROM officers WHERE badge = %s LIMIT 1", (badge,))
+        cur.execute(
+            """SELECT officer_id, `name`, `rank`, badge, email, `role`, password_hash
+               FROM officers WHERE badge = %s LIMIT 1""",
+            (badge,)
+        )
         row = cur.fetchone()
         if not row:
             return None
@@ -925,7 +951,8 @@ def verify_officer_login(badge_or_name: str, plain_password: str):
     try:
         # Try badge first, then name
         cur.execute(
-            "SELECT * FROM officers WHERE badge = %s OR `name` = %s LIMIT 1",
+            """SELECT officer_id, `name`, `rank`, badge, email, `role`, password_hash
+               FROM officers WHERE badge = %s OR `name` = %s LIMIT 1""",
             (badge_or_name, badge_or_name)
         )
         row = cur.fetchone()
@@ -1414,7 +1441,9 @@ def get_evidence_by_id(evidence_id):
     cur  = conn.cursor()
     try:
         cur.execute(
-            "SELECT * FROM case_evidence WHERE evidence_id = %s",
+            """SELECT evidence_id, case_id, officer_id, original_name, file_path,
+                      file_size, description, created_at
+               FROM case_evidence WHERE evidence_id = %s""",
             (evidence_id,)
         )
         row = cur.fetchone()
@@ -1452,7 +1481,8 @@ def get_admin_officer():
     cur  = conn.cursor()
     try:
         cur.execute(
-            "SELECT * FROM officers WHERE `role` = 'admin' OR badge = 'ADM-0001' LIMIT 1"
+            """SELECT officer_id, `name`, email FROM officers
+               WHERE `role` = 'admin' OR badge = 'ADM-0001' LIMIT 1"""
         )
         row = cur.fetchone()
         if not row:
@@ -1471,8 +1501,12 @@ def get_officers_assigned_to_case(case_id: int):
     conn = get_db()
     cur  = conn.cursor()
     try:
+        # Explicit columns: identity + the fields consumed by the staff UI,
+        # the PDF dossier teammates table (name/rank/badge/station) and the
+        # assignment-notification email (email). No password_hash, no SELECT *.
         cur.execute(
-            """SELECT o.* FROM officers o
+            """SELECT o.officer_id, o.`name`, o.`rank`, o.badge, o.station, o.email, o.`role`
+               FROM officers o
                JOIN case_officer co ON o.officer_id = co.officer_id
                WHERE co.case_id = %s
                ORDER BY o.officer_id""",

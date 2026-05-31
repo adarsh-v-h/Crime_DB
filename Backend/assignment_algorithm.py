@@ -231,9 +231,10 @@ def approve_recommendation(recommendation_id: int, admin_officer_id: int,
     conn = get_db()
     cur = conn.cursor()
     try:
-        # Fetch the recommendation and complaint
+        # Fetch the recommendation and complaint (explicit columns only)
         cur.execute(
-            """SELECT ar.*, pc.crime_type, pc.location, pc.incident_desc,
+            """SELECT ar.recommendation_id, ar.complaint_id, ar.recommended_officer_ids,
+                      pc.crime_type, pc.location, pc.incident_desc,
                       pc.complaint_mode, pc.complainant_name, pc.contact, pc.aadhaar, pc.promoted_case_id
                FROM assignment_recommendations ar
                JOIN public_complaints pc ON ar.complaint_id = pc.complaint_id
@@ -373,9 +374,10 @@ def process_pending_complaints() -> dict:
     conn = get_db()
     cur = conn.cursor()
     try:
-        # Fetch all pending complaints
+        # Fetch all pending complaints (only the columns the loop below reads)
         cur.execute(
-            "SELECT * FROM public_complaints WHERE `status` = 'Pending' ORDER BY submitted_at ASC"
+            "SELECT complaint_id, crime_type FROM public_complaints "
+            "WHERE `status` = 'Pending' ORDER BY submitted_at ASC"
         )
         pending_complaints = _rows_to_list(cur, cur.fetchall())
         
