@@ -80,7 +80,7 @@ python3 -m pip install --upgrade pip
 ### 2. Clone the repo
 
 ```bash
-git clone https://github.com/your-org/Crime_DB.git
+git clone https://github.com/adarsh-v-h/Crime_DB.git
 cd Crime_DB
 ```
 
