@@ -108,8 +108,8 @@ DB_PASSWORD=your_mysql_password
 DB_NAME=crms
 
 # Use Google's public TEST keys for local dev (accept any token):
-RECAPTCHA_SECRET_KEY=6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
-RECAPTCHA_PUBLIC_KEY=6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+RECAPTCHA_SECRET_KEY=
+RECAPTCHA_PUBLIC_KEY=
 ```
 
 Everything else has sensible defaults — see [Environment variables reference](#environment-variables-reference).
